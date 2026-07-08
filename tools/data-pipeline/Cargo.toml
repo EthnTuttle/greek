@@ -1,0 +1,11 @@
+[package]
+name = "data-pipeline"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+quick-xml = { version = "0.36", features = ["serialize"] }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+anyhow = { workspace = true }
+unicode-normalization = "0.1"

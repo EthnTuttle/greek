@@ -1,0 +1,29 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Android
+/android/app/build/
+/android/build/
+/android/.gradle/
+/android/local.properties
+
+# Data (large binary, rebuild with `cargo run -p data-pipeline`)
+/data/morphology.sqlite
+
+# Android assets (copied from data/ during build)
+/android/app/src/main/assets/morphology.sqlite
+/android/app/src/main/assets/cards/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.apk
+build.log

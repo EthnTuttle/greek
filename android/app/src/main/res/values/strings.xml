@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Greek</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_read">Read</string>
+    <string name="nav_dictionary">Dictionary</string>
+    <string name="nav_progress">Progress</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Home Screen -->
+    <string name="home_due_today">Due today</string>
+    <string name="home_cards_count">%d cards</string>
+    <string name="home_start_review">Start Review</string>
+    <string name="home_continue_reading">Continue Reading</string>
+    <string name="home_streak">Day streak</string>
+    <string name="home_streak_count">%d days</string>
+
+    <!-- Review Screen -->
+    <string name="review_progress">%d of %d</string>
+    <string name="review_show_answer">Show Answer</string>
+    <string name="review_again">Again</string>
+    <string name="review_hard">Hard</string>
+    <string name="review_good">Good</string>
+    <string name="review_easy">Easy</string>
+
+    <!-- Reader Screen -->
+    <string name="reader_title">Reader</string>
+    <string name="reader_add_to_srs">Add to SRS</string>
+    <string name="reader_close">Close</string>
+
+    <!-- Curriculum Screen -->
+    <string name="curriculum_title">Curriculum</string>
+    <string name="curriculum_cards">%d cards</string>
+    <string name="curriculum_progress">%d%% complete</string>
+
+    <!-- Dictionary Screen -->
+    <string name="dictionary_search">Search dictionary…</string>
+    <string name="dictionary_no_results">No results found</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_notifications">Daily reminder</string>
+    <string name="settings_dark_mode">Dark mode</string>
+    <string name="settings_auto_play_audio">Auto-play audio</string>
+</resources>

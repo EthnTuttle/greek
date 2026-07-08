@@ -1,0 +1,15 @@
+[package]
+name = "greek-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fsrs = "2"
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+unicode-normalization = "0.1"

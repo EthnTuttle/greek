@@ -1,0 +1,4853 @@
+[
+  {
+    "id": "ath1-001",
+    "front": "ὁ ἀγρός",
+    "back": "the field, farm",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-002",
+    "front": "ὁ αὐτουργός",
+    "back": "the farmer (who works his own land)",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-003",
+    "front": "ὁ πόνος",
+    "back": "the toil, work, labor",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-004",
+    "front": "ὁ δοῦλος",
+    "back": "the slave",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-005",
+    "front": "ὁ οἶκος",
+    "back": "the house, home",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-006",
+    "front": "ὁ λίθος",
+    "back": "the stone",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-007",
+    "front": "ὁ χρόνος",
+    "back": "the time",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-008",
+    "front": "τὸ ἔργον",
+    "back": "the work, deed",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-009",
+    "front": "τὸ δένδρον",
+    "back": "the tree",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-010",
+    "front": "μακρός, -ά, -όν",
+    "back": "long, large",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-011",
+    "front": "καλός, -ή, -όν",
+    "back": "beautiful, fine, good",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-012",
+    "front": "χαλεπός, -ή, -όν",
+    "back": "difficult, hard",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-013",
+    "front": "μικρός, -ά, -όν",
+    "back": "small, little",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-014",
+    "front": "ἰσχυρός, -ά, -όν",
+    "back": "strong, mighty",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-015",
+    "front": "πονέω",
+    "back": "I work, toil",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-016",
+    "front": "φιλέω",
+    "back": "I love, like",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-017",
+    "front": "ποιέω",
+    "back": "I make, do",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-018",
+    "front": "ἐστί(ν)",
+    "back": "he/she/it is",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-019",
+    "front": "εἰσί(ν)",
+    "back": "they are",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-020",
+    "front": "καί",
+    "back": "and, also, even",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "conjunction"
+    ]
+  },
+  {
+    "id": "ath1-021",
+    "front": "ἀλλά",
+    "back": "but",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "conjunction"
+    ]
+  },
+  {
+    "id": "ath1-022",
+    "front": "οὐ, οὐκ, οὐχ",
+    "back": "not",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "particle",
+      "negation"
+    ]
+  },
+  {
+    "id": "ath1-023",
+    "front": "γάρ",
+    "back": "for, because (postpositive)",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": [
+      "athenaze-i",
+      "chapter-1",
+      "conjunction",
+      "postpositive"
+    ]
+  },
+  {
+    "id": "ath1-024",
+    "front": "ὁ δεσπότης",
+    "back": "the master (of slaves)",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "noun",
+      "masculine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-025",
+    "front": "ὁ Δικαιόπολις",
+    "back": "Dicaeopolis (proper name)",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "noun",
+      "masculine",
+      "proper-name"
+    ]
+  },
+  {
+    "id": "ath1-026",
+    "front": "ὁ Ξανθίας",
+    "back": "Xanthias (slave name)",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "noun",
+      "masculine",
+      "proper-name"
+    ]
+  },
+  {
+    "id": "ath1-027",
+    "front": "ὁ ἥλιος",
+    "back": "the sun",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-028",
+    "front": "ὁ ἱδρώς",
+    "back": "the sweat",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-029",
+    "front": "τὸ δεῖπνον",
+    "back": "the dinner, meal",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-030",
+    "front": "ἐλαύνω",
+    "back": "I drive, march",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-031",
+    "front": "βαίνω",
+    "back": "I walk, go, step",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-032",
+    "front": "φέρω",
+    "back": "I carry, bear, bring",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-033",
+    "front": "λαμβάνω",
+    "back": "I take, seize, receive",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-034",
+    "front": "σπεύδω",
+    "back": "I hurry, hasten",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-035",
+    "front": "καθίζω",
+    "back": "I sit down, seat",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-036",
+    "front": "καθεύδω",
+    "back": "I sleep",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-037",
+    "front": "βλέπω",
+    "back": "I look (at), see",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-038",
+    "front": "καλέω",
+    "back": "I call, summon",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-039",
+    "front": "οὕτω(ς)",
+    "back": "thus, so, in this way",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-040",
+    "front": "πρός (+ acc.)",
+    "back": "to, toward; (+ dat.) at, near",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "preposition"
+    ]
+  },
+  {
+    "id": "ath1-041",
+    "front": "ἐν (+ dat.)",
+    "back": "in, on, among",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "preposition"
+    ]
+  },
+  {
+    "id": "ath1-042",
+    "front": "δέ",
+    "back": "but, and (postpositive)",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "conjunction",
+      "postpositive"
+    ]
+  },
+  {
+    "id": "ath1-043",
+    "front": "μέν ... δέ",
+    "back": "on the one hand ... on the other",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "particle",
+      "correlative"
+    ]
+  },
+  {
+    "id": "ath1-044",
+    "front": "αὐτός, -ή, -ό",
+    "back": "him/her/it; self; same",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "pronoun",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "pronoun"
+    ]
+  },
+  {
+    "id": "ath1-045",
+    "front": "οὖν",
+    "back": "therefore, then (postpositive)",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": [
+      "athenaze-i",
+      "chapter-2",
+      "conjunction",
+      "postpositive"
+    ]
+  },
+  {
+    "id": "ath1-046",
+    "front": "ὁ ἄροτος",
+    "back": "the plowing",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-047",
+    "front": "τὸ ἄροτρον",
+    "back": "the plow",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-048",
+    "front": "ὁ βοῦς",
+    "back": "the ox",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-049",
+    "front": "τὸ σπέρμα",
+    "back": "the seed",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-050",
+    "front": "τὸ ζυγόν",
+    "back": "the yoke",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-051",
+    "front": "ὁ σῖτος",
+    "back": "the grain, food",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-052",
+    "front": "ὁ αὐλός",
+    "back": "the furrow; pipe",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-053",
+    "front": "σπείρω",
+    "back": "I sow (seed)",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-054",
+    "front": "ἕλκω",
+    "back": "I drag, pull, draw",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-055",
+    "front": "λύω",
+    "back": "I loosen, release, untie",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-056",
+    "front": "τρέπω",
+    "back": "I turn, direct",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-057",
+    "front": "ἐκβάλλω",
+    "back": "I throw out, drive out",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-058",
+    "front": "δή",
+    "back": "indeed, certainly (postpositive)",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "particle",
+      "postpositive"
+    ]
+  },
+  {
+    "id": "ath1-059",
+    "front": "μάλα",
+    "back": "very, very much",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-060",
+    "front": "ἤδη",
+    "back": "already, now",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-061",
+    "front": "ἔπειτα",
+    "back": "then, next, thereafter",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-062",
+    "front": "πολύς, πολλή, πολύ",
+    "back": "much, many",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "adjective",
+      "irregular"
+    ]
+  },
+  {
+    "id": "ath1-063",
+    "front": "ὀλίγος, -η, -ον",
+    "back": "few, little, small",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-064",
+    "front": "αἴρω",
+    "back": "I lift, raise",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-065",
+    "front": "ἀεί",
+    "back": "always, ever",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-066",
+    "front": "ἄγω",
+    "back": "I lead, drive, bring",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-3",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-067",
+    "front": "ἡ κρήνη",
+    "back": "the spring, fountain",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-068",
+    "front": "ἡ ὑδρία",
+    "back": "the water jar",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-069",
+    "front": "ἡ γυνή",
+    "back": "the woman, wife",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-070",
+    "front": "ἡ θυγάτηρ",
+    "back": "the daughter",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-071",
+    "front": "ἡ μήτηρ",
+    "back": "the mother",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-072",
+    "front": "ἡ οἰκία",
+    "back": "the house, dwelling",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-073",
+    "front": "ἡ ὁδός",
+    "back": "the road, way, path",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "noun",
+      "feminine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-074",
+    "front": "τὸ ὕδωρ",
+    "back": "the water",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-075",
+    "front": "βαδίζω",
+    "back": "I walk, go on foot",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-076",
+    "front": "πληρόω",
+    "back": "I fill",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-077",
+    "front": "πάρειμι",
+    "back": "I am present, am here",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-078",
+    "front": "προσχωρέω",
+    "back": "I go toward, approach",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-079",
+    "front": "χαίρω",
+    "back": "I rejoice; χαῖρε = hello!",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-080",
+    "front": "λέγω",
+    "back": "I say, speak, tell",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-081",
+    "front": "πρός (+ dat.)",
+    "back": "at, near, by",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "preposition"
+    ]
+  },
+  {
+    "id": "ath1-082",
+    "front": "ἐκ, ἐξ (+ gen.)",
+    "back": "out of, from",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "preposition"
+    ]
+  },
+  {
+    "id": "ath1-083",
+    "front": "ἀπό (+ gen.)",
+    "back": "from, away from",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "preposition"
+    ]
+  },
+  {
+    "id": "ath1-084",
+    "front": "μετά (+ gen.)",
+    "back": "with; (+ acc.) after",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "preposition"
+    ]
+  },
+  {
+    "id": "ath1-085",
+    "front": "ἐπί (+ gen./dat./acc.)",
+    "back": "on, upon, at, against",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "preposition"
+    ]
+  },
+  {
+    "id": "ath1-086",
+    "front": "πρῶτον",
+    "back": "first, at first",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-087",
+    "front": "τότε",
+    "back": "then, at that time",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-4",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-088",
+    "front": "ὁ λύκος",
+    "back": "the wolf",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-089",
+    "front": "τὸ πρόβατον",
+    "back": "the sheep",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-090",
+    "front": "ὁ κύων",
+    "back": "the dog",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-091",
+    "front": "ἡ αἴξ",
+    "back": "the goat",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-092",
+    "front": "ὁ ποιμήν",
+    "back": "the shepherd",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-093",
+    "front": "τὸ ὄρος",
+    "back": "the mountain",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-094",
+    "front": "ὁ φόβος",
+    "back": "the fear, terror",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-095",
+    "front": "κτείνω",
+    "back": "I kill, slay",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-096",
+    "front": "τρέχω",
+    "back": "I run",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-097",
+    "front": "φεύγω",
+    "back": "I flee, escape; am exiled",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-098",
+    "front": "διώκω",
+    "back": "I pursue, chase; prosecute",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-099",
+    "front": "καταλαμβάνω",
+    "back": "I seize, overtake, catch",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-100",
+    "front": "ὁρμάω",
+    "back": "I rush, set out, start",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-101",
+    "front": "ῥίπτω",
+    "back": "I throw, hurl, cast",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-102",
+    "front": "πάλιν",
+    "back": "back, again",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-103",
+    "front": "ἐνταῦθα",
+    "back": "here, there; then",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-104",
+    "front": "ταχέως",
+    "back": "quickly, swiftly",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-105",
+    "front": "δεινός, -ή, -όν",
+    "back": "terrible, fearful; clever",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-106",
+    "front": "φεύγω, φεύξομαι, ἔφυγον, πέφευγα",
+    "back": "flee, escape (principal parts)",
+    "chapter": 5,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-107",
+    "front": "τρέχω, δραμοῦμαι, ἔδραμον, δεδράμηκα",
+    "back": "run (principal parts)",
+    "chapter": 5,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-108",
+    "front": "λαμβάνω, λήψομαι, ἔλαβον, εἴληφα, εἴλημμαι, ἐλήφθην",
+    "back": "take, seize (principal parts)",
+    "chapter": 5,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-5",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-109",
+    "front": "ὁ μῦθος",
+    "back": "the story, myth, word",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-110",
+    "front": "ὁ πατήρ",
+    "back": "the father",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-111",
+    "front": "ὁ παῖς",
+    "back": "the child, boy, girl; slave",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-112",
+    "front": "ὁ πάππος",
+    "back": "the grandfather",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-113",
+    "front": "τὸ ἱερόν",
+    "back": "the temple, sanctuary",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-114",
+    "front": "ἡ ἑορτή",
+    "back": "the festival, holiday",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-115",
+    "front": "ἀκούω",
+    "back": "I hear, listen to (+ gen.)",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-116",
+    "front": "ἡγέομαι",
+    "back": "I lead (the way); consider",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-117",
+    "front": "ἐθέλω",
+    "back": "I wish, am willing",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-118",
+    "front": "γιγνώσκω",
+    "back": "I come to know, learn, perceive",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-119",
+    "front": "μένω",
+    "back": "I stay, remain, wait (for)",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-120",
+    "front": "πέμπω",
+    "back": "I send",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-121",
+    "front": "ἡ νύξ",
+    "back": "the night",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-122",
+    "front": "ἡ γῆ",
+    "back": "the earth, land, country",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-123",
+    "front": "οὕτως",
+    "back": "thus, so, in this way",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-124",
+    "front": "μάλιστα",
+    "back": "most (of all), especially, certainly",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-125",
+    "front": "ἔτι",
+    "back": "still, yet, further",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-126",
+    "front": "ποτέ",
+    "back": "once, at some time, ever",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-127",
+    "front": "βαίνω, βήσομαι, ἔβην, βέβηκα",
+    "back": "go, walk, step (principal parts)",
+    "chapter": 6,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-128",
+    "front": "γιγνώσκω, γνώσομαι, ἔγνων, ἔγνωκα, ἔγνωσμαι, ἐγνώσθην",
+    "back": "know, learn (principal parts)",
+    "chapter": 6,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-129",
+    "front": "ἀκούω, ἀκούσομαι, ἤκουσα, ἀκήκοα, —, ἠκούσθην",
+    "back": "hear (principal parts)",
+    "chapter": 6,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-6",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-130",
+    "front": "ὁ Κύκλωψ",
+    "back": "the Cyclops",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-131",
+    "front": "ὁ Ὀδυσσεύς",
+    "back": "Odysseus",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-132",
+    "front": "ὁ ἑταῖρος",
+    "back": "the companion, comrade",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-133",
+    "front": "τὸ ἄντρον",
+    "back": "the cave",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-134",
+    "front": "ὁ γίγας",
+    "back": "the giant",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-135",
+    "front": "ὁ ὀφθαλμός",
+    "back": "the eye",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-136",
+    "front": "τὸ πῦρ",
+    "back": "the fire",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-137",
+    "front": "ἡ ναῦς",
+    "back": "the ship",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-138",
+    "front": "τὸ σῶμα",
+    "back": "the body",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-139",
+    "front": "ἡ θάλαττα",
+    "back": "the sea",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-140",
+    "front": "ἐσθίω",
+    "back": "I eat",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-141",
+    "front": "πίνω",
+    "back": "I drink",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-142",
+    "front": "εὑρίσκω",
+    "back": "I find, discover",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-143",
+    "front": "ἀποφεύγω",
+    "back": "I flee away, escape",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-144",
+    "front": "ἐξέρχομαι",
+    "back": "I go out, come out",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-145",
+    "front": "τυφλόω",
+    "back": "I blind",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-146",
+    "front": "μέγας, μεγάλη, μέγα",
+    "back": "big, great, large",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "adjective",
+      "irregular"
+    ]
+  },
+  {
+    "id": "ath1-147",
+    "front": "εἷς, μία, ἕν",
+    "back": "one",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "numeral",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "numeral"
+    ]
+  },
+  {
+    "id": "ath1-148",
+    "front": "οὐδείς, οὐδεμία, οὐδέν",
+    "back": "no one, nothing, no",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "pronoun",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "pronoun",
+      "indefinite"
+    ]
+  },
+  {
+    "id": "ath1-149",
+    "front": "φέρω, οἴσω, ἤνεγκον/ἤνεγκα, ἐνήνοχα, ἐνήνεγμαι, ἠνέχθην",
+    "back": "carry, bear (principal parts)",
+    "chapter": 7,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-150",
+    "front": "ἐσθίω, ἔδομαι, ἔφαγον, ἐδήδοκα, ἐδήδεσμαι, ἠδέσθην",
+    "back": "eat (principal parts)",
+    "chapter": 7,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-151",
+    "front": "εὑρίσκω, εὑρήσω, ηὗρον/εὗρον, ηὕρηκα, ηὕρημαι, ηὑρέθην",
+    "back": "find (principal parts)",
+    "chapter": 7,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-7",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-152",
+    "front": "τὸ ἄστυ",
+    "back": "the city, town",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-153",
+    "front": "ἡ πόλις",
+    "back": "the city, city-state",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-154",
+    "front": "ὁ ἀγρότης",
+    "back": "the farmer, countryman",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "noun",
+      "masculine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-155",
+    "front": "ὁ ἄνθρωπος",
+    "back": "the human being, person",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-156",
+    "front": "ἡ ἀγορά",
+    "back": "the marketplace, agora",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-157",
+    "front": "ὁ ὄχλος",
+    "back": "the crowd, mob",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-158",
+    "front": "ὁ ξένος",
+    "back": "the stranger, guest, host",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-159",
+    "front": "πορεύομαι",
+    "back": "I travel, march, journey",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-160",
+    "front": "ἀφικνέομαι",
+    "back": "I arrive (at)",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-161",
+    "front": "θαυμάζω",
+    "back": "I wonder (at), am amazed, admire",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-162",
+    "front": "ὁρμάομαι",
+    "back": "I set out, start, rush",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-163",
+    "front": "θεάομαι",
+    "back": "I see, watch, gaze at",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-164",
+    "front": "σκοπέω",
+    "back": "I look at, examine, consider",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-165",
+    "front": "πανταχοῦ",
+    "back": "everywhere",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-166",
+    "front": "μακράν",
+    "back": "far, a long way",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-167",
+    "front": "εἰς (+ acc.)",
+    "back": "into, to, toward",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "preposition"
+    ]
+  },
+  {
+    "id": "ath1-168",
+    "front": "διά (+ gen.)",
+    "back": "through; (+ acc.) on account of",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "preposition"
+    ]
+  },
+  {
+    "id": "ath1-169",
+    "front": "πολύς, πολλοί",
+    "back": "much; (pl.) many",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "adjective",
+      "irregular"
+    ]
+  },
+  {
+    "id": "ath1-170",
+    "front": "ἔρχομαι, εἶμι/ἐλεύσομαι, ἦλθον, ἐλήλυθα",
+    "back": "come, go (principal parts)",
+    "chapter": 8,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-171",
+    "front": "ὁράω, ὄψομαι, εἶδον, ἑώρακα/ἑόρακα, ἑώραμαι/ὦμμαι, ὤφθην",
+    "back": "see (principal parts)",
+    "chapter": 8,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-172",
+    "front": "ἀφικνέομαι, ἀφίξομαι, ἀφικόμην, ἀφῖγμαι",
+    "back": "arrive (principal parts)",
+    "chapter": 8,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-8",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-173",
+    "front": "ἡ πανήγυρις",
+    "back": "the festival, assembly",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-174",
+    "front": "ἡ πομπή",
+    "back": "the procession, parade",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-175",
+    "front": "ὁ χορός",
+    "back": "the chorus, dance",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-176",
+    "front": "τὸ θῦμα",
+    "back": "the offering, sacrifice, victim",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-177",
+    "front": "ὁ βωμός",
+    "back": "the altar",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-178",
+    "front": "ἡ ἑορτή",
+    "back": "the festival, feast day",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-179",
+    "front": "τὸ θέατρον",
+    "back": "the theater",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-180",
+    "front": "ὁ ἀγών",
+    "back": "the contest, competition; trial",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-181",
+    "front": "θύω",
+    "back": "I sacrifice",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-182",
+    "front": "εὔχομαι",
+    "back": "I pray, vow",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-183",
+    "front": "θεωρέω",
+    "back": "I watch, observe, contemplate",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-184",
+    "front": "σπένδω",
+    "back": "I pour a libation",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-185",
+    "front": "τέρπω",
+    "back": "I delight, please; (mid.) enjoy",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-186",
+    "front": "νικάω",
+    "back": "I win, conquer, defeat",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-187",
+    "front": "ἄριστος, -η, -ον",
+    "back": "best, noblest, most excellent",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "adjective",
+      "superlative"
+    ]
+  },
+  {
+    "id": "ath1-188",
+    "front": "ἱερός, -ά, -όν",
+    "back": "holy, sacred",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-189",
+    "front": "ἅπας, ἅπασα, ἅπαν",
+    "back": "all, every, the whole",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "adjective",
+      "irregular"
+    ]
+  },
+  {
+    "id": "ath1-190",
+    "front": "ἑκάστοτε",
+    "back": "each time, on each occasion",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-191",
+    "front": "νικάω, νικήσω, ἐνίκησα, νενίκηκα, νενίκημαι, ἐνικήθην",
+    "back": "win, conquer (principal parts)",
+    "chapter": 9,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-192",
+    "front": "θύω, θύσω, ἔθυσα, τέθυκα, τέθυμαι, ἐτύθην",
+    "back": "sacrifice (principal parts)",
+    "chapter": 9,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-193",
+    "front": "εὔχομαι, εὔξομαι, ηὐξάμην/εὐξάμην, ηὖγμαι",
+    "back": "pray, vow (principal parts)",
+    "chapter": 9,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-9",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-194",
+    "front": "ἡ συμφορά",
+    "back": "the disaster, misfortune, event",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-195",
+    "front": "ἡ νόσος",
+    "back": "the disease, sickness",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "noun",
+      "feminine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-196",
+    "front": "ὁ ἰατρός",
+    "back": "the doctor, physician",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-197",
+    "front": "τὸ φάρμακον",
+    "back": "the drug, medicine; poison",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-198",
+    "front": "ἡ κεφαλή",
+    "back": "the head",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-199",
+    "front": "τὸ τραῦμα",
+    "back": "the wound",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-200",
+    "front": "πίπτω",
+    "back": "I fall",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-201",
+    "front": "πάσχω",
+    "back": "I suffer, experience",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-202",
+    "front": "θεραπεύω",
+    "back": "I heal, serve, tend",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-203",
+    "front": "ἀποθνῄσκω",
+    "back": "I die, am killed",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-204",
+    "front": "κάμνω",
+    "back": "I am sick, am tired, toil",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-205",
+    "front": "ἀλγέω",
+    "back": "I feel pain, suffer",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-206",
+    "front": "τυγχάνω",
+    "back": "I happen (to); obtain, hit",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-207",
+    "front": "κελεύω",
+    "back": "I order, command, urge",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-208",
+    "front": "ἀσθενής, -ές",
+    "back": "weak, sick, feeble",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "adjective",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-209",
+    "front": "δυνατός, -ή, -όν",
+    "back": "able, powerful, possible",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-210",
+    "front": "τυφλός, -ή, -όν",
+    "back": "blind",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-211",
+    "front": "πίπτω, πεσοῦμαι, ἔπεσον, πέπτωκα",
+    "back": "fall (principal parts)",
+    "chapter": 10,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-212",
+    "front": "πάσχω, πείσομαι, ἔπαθον, πέπονθα",
+    "back": "suffer (principal parts)",
+    "chapter": 10,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-213",
+    "front": "ἀποθνῄσκω, ἀποθανοῦμαι, ἀπέθανον, τέθνηκα",
+    "back": "die (principal parts)",
+    "chapter": 10,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-214",
+    "front": "μανθάνω, μαθήσομαι, ἔμαθον, μεμάθηκα",
+    "back": "learn (principal parts)",
+    "chapter": 10,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-10",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-215",
+    "front": "ὁ Ἀσκληπιός",
+    "back": "Asclepius (god of healing)",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "noun",
+      "masculine",
+      "proper-name"
+    ]
+  },
+  {
+    "id": "ath1-216",
+    "front": "τὸ Ἀσκληπιεῖον",
+    "back": "the temple of Asclepius",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-217",
+    "front": "ὁ κάμνων",
+    "back": "the sick person, patient",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "noun",
+      "masculine",
+      "participle"
+    ]
+  },
+  {
+    "id": "ath1-218",
+    "front": "ἡ θεραπεία",
+    "back": "the healing, treatment, service",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-219",
+    "front": "ἡ ἐλπίς",
+    "back": "the hope, expectation",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-220",
+    "front": "ἡ νῆσος",
+    "back": "the island",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "noun",
+      "feminine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-221",
+    "front": "ἰάομαι",
+    "back": "I heal, cure",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-222",
+    "front": "σῴζω",
+    "back": "I save, keep safe, rescue",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-223",
+    "front": "ἀναχωρέω",
+    "back": "I withdraw, retreat, go back",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-224",
+    "front": "προσέρχομαι",
+    "back": "I approach, come toward",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-225",
+    "front": "ἐπανέρχομαι",
+    "back": "I return, come back",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-226",
+    "front": "ἐρωτάω",
+    "back": "I ask, inquire",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-227",
+    "front": "ἀποκρίνομαι",
+    "back": "I answer, reply",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-228",
+    "front": "χρήσιμος, -η, -ον",
+    "back": "useful, serviceable",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-229",
+    "front": "ἕτοιμος, -η, -ον",
+    "back": "ready, prepared",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-230",
+    "front": "ὅμως",
+    "back": "nevertheless, however",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-231",
+    "front": "τέλος",
+    "back": "finally, at last; (noun) end",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-232",
+    "front": "εὐθύς",
+    "back": "immediately, at once",
+    "chapter": 11,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-233",
+    "front": "σῴζω, σώσω, ἔσωσα, σέσωκα, σέσωσμαι/σέσωμαι, ἐσώθην",
+    "back": "save (principal parts)",
+    "chapter": 11,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-234",
+    "front": "ἐρωτάω, ἐρήσομαι/ἐρωτήσω, ἠρόμην/ἠρώτησα, ἠρώτηκα",
+    "back": "ask (principal parts)",
+    "chapter": 11,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-235",
+    "front": "ἀποκρίνομαι, ἀποκρινοῦμαι, ἀπεκρινάμην, ἀποκέκριμαι",
+    "back": "answer (principal parts)",
+    "chapter": 11,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-11",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-236",
+    "front": "ἡ Σαλαμίς",
+    "back": "Salamis (island)",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "noun",
+      "feminine",
+      "third-declension",
+      "proper-name"
+    ]
+  },
+  {
+    "id": "ath1-237",
+    "front": "ἡ ναῦς",
+    "back": "the ship",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-238",
+    "front": "ὁ ναύτης",
+    "back": "the sailor",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "noun",
+      "masculine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-239",
+    "front": "ἡ ναυμαχία",
+    "back": "the sea battle",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-240",
+    "front": "τὸ πλοῖον",
+    "back": "the boat, vessel, ship",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "noun",
+      "neuter",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-241",
+    "front": "ὁ λιμήν",
+    "back": "the harbor, port",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-242",
+    "front": "ὁ στόλος",
+    "back": "the fleet, expedition",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-243",
+    "front": "ὁ Πέρσης",
+    "back": "the Persian",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "noun",
+      "masculine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-244",
+    "front": "ὁ βάρβαρος",
+    "back": "the foreigner, barbarian",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-245",
+    "front": "πλέω",
+    "back": "I sail, voyage",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-246",
+    "front": "μάχομαι",
+    "back": "I fight (+ dat.)",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-247",
+    "front": "ναυμαχέω",
+    "back": "I fight a naval battle",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-248",
+    "front": "ἀμύνω",
+    "back": "I ward off; (mid.) defend oneself",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-249",
+    "front": "ἀναχωρέω",
+    "back": "I withdraw, retreat",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-250",
+    "front": "ἐπιπλέω",
+    "back": "I sail against",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-251",
+    "front": "ἀνδρεῖος, -α, -ον",
+    "back": "brave, manly, courageous",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-252",
+    "front": "στενός, -ή, -όν",
+    "back": "narrow",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-253",
+    "front": "κατά (+ gen.)",
+    "back": "down from; against; (+ acc.) according to",
+    "chapter": 12,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "preposition"
+    ]
+  },
+  {
+    "id": "ath1-254",
+    "front": "πλέω, πλεύσομαι/πλευσοῦμαι, ἔπλευσα, πέπλευκα, πέπλευσμαι",
+    "back": "sail (principal parts)",
+    "chapter": 12,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-255",
+    "front": "μάχομαι, μαχοῦμαι, ἐμαχεσάμην, μεμάχημαι",
+    "back": "fight (principal parts)",
+    "chapter": 12,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-256",
+    "front": "νικάω, νικήσω, ἐνίκησα, νενίκηκα, νενίκημαι, ἐνικήθην",
+    "back": "win, defeat (principal parts)",
+    "chapter": 12,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-12",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-257",
+    "front": "αἱ Ἀθῆναι",
+    "back": "Athens",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "noun",
+      "feminine",
+      "first-declension",
+      "proper-name"
+    ]
+  },
+  {
+    "id": "ath1-258",
+    "front": "ὁ Ἀθηναῖος",
+    "back": "the Athenian",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-259",
+    "front": "ὁ πολίτης",
+    "back": "the citizen",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "noun",
+      "masculine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-260",
+    "front": "ὁ μέτοικος",
+    "back": "the resident alien, metic",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-261",
+    "front": "τὸ τεῖχος",
+    "back": "the wall, fortification",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-262",
+    "front": "ὁ Πειραιεύς",
+    "back": "the Piraeus (port of Athens)",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "noun",
+      "masculine",
+      "third-declension",
+      "proper-name"
+    ]
+  },
+  {
+    "id": "ath1-263",
+    "front": "ἡ ἀκρόπολις",
+    "back": "the acropolis, citadel",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-264",
+    "front": "ὁ Παρθενών",
+    "back": "the Parthenon",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "noun",
+      "masculine",
+      "third-declension",
+      "proper-name"
+    ]
+  },
+  {
+    "id": "ath1-265",
+    "front": "ἡ ἀγορά",
+    "back": "the agora, marketplace",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-266",
+    "front": "οἰκέω",
+    "back": "I live (in), inhabit",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-267",
+    "front": "ἀναβαίνω",
+    "back": "I go up, climb",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-268",
+    "front": "καταβαίνω",
+    "back": "I go down, descend",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-269",
+    "front": "ἐπισκοπέω",
+    "back": "I inspect, look upon, visit",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-270",
+    "front": "δέχομαι",
+    "back": "I receive, accept, welcome",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-271",
+    "front": "κλέος, -ους (τό)",
+    "back": "glory, fame, renown",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-272",
+    "front": "ἐλεύθερος, -α, -ον",
+    "back": "free",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-273",
+    "front": "σεμνός, -ή, -όν",
+    "back": "holy, august, solemn",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-274",
+    "front": "ἐκεῖ",
+    "back": "there, in that place",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-275",
+    "front": "ἐκεῖθεν",
+    "back": "from there, thence",
+    "chapter": 13,
+    "card_type": "Vocab",
+    "pos": "adverb",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "adverb"
+    ]
+  },
+  {
+    "id": "ath1-276",
+    "front": "δέχομαι, δέξομαι, ἐδεξάμην, δέδεγμαι, ἐδέχθην",
+    "back": "receive (principal parts)",
+    "chapter": 13,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-277",
+    "front": "ἄγω, ἄξω, ἤγαγον, ἦχα, ἦγμαι, ἤχθην",
+    "back": "lead, bring (principal parts)",
+    "chapter": 13,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-13",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-278",
+    "front": "ἡ ἐκκλησία",
+    "back": "the assembly (of citizens)",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-279",
+    "front": "ὁ δῆμος",
+    "back": "the people, the demos",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-280",
+    "front": "ἡ βουλή",
+    "back": "the council",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-281",
+    "front": "ἡ ψῆφος",
+    "back": "the vote, pebble (for voting)",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "noun",
+      "feminine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-282",
+    "front": "ὁ ῥήτωρ",
+    "back": "the orator, speaker, politician",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "noun",
+      "masculine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-283",
+    "front": "ὁ νόμος",
+    "back": "the law, custom",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-284",
+    "front": "ἡ γνώμη",
+    "back": "the opinion, judgment, resolution",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-285",
+    "front": "ὁ στρατηγός",
+    "back": "the general",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-286",
+    "front": "ψηφίζομαι",
+    "back": "I vote",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-287",
+    "front": "πείθω",
+    "back": "I persuade; (mid.) obey (+ dat.)",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-288",
+    "front": "κηρύττω",
+    "back": "I proclaim, announce",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-289",
+    "front": "ἀγορεύω",
+    "back": "I speak (in assembly)",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-290",
+    "front": "βουλεύω",
+    "back": "I deliberate; (mid.) plan",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-291",
+    "front": "αἱρέω",
+    "back": "I take, seize; (mid.) choose",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-292",
+    "front": "ψηφίζω",
+    "back": "I decree, vote",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-293",
+    "front": "δίκαιος, -α, -ον",
+    "back": "just, righteous",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-294",
+    "front": "ἄδικος, -ον",
+    "back": "unjust, wrong",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "adjective",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-295",
+    "front": "κοινός, -ή, -όν",
+    "back": "common, shared, public",
+    "chapter": 14,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-296",
+    "front": "πείθω, πείσω, ἔπεισα, πέπεικα, πέπεισμαι, ἐπείσθην",
+    "back": "persuade (principal parts)",
+    "chapter": 14,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-297",
+    "front": "αἱρέω, αἱρήσω, εἷλον, ᾕρηκα, ᾕρημαι, ᾑρέθην",
+    "back": "take, choose (principal parts)",
+    "chapter": 14,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-298",
+    "front": "λέγω, λέξω/ἐρῶ, ἔλεξα/εἶπον, εἴρηκα, εἴρημαι/λέλεγμαι, ἐλέχθη/ἐρρήθην",
+    "back": "say, speak (principal parts)",
+    "chapter": 14,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-14",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-299",
+    "front": "ὁ λόγος",
+    "back": "the word, speech, argument, reason",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-300",
+    "front": "ἡ εἰρήνη",
+    "back": "the peace",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-301",
+    "front": "ὁ πόλεμος",
+    "back": "the war",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-302",
+    "front": "ὁ σύμμαχος",
+    "back": "the ally",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-303",
+    "front": "ἡ δύναμις",
+    "back": "the power, ability, force",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "noun",
+      "feminine",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-304",
+    "front": "ὁ κίνδυνος",
+    "back": "the danger, risk",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-305",
+    "front": "ἡ ἀρετή",
+    "back": "the virtue, excellence, valor",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-306",
+    "front": "ἡ ἐλευθερία",
+    "back": "the freedom, liberty",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-307",
+    "front": "πολεμέω",
+    "back": "I make war (+ dat.)",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-308",
+    "front": "κινδυνεύω",
+    "back": "I am in danger, risk",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-309",
+    "front": "συμβουλεύω",
+    "back": "I advise (+ dat.)",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-310",
+    "front": "ἐπαινέω",
+    "back": "I praise, approve",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-311",
+    "front": "ψέγω",
+    "back": "I blame, censure",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-312",
+    "front": "ἀντιλέγω",
+    "back": "I speak against, contradict",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-313",
+    "front": "δημηγορέω",
+    "back": "I speak before the people, make a public speech",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-314",
+    "front": "ἱκανός, -ή, -όν",
+    "back": "sufficient, capable, considerable",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-315",
+    "front": "σοφός, -ή, -όν",
+    "back": "wise, clever, skilled",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "adjective",
+      "first-second-declension"
+    ]
+  },
+  {
+    "id": "ath1-316",
+    "front": "ἀληθής, -ές",
+    "back": "true, real",
+    "chapter": 15,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "adjective",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-317",
+    "front": "πολεμέω, πολεμήσω, ἐπολέμησα, πεπολέμηκα, πεπολέμημαι",
+    "back": "make war (principal parts)",
+    "chapter": 15,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-318",
+    "front": "πέμπω, πέμψω, ἔπεμψα, πέπομφα, πέπεμμαι, ἐπέμφθην",
+    "back": "send (principal parts)",
+    "chapter": 15,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-319",
+    "front": "κελεύω, κελεύσω, ἐκέλευσα, κεκέλευκα, κεκέλευσμαι, ἐκελεύσθην",
+    "back": "order (principal parts)",
+    "chapter": 15,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-15",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-320",
+    "front": "ἡ ψυχή",
+    "back": "the soul, spirit, life",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-321",
+    "front": "ἡ τύχη",
+    "back": "the fortune, luck, chance",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-322",
+    "front": "ὁ θεός",
+    "back": "the god",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-323",
+    "front": "ἡ θεά",
+    "back": "the goddess",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "noun",
+      "feminine",
+      "first-declension"
+    ]
+  },
+  {
+    "id": "ath1-324",
+    "front": "ὁ βίος",
+    "back": "the life, livelihood",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-325",
+    "front": "ὁ θάνατος",
+    "back": "the death",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "noun",
+      "masculine",
+      "second-declension"
+    ]
+  },
+  {
+    "id": "ath1-326",
+    "front": "τὸ τέλος",
+    "back": "the end, goal, purpose",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "noun",
+      "neuter",
+      "third-declension"
+    ]
+  },
+  {
+    "id": "ath1-327",
+    "front": "νομίζω",
+    "back": "I think, believe, consider",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-328",
+    "front": "δοκέω",
+    "back": "I seem, think; (impers.) it seems best",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-329",
+    "front": "ζάω/ζῶ",
+    "back": "I live, am alive",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-330",
+    "front": "βούλομαι",
+    "back": "I wish, want, am willing",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-331",
+    "front": "δύναμαι",
+    "back": "I am able, can",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-332",
+    "front": "γίγνομαι",
+    "back": "I become, happen, am born",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "verb",
+      "present-middle"
+    ]
+  },
+  {
+    "id": "ath1-333",
+    "front": "φαίνω",
+    "back": "I show; (mid.) appear, seem",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "verb",
+      "present-active"
+    ]
+  },
+  {
+    "id": "ath1-334",
+    "front": "τοιοῦτος, τοιαύτη, τοιοῦτο(ν)",
+    "back": "such, of such a kind",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "pronoun",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "pronoun",
+      "demonstrative"
+    ]
+  },
+  {
+    "id": "ath1-335",
+    "front": "ἐκεῖνος, -η, -ο",
+    "back": "that (person/thing)",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "pronoun",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "pronoun",
+      "demonstrative"
+    ]
+  },
+  {
+    "id": "ath1-336",
+    "front": "ὅδε, ἥδε, τόδε",
+    "back": "this (here), the following",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "pronoun",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "pronoun",
+      "demonstrative"
+    ]
+  },
+  {
+    "id": "ath1-337",
+    "front": "ὥσπερ",
+    "back": "just as, as if",
+    "chapter": 16,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "conjunction"
+    ]
+  },
+  {
+    "id": "ath1-338",
+    "front": "γίγνομαι, γενήσομαι, ἐγενόμην, γέγονα, γεγένημαι",
+    "back": "become (principal parts)",
+    "chapter": 16,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-339",
+    "front": "φαίνω, φανῶ, ἔφηνα, πέφηνα/πέφαγκα, πέφασμαι, ἐφάνθην/ἐφάνην",
+    "back": "show, appear (principal parts)",
+    "chapter": 16,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "verb",
+      "principal-parts"
+    ]
+  },
+  {
+    "id": "ath1-340",
+    "front": "βούλομαι, βουλήσομαι, —, —, βεβούλημαι, ἐβουλήθην",
+    "back": "wish, want (principal parts)",
+    "chapter": 16,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": [
+      "athenaze-i",
+      "chapter-16",
+      "verb",
+      "principal-parts"
+    ]
+  }
+]

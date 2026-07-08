@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light theme colors -->
+    <color name="parchment_light">#FFF8E7</color>
+    <color name="amber_accent">#D4A574</color>
+    <color name="deep_brown">#3E2723</color>
+    <color name="olive_dark">#6B7A3F</color>
+
+    <!-- Dark theme colors -->
+    <color name="dark_background">#1A1410</color>
+    <color name="dark_surface">#2B2420</color>
+
+    <!-- System colors -->
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+</resources>

@@ -1,0 +1,1181 @@
+[
+  {
+    "id": "jact-001",
+    "front": "ὁ ἄνθρωπος",
+    "back": "the person, human being",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-1", "noun", "masculine", "second-declension"]
+  },
+  {
+    "id": "jact-002",
+    "front": "ἡ ναῦς",
+    "back": "the ship",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-1", "noun", "feminine", "third-declension", "maritime"]
+  },
+  {
+    "id": "jact-003",
+    "front": "ἡ θάλαττα",
+    "back": "the sea",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-1", "noun", "feminine", "first-declension"]
+  },
+  {
+    "id": "jact-004",
+    "front": "ὁ ναύτης",
+    "back": "the sailor",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-1", "noun", "masculine", "first-declension", "maritime"]
+  },
+  {
+    "id": "jact-005",
+    "front": "ὁ λιμήν",
+    "back": "the harbour, port",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-1", "noun", "masculine", "third-declension", "maritime"]
+  },
+  {
+    "id": "jact-006",
+    "front": "πλέω",
+    "back": "I sail",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-1", "verb", "maritime"]
+  },
+  {
+    "id": "jact-007",
+    "front": "βαίνω",
+    "back": "I go, walk, step",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-1", "verb", "motion"]
+  },
+  {
+    "id": "jact-008",
+    "front": "ἔρχομαι",
+    "back": "I come, go",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-1", "verb", "deponent", "motion"]
+  },
+  {
+    "id": "jact-009",
+    "front": "εἰμί",
+    "back": "I am",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-1", "verb", "irregular", "copula"]
+  },
+  {
+    "id": "jact-010",
+    "front": "ὁράω",
+    "back": "I see",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-1", "verb", "contract"]
+  },
+  {
+    "id": "jact-011",
+    "front": "καλός",
+    "back": "beautiful, fine, noble",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": ["jact", "chapter-1", "adjective", "second-declension"]
+  },
+  {
+    "id": "jact-012",
+    "front": "καί",
+    "back": "and; also, even",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-1", "conjunction"]
+  },
+  {
+    "id": "jact-013",
+    "front": "οὐ (οὐκ, οὐχ)",
+    "back": "not",
+    "chapter": 1,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": ["jact", "chapter-1", "particle", "negation"]
+  },
+  {
+    "id": "jact-014",
+    "front": "τό πλοῖον",
+    "back": "the boat, vessel",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-2", "noun", "neuter", "second-declension", "maritime"]
+  },
+  {
+    "id": "jact-015",
+    "front": "ὁ κυβερνήτης",
+    "back": "the helmsman, pilot",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-2", "noun", "masculine", "first-declension", "maritime"]
+  },
+  {
+    "id": "jact-016",
+    "front": "τό ἐμπόριον",
+    "back": "the trading post, market",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-2", "noun", "neuter", "second-declension", "commerce"]
+  },
+  {
+    "id": "jact-017",
+    "front": "τό φορτίον",
+    "back": "the cargo, burden",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-2", "noun", "neuter", "second-declension", "maritime"]
+  },
+  {
+    "id": "jact-018",
+    "front": "τό πνεῦμα",
+    "back": "the wind, breath, spirit",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-2", "noun", "neuter", "third-declension"]
+  },
+  {
+    "id": "jact-019",
+    "front": "ὁ ἄνεμος",
+    "back": "the wind",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-2", "noun", "masculine", "second-declension", "maritime"]
+  },
+  {
+    "id": "jact-020",
+    "front": "τό κῦμα",
+    "back": "the wave",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-2", "noun", "neuter", "third-declension", "maritime"]
+  },
+  {
+    "id": "jact-021",
+    "front": "ὁ χειμών",
+    "back": "the storm, winter",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-2", "noun", "masculine", "third-declension", "maritime"]
+  },
+  {
+    "id": "jact-022",
+    "front": "ὁ κίνδυνος",
+    "back": "the danger, risk",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-2", "noun", "masculine", "second-declension"]
+  },
+  {
+    "id": "jact-023",
+    "front": "σῴζω",
+    "back": "I save, preserve",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-2", "verb"]
+  },
+  {
+    "id": "jact-024",
+    "front": "φέρω",
+    "back": "I carry, bear, bring",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-2", "verb", "irregular"]
+  },
+  {
+    "id": "jact-025",
+    "front": "πρός",
+    "back": "to, towards (+ acc.); at, near (+ dat.); in the name of (+ gen.)",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": ["jact", "chapter-2", "preposition"]
+  },
+  {
+    "id": "jact-026",
+    "front": "εἰς",
+    "back": "into, to (+ acc.)",
+    "chapter": 2,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": ["jact", "chapter-2", "preposition"]
+  },
+  {
+    "id": "jact-027",
+    "front": "ἡ δίκη",
+    "back": "the justice, lawsuit, penalty, custom",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-3", "noun", "feminine", "first-declension", "legal"]
+  },
+  {
+    "id": "jact-028",
+    "front": "ὁ δικαστής",
+    "back": "the judge, juror",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-3", "noun", "masculine", "first-declension", "legal"]
+  },
+  {
+    "id": "jact-029",
+    "front": "ἀδικέω",
+    "back": "I do wrong, injure, commit a crime",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-3", "verb", "contract", "legal"]
+  },
+  {
+    "id": "jact-030",
+    "front": "κλέπτω",
+    "back": "I steal",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-3", "verb", "legal"]
+  },
+  {
+    "id": "jact-031",
+    "front": "ὁ μάρτυς",
+    "back": "the witness",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-3", "noun", "masculine", "third-declension", "legal"]
+  },
+  {
+    "id": "jact-032",
+    "front": "ψεύδομαι",
+    "back": "I lie, deceive",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-3", "verb", "deponent", "legal"]
+  },
+  {
+    "id": "jact-033",
+    "front": "ἀληθής",
+    "back": "true, truthful",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": ["jact", "chapter-3", "adjective", "third-declension", "legal"]
+  },
+  {
+    "id": "jact-034",
+    "front": "ὁ νόμος",
+    "back": "the law, custom",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-3", "noun", "masculine", "second-declension", "legal"]
+  },
+  {
+    "id": "jact-035",
+    "front": "λέγω",
+    "back": "I say, speak, tell",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-3", "verb"]
+  },
+  {
+    "id": "jact-036",
+    "front": "ἀκούω",
+    "back": "I hear, listen to (+ gen. of person, acc. of thing)",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-3", "verb"]
+  },
+  {
+    "id": "jact-037",
+    "front": "δέ",
+    "back": "but, and (postpositive)",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": ["jact", "chapter-3", "particle", "postpositive"]
+  },
+  {
+    "id": "jact-038",
+    "front": "γάρ",
+    "back": "for, because (postpositive)",
+    "chapter": 3,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": ["jact", "chapter-3", "particle", "postpositive"]
+  },
+  {
+    "id": "jact-039",
+    "front": "τό δικαστήριον",
+    "back": "the law court",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-4", "noun", "neuter", "second-declension", "legal"]
+  },
+  {
+    "id": "jact-040",
+    "front": "κατηγορέω",
+    "back": "I accuse, prosecute (+ gen. of person)",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-4", "verb", "contract", "legal"]
+  },
+  {
+    "id": "jact-041",
+    "front": "ἀπολογέομαι",
+    "back": "I defend myself, speak in one's defence",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-4", "verb", "deponent", "contract", "legal"]
+  },
+  {
+    "id": "jact-042",
+    "front": "τιμωρέω",
+    "back": "I punish, take vengeance on (+ acc.)",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-4", "verb", "contract", "legal"]
+  },
+  {
+    "id": "jact-043",
+    "front": "ἡ ζημία",
+    "back": "the penalty, fine, loss",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-4", "noun", "feminine", "first-declension", "legal"]
+  },
+  {
+    "id": "jact-044",
+    "front": "καταψηφίζομαι",
+    "back": "I vote against, condemn (+ gen.)",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-4", "verb", "deponent", "legal"]
+  },
+  {
+    "id": "jact-045",
+    "front": "ἀποφεύγω",
+    "back": "I escape, am acquitted",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-4", "verb", "legal"]
+  },
+  {
+    "id": "jact-046",
+    "front": "ὁ κατήγορος",
+    "back": "the accuser, prosecutor",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-4", "noun", "masculine", "second-declension", "legal"]
+  },
+  {
+    "id": "jact-047",
+    "front": "ἡ ψῆφος",
+    "back": "the vote, ballot, pebble",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-4", "noun", "feminine", "second-declension", "legal"]
+  },
+  {
+    "id": "jact-048",
+    "front": "φεύγω",
+    "back": "I flee; am a defendant",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-4", "verb", "legal"]
+  },
+  {
+    "id": "jact-049",
+    "front": "ἄδικος",
+    "back": "unjust, wrong",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "adjective",
+    "tags": ["jact", "chapter-4", "adjective", "second-declension", "legal"]
+  },
+  {
+    "id": "jact-050",
+    "front": "μέν",
+    "back": "on the one hand (postpositive; often paired with δέ)",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": ["jact", "chapter-4", "particle", "postpositive"]
+  },
+  {
+    "id": "jact-051",
+    "front": "οὖν",
+    "back": "therefore, accordingly (postpositive)",
+    "chapter": 4,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": ["jact", "chapter-4", "particle", "postpositive"]
+  },
+  {
+    "id": "jact-052",
+    "front": "πράττω",
+    "back": "I do, accomplish, fare",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "aorist"]
+  },
+  {
+    "id": "jact-053",
+    "front": "γίγνομαι",
+    "back": "I become, happen, am born",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "deponent", "aorist"]
+  },
+  {
+    "id": "jact-054",
+    "front": "εἶπον",
+    "back": "I said, spoke (aorist of λέγω)",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "aorist", "irregular", "suppletive"]
+  },
+  {
+    "id": "jact-055",
+    "front": "ἦλθον",
+    "back": "I came, went (aorist of ἔρχομαι)",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "aorist", "irregular", "suppletive"]
+  },
+  {
+    "id": "jact-056",
+    "front": "εἶδον",
+    "back": "I saw (aorist of ὁράω)",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "aorist", "irregular", "suppletive"]
+  },
+  {
+    "id": "jact-057",
+    "front": "ἤκουσα",
+    "back": "I heard (aorist of ἀκούω)",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "aorist"]
+  },
+  {
+    "id": "jact-058",
+    "front": "ἔμαθον",
+    "back": "I learned (aorist of μανθάνω)",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "aorist", "irregular"]
+  },
+  {
+    "id": "jact-059",
+    "front": "ἔλαβον",
+    "back": "I took, seized (aorist of λαμβάνω)",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "aorist", "irregular"]
+  },
+  {
+    "id": "jact-060",
+    "front": "ἔπεσον",
+    "back": "I fell (aorist of πίπτω)",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "aorist", "irregular"]
+  },
+  {
+    "id": "jact-061",
+    "front": "πράττω, πράξω, ἔπραξα, πέπραχα, πέπραγμαι, ἐπράχθην",
+    "back": "do, accomplish, fare (principal parts)",
+    "chapter": 5,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "principal-parts"]
+  },
+  {
+    "id": "jact-062",
+    "front": "λαμβάνω, λήψομαι, ἔλαβον, εἴληφα, εἴλημμαι, ἐλήφθην",
+    "back": "take, seize (principal parts)",
+    "chapter": 5,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "principal-parts"]
+  },
+  {
+    "id": "jact-063",
+    "front": "μανθάνω, μαθήσομαι, ἔμαθον, μεμάθηκα, —, —",
+    "back": "learn, understand (principal parts)",
+    "chapter": 5,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-5", "verb", "principal-parts"]
+  },
+  {
+    "id": "jact-064",
+    "front": "ἐκ (ἐξ)",
+    "back": "out of, from (+ gen.)",
+    "chapter": 5,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": ["jact", "chapter-5", "preposition"]
+  },
+  {
+    "id": "jact-065",
+    "front": "στρατεύω",
+    "back": "I march, make war; (mid.) serve as a soldier",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-6", "verb", "military"]
+  },
+  {
+    "id": "jact-066",
+    "front": "μάχομαι",
+    "back": "I fight, battle (+ dat.)",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-6", "verb", "deponent", "military"]
+  },
+  {
+    "id": "jact-067",
+    "front": "νικάω",
+    "back": "I conquer, defeat, win",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-6", "verb", "contract", "military"]
+  },
+  {
+    "id": "jact-068",
+    "front": "βουλεύω",
+    "back": "I plan, deliberate; (mid.) I deliberate for myself",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-6", "verb"]
+  },
+  {
+    "id": "jact-069",
+    "front": "πέμπω",
+    "back": "I send",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-6", "verb"]
+  },
+  {
+    "id": "jact-070",
+    "front": "ἡ μάχη",
+    "back": "the battle, fight",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-6", "noun", "feminine", "first-declension", "military"]
+  },
+  {
+    "id": "jact-071",
+    "front": "ὁ στρατηγός",
+    "back": "the general",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-6", "noun", "masculine", "second-declension", "military"]
+  },
+  {
+    "id": "jact-072",
+    "front": "τό στράτευμα",
+    "back": "the army, expedition",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-6", "noun", "neuter", "third-declension", "military"]
+  },
+  {
+    "id": "jact-073",
+    "front": "ὁ πόλεμος",
+    "back": "the war",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-6", "noun", "masculine", "second-declension", "military"]
+  },
+  {
+    "id": "jact-074",
+    "front": "πέμπω, πέμψω, ἔπεμψα, πέπομφα, πέπεμμαι, ἐπέμφθην",
+    "back": "send (principal parts)",
+    "chapter": 6,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-6", "verb", "principal-parts"]
+  },
+  {
+    "id": "jact-075",
+    "front": "νικάω, νικήσω, ἐνίκησα, νενίκηκα, νενίκημαι, ἐνικήθην",
+    "back": "conquer, defeat, win (principal parts)",
+    "chapter": 6,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-6", "verb", "principal-parts"]
+  },
+  {
+    "id": "jact-076",
+    "front": "μετά",
+    "back": "with (+ gen.); after (+ acc.)",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "preposition",
+    "tags": ["jact", "chapter-6", "preposition"]
+  },
+  {
+    "id": "jact-077",
+    "front": "ἀλλά",
+    "back": "but, however",
+    "chapter": 6,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-6", "conjunction"]
+  },
+  {
+    "id": "jact-078",
+    "front": "λέγων, λέγουσα, λέγον",
+    "back": "saying, speaking (present active participle of λέγω)",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb", "participle", "present"]
+  },
+  {
+    "id": "jact-079",
+    "front": "εἰπών, εἰποῦσα, εἰπόν",
+    "back": "having said (aorist active participle of λέγω)",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb", "participle", "aorist"]
+  },
+  {
+    "id": "jact-080",
+    "front": "ἰδών, ἰδοῦσα, ἰδόν",
+    "back": "having seen (aorist active participle of ὁράω)",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb", "participle", "aorist"]
+  },
+  {
+    "id": "jact-081",
+    "front": "ἐλθών, ἐλθοῦσα, ἐλθόν",
+    "back": "having come/gone (aorist active participle of ἔρχομαι)",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb", "participle", "aorist"]
+  },
+  {
+    "id": "jact-082",
+    "front": "μαθών, μαθοῦσα, μαθόν",
+    "back": "having learned (aorist active participle of μανθάνω)",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb", "participle", "aorist"]
+  },
+  {
+    "id": "jact-083",
+    "front": "ποιήσας, ποιήσασα, ποιῆσαν",
+    "back": "having done/made (aorist active participle of ποιέω)",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb", "participle", "aorist"]
+  },
+  {
+    "id": "jact-084",
+    "front": "γενόμενος, γενομένη, γενόμενον",
+    "back": "having become, having happened (aorist middle participle of γίγνομαι)",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb", "participle", "aorist", "deponent"]
+  },
+  {
+    "id": "jact-085",
+    "front": "ποιέω",
+    "back": "I make, do",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb", "contract"]
+  },
+  {
+    "id": "jact-086",
+    "front": "τυγχάνω",
+    "back": "I happen (to be), chance upon (+ gen.); (+ participle) happen to be doing",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb"]
+  },
+  {
+    "id": "jact-087",
+    "front": "λανθάνω",
+    "back": "I escape notice; (+ participle) do X without being noticed",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb"]
+  },
+  {
+    "id": "jact-088",
+    "front": "φθάνω",
+    "back": "I anticipate, act first; (+ participle) do X before someone else",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb"]
+  },
+  {
+    "id": "jact-089",
+    "front": "ἔρχομαι, εἶμι/ἐλεύσομαι, ἦλθον, ἐλήλυθα, —, —",
+    "back": "come, go (principal parts)",
+    "chapter": 7,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-7", "verb", "principal-parts", "suppletive"]
+  },
+  {
+    "id": "jact-090",
+    "front": "ὡς",
+    "back": "as, how; that; since; in order to (+ participle/clause)",
+    "chapter": 7,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-7", "conjunction"]
+  },
+  {
+    "id": "jact-091",
+    "front": "ὅς, ἥ, ὅ",
+    "back": "who, which, that (relative pronoun)",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "pronoun",
+    "tags": ["jact", "chapter-8", "pronoun", "relative"]
+  },
+  {
+    "id": "jact-092",
+    "front": "ὅστις, ἥτις, ὅ τι",
+    "back": "whoever, whatever; (indirect) who, which",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "pronoun",
+    "tags": ["jact", "chapter-8", "pronoun", "indefinite-relative"]
+  },
+  {
+    "id": "jact-093",
+    "front": "ἵνα",
+    "back": "in order that, so that (+ subjunctive)",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-8", "conjunction", "purpose"]
+  },
+  {
+    "id": "jact-094",
+    "front": "ὅπως",
+    "back": "in order that, how (+ subjunctive/future indicative)",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-8", "conjunction", "purpose"]
+  },
+  {
+    "id": "jact-095",
+    "front": "ὥστε",
+    "back": "so that, with the result that (+ infinitive or indicative)",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-8", "conjunction", "result"]
+  },
+  {
+    "id": "jact-096",
+    "front": "ἐπεί (ἐπειδή)",
+    "back": "when, since, after",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-8", "conjunction", "temporal"]
+  },
+  {
+    "id": "jact-097",
+    "front": "πρίν",
+    "back": "before, until (+ infinitive or subjunctive)",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-8", "conjunction", "temporal"]
+  },
+  {
+    "id": "jact-098",
+    "front": "βούλομαι",
+    "back": "I wish, want, am willing",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-8", "verb", "deponent"]
+  },
+  {
+    "id": "jact-099",
+    "front": "κελεύω",
+    "back": "I order, command, urge",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-8", "verb"]
+  },
+  {
+    "id": "jact-100",
+    "front": "δεῖ",
+    "back": "it is necessary (+ acc. + inf.)",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-8", "verb", "impersonal"]
+  },
+  {
+    "id": "jact-101",
+    "front": "γιγνώσκω, γνώσομαι, ἔγνων, ἔγνωκα, ἔγνωσμαι, ἐγνώσθην",
+    "back": "know, recognise, judge (principal parts)",
+    "chapter": 8,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-8", "verb", "principal-parts"]
+  },
+  {
+    "id": "jact-102",
+    "front": "ποιέω, ποιήσω, ἐποίησα, πεποίηκα, πεποίημαι, ἐποιήθην",
+    "back": "make, do (principal parts)",
+    "chapter": 8,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-8", "verb", "principal-parts"]
+  },
+  {
+    "id": "jact-103",
+    "front": "μή",
+    "back": "not (with subjunctive, imperative, infinitive, participle)",
+    "chapter": 8,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": ["jact", "chapter-8", "particle", "negation"]
+  },
+  {
+    "id": "jact-104",
+    "front": "φημί",
+    "back": "I say, assert, affirm",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-9", "verb", "irregular", "indirect-speech"]
+  },
+  {
+    "id": "jact-105",
+    "front": "νομίζω",
+    "back": "I think, believe, consider (+ acc. + inf.)",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-9", "verb", "indirect-speech"]
+  },
+  {
+    "id": "jact-106",
+    "front": "ἡγέομαι",
+    "back": "I think, consider, believe; lead (+ gen.)",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-9", "verb", "deponent", "contract", "indirect-speech"]
+  },
+  {
+    "id": "jact-107",
+    "front": "δοκέω",
+    "back": "I think, seem; (impersonal) it seems best",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-9", "verb", "contract", "indirect-speech"]
+  },
+  {
+    "id": "jact-108",
+    "front": "ἀγγέλλω",
+    "back": "I announce, report",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-9", "verb", "indirect-speech"]
+  },
+  {
+    "id": "jact-109",
+    "front": "ὅτι",
+    "back": "that, because",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-9", "conjunction", "indirect-speech"]
+  },
+  {
+    "id": "jact-110",
+    "front": "οἶδα",
+    "back": "I know (perfect form with present meaning)",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-9", "verb", "irregular", "perfect"]
+  },
+  {
+    "id": "jact-111",
+    "front": "ἐλπίζω",
+    "back": "I hope, expect (+ inf. or acc. + inf.)",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-9", "verb", "indirect-speech"]
+  },
+  {
+    "id": "jact-112",
+    "front": "πυνθάνομαι",
+    "back": "I inquire, learn by asking (+ gen. of person)",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-9", "verb", "deponent", "indirect-speech"]
+  },
+  {
+    "id": "jact-113",
+    "front": "ἀγγέλλω, ἀγγελῶ, ἤγγειλα, ἤγγελκα, ἤγγελμαι, ἠγγέλθην",
+    "back": "announce, report (principal parts)",
+    "chapter": 9,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-9", "verb", "principal-parts"]
+  },
+  {
+    "id": "jact-114",
+    "front": "πυνθάνομαι, πεύσομαι, ἐπυθόμην, —, πέπυσμαι, —",
+    "back": "inquire, learn by asking (principal parts)",
+    "chapter": 9,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-9", "verb", "principal-parts", "deponent"]
+  },
+  {
+    "id": "jact-115",
+    "front": "αὐτός, αὐτή, αὐτό",
+    "back": "he/she/it (pronoun); self; the same (with article)",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "pronoun",
+    "tags": ["jact", "chapter-9", "pronoun"]
+  },
+  {
+    "id": "jact-116",
+    "front": "ἐκεῖνος, ἐκείνη, ἐκεῖνο",
+    "back": "that (person/thing), he/she/it (demonstrative pronoun)",
+    "chapter": 9,
+    "card_type": "Vocab",
+    "pos": "pronoun",
+    "tags": ["jact", "chapter-9", "pronoun", "demonstrative"]
+  },
+  {
+    "id": "jact-117",
+    "front": "εἰ",
+    "back": "if (introduces conditional protasis)",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-10", "conjunction", "conditional"]
+  },
+  {
+    "id": "jact-118",
+    "front": "ἐάν (ἄν, ἤν)",
+    "back": "if (+ subjunctive; general or future condition)",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "conjunction",
+    "tags": ["jact", "chapter-10", "conjunction", "conditional"]
+  },
+  {
+    "id": "jact-119",
+    "front": "ἄν",
+    "back": "(particle) marks potential or conditional statements",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": ["jact", "chapter-10", "particle", "conditional", "potential"]
+  },
+  {
+    "id": "jact-120",
+    "front": "εἴθε (εἰ γάρ)",
+    "back": "would that!, if only! (introduces wish)",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "particle",
+    "tags": ["jact", "chapter-10", "particle", "wish"]
+  },
+  {
+    "id": "jact-121",
+    "front": "δύναμαι",
+    "back": "I am able, can",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-10", "verb", "deponent", "irregular"]
+  },
+  {
+    "id": "jact-122",
+    "front": "βούλομαι",
+    "back": "I wish, want, am willing",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-10", "verb", "deponent"]
+  },
+  {
+    "id": "jact-123",
+    "front": "μέλλω",
+    "back": "I am about to, intend to (+ inf.); delay",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-10", "verb"]
+  },
+  {
+    "id": "jact-124",
+    "front": "ἐθέλω (θέλω)",
+    "back": "I wish, am willing",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-10", "verb"]
+  },
+  {
+    "id": "jact-125",
+    "front": "χρή",
+    "back": "it is necessary, one must (+ acc. + inf.)",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-10", "verb", "impersonal"]
+  },
+  {
+    "id": "jact-126",
+    "front": "γιγνώσκω",
+    "back": "I know, recognise, judge, decide",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "verb",
+    "tags": ["jact", "chapter-10", "verb"]
+  },
+  {
+    "id": "jact-127",
+    "front": "ὁ λόγος",
+    "back": "the word, speech, argument, reason, account",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-10", "noun", "masculine", "second-declension"]
+  },
+  {
+    "id": "jact-128",
+    "front": "ἡ γνώμη",
+    "back": "the opinion, judgement, intention",
+    "chapter": 10,
+    "card_type": "Vocab",
+    "pos": "noun",
+    "tags": ["jact", "chapter-10", "noun", "feminine", "first-declension"]
+  },
+  {
+    "id": "jact-129",
+    "front": "φέρω, οἴσω, ἤνεγκον/ἤνεγκα, ἐνήνοχα, ἐνήνεγμαι, ἠνέχθην",
+    "back": "carry, bear, bring (principal parts)",
+    "chapter": 10,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-10", "verb", "principal-parts", "suppletive"]
+  },
+  {
+    "id": "jact-130",
+    "front": "ὁράω, ὄψομαι, εἶδον, ἑώρακα/ἑόρακα, ἑώραμαι/ὦμμαι, ὤφθην",
+    "back": "see (principal parts)",
+    "chapter": 10,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-10", "verb", "principal-parts", "suppletive"]
+  },
+  {
+    "id": "jact-131",
+    "front": "λέγω, ἐρῶ/λέξω, εἶπον/ἔλεξα, εἴρηκα, εἴρημαι/λέλεγμαι, ἐλέχθην/ἐρρήθην",
+    "back": "say, speak, tell (principal parts)",
+    "chapter": 10,
+    "card_type": "PrincipalParts",
+    "pos": "verb",
+    "tags": ["jact", "chapter-10", "verb", "principal-parts", "suppletive"]
+  }
+]
