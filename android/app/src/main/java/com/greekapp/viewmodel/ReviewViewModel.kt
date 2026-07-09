@@ -1,12 +1,16 @@
 package com.greekapp.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.greekapp.GreekApplication
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 data class Card(
-    val id: Int,
+    val id: String,
     val front: String,
     val back: String
 )
@@ -15,29 +19,37 @@ data class ReviewState(
     val cards: List<Card> = emptyList(),
     val currentIndex: Int = 0,
     val isAnswerRevealed: Boolean = false,
-    val isComplete: Boolean = false
+    val isComplete: Boolean = false,
+    val isLoading: Boolean = true
 )
 
 class ReviewViewModel : ViewModel() {
-    private val _state = MutableStateFlow(
-        ReviewState(
-            cards = listOf(
-                Card(1, "ὁ ἄνθρωπος", "the person, human"),
-                Card(2, "ἡ γῆ", "the earth, land"),
-                Card(3, "τὸ ἔργον", "the work, deed"),
-                Card(4, "λέγω", "I say, I speak"),
-                Card(5, "καλός", "beautiful, good"),
-                Card(6, "ἐν", "in, on, among (+ dat)"),
-                Card(7, "πρός", "to, toward (+ acc)"),
-                Card(8, "ἀλλά", "but, however"),
-                Card(9, "καί", "and, also, even"),
-                Card(10, "οὐ", "not"),
-                Card(11, "ὁ λόγος", "the word, speech, reason"),
-                Card(12, "ἡ ὁδός", "the road, way, journey")
-            )
-        )
-    )
+    private val _state = MutableStateFlow(ReviewState())
     val state: StateFlow<ReviewState> = _state.asStateFlow()
+
+    init { loadCards() }
+
+    private fun loadCards() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val core = GreekApplication.greekCore ?: return@launch
+            try {
+                val dueCards = core.getDueCards(20)
+                val cards = if (dueCards.isNotEmpty()) {
+                    dueCards.map { Card(id = it.card.id, front = it.card.front, back = it.card.back) }
+                } else {
+                    val newCards = core.getNewCards("athenaze", 1, 10)
+                    newCards.map { Card(id = it.id, front = it.front, back = it.back) }
+                }
+                _state.value = ReviewState(
+                    cards = cards,
+                    isLoading = false,
+                    isComplete = cards.isEmpty()
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(isLoading = false, isComplete = true)
+            }
+        }
+    }
 
     fun revealAnswer() {
         _state.value = _state.value.copy(isAnswerRevealed = true)
@@ -45,8 +57,15 @@ class ReviewViewModel : ViewModel() {
 
     fun answerCard(difficulty: Int) {
         val currentState = _state.value
+        val card = currentCard ?: return
 
-        // In real app: GreekCore.recordAnswer(card.id, difficulty)
+        viewModelScope.launch(Dispatchers.IO) {
+            val core = GreekApplication.greekCore ?: return@launch
+            val rating = (difficulty + 1).toUByte()
+            try {
+                core.submitReview(card.id, rating)
+            } catch (_: Exception) {}
+        }
 
         val nextIndex = currentState.currentIndex + 1
         if (nextIndex >= currentState.cards.size) {

@@ -1,28 +1,43 @@
 package com.greekapp.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.greekapp.GreekApplication
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 data class HomeState(
-    val dueCardsCount: Int = 12,
-    val streak: Int = 7,
-    val hasRecentReading: Boolean = true
+    val dueCardsCount: Int = 0,
+    val streak: Int = 0,
+    val totalCards: Int = 0,
+    val reviewedToday: Int = 0,
+    val isLoading: Boolean = true
 )
 
 class HomeViewModel : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
-    // Will be replaced with actual Rust integration
+    init { refreshStats() }
+
     fun refreshStats() {
-        // Mock: In real app, this will call Rust library
-        // val stats = GreekCore.getHomeStats()
-        // _state.value = HomeState(
-        //     dueCardsCount = stats.dueCount,
-        //     streak = stats.streak,
-        //     hasRecentReading = stats.lastReadingTimestamp != null
-        // )
+        viewModelScope.launch(Dispatchers.IO) {
+            val core = GreekApplication.greekCore ?: return@launch
+            try {
+                val stats = core.getReviewStats()
+                _state.value = HomeState(
+                    dueCardsCount = stats.dueCount,
+                    streak = stats.streakDays,
+                    totalCards = stats.totalCards,
+                    reviewedToday = stats.reviewedToday,
+                    isLoading = false
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(isLoading = false)
+            }
+        }
     }
 }

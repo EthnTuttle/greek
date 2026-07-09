@@ -1,9 +1,13 @@
 package com.greekapp.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.greekapp.GreekApplication
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 data class Chapter(
     val number: Int,
@@ -16,45 +20,49 @@ data class Chapter(
 
 data class Section(
     val name: String,
+    val textbook: String,
     val chapters: List<Chapter>,
     val isExpanded: Boolean = false
 )
 
 data class CurriculumState(
-    val sections: List<Section> = emptyList()
+    val sections: List<Section> = emptyList(),
+    val isLoading: Boolean = true
 )
 
 class CurriculumViewModel : ViewModel() {
-    private val _state = MutableStateFlow(
-        CurriculumState(
-            sections = listOf(
-                Section(
-                    name = "Athenaze Book I",
-                    chapters = listOf(
-                        Chapter(1, "Ο ΔΙΚΑΙΟΠΟΛΙΣ (α)", 45, 45),
-                        Chapter(2, "Ο ΔΙΚΑΙΟΠΟΛΙΣ (β)", 52, 38),
-                        Chapter(3, "Ο ΑΡΟΤΟΣ (α)", 48, 12),
-                        Chapter(4, "Ο ΑΡΟΤΟΣ (β)", 55, 0),
-                        Chapter(5, "Ο ΛΥΚΟΣ (α)", 61, 0),
-                        Chapter(6, "Ο ΛΥΚΟΣ (β)", 47, 0),
-                        Chapter(7, "Ο ΚΥΝΗΓΟΣ (α)", 58, 0),
-                        Chapter(8, "Ο ΚΥΝΗΓΟΣ (β)", 53, 0),
-                        Chapter(9, "Ο ΠΑΡΘΕΝΟΣ (α)", 49, 0),
-                        Chapter(10, "Ο ΠΑΡΘΕΝΟΣ (β)", 56, 0)
-                    ),
-                    isExpanded = true
-                ),
-                Section(
-                    name = "Athenaze Book II",
-                    chapters = (11..20).map { num ->
-                        Chapter(num, "Chapter $num", 50, 0)
-                    },
-                    isExpanded = false
-                )
-            )
-        )
-    )
+    private val _state = MutableStateFlow(CurriculumState())
     val state: StateFlow<CurriculumState> = _state.asStateFlow()
+
+    init { loadCurriculum() }
+
+    private fun loadCurriculum() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val core = GreekApplication.greekCore ?: return@launch
+            try {
+                val curricula = core.getCurricula()
+                val sections = curricula.mapIndexed { index, cv ->
+                    val chapters = core.getChapters(cv.textbook)
+                    Section(
+                        name = cv.displayName,
+                        textbook = cv.textbook,
+                        chapters = chapters.map { ch ->
+                            Chapter(
+                                number = ch.chapter,
+                                title = ch.title,
+                                cardCount = ch.cardCount,
+                                completedCount = ch.masteredCount
+                            )
+                        },
+                        isExpanded = (index == 0)
+                    )
+                }
+                _state.value = CurriculumState(sections = sections, isLoading = false)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(isLoading = false)
+            }
+        }
+    }
 
     fun toggleSection(sectionName: String) {
         _state.value = _state.value.copy(
@@ -69,7 +77,14 @@ class CurriculumViewModel : ViewModel() {
     }
 
     fun startChapter(chapterNumber: Int) {
-        // In real app: navigate to chapter-specific review session
-        // GreekCore.loadChapterCards(chapterNumber)
+        val section = _state.value.sections.firstOrNull { s ->
+            s.chapters.any { it.number == chapterNumber }
+        } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val core = GreekApplication.greekCore ?: return@launch
+            try {
+                core.unlockChapter(section.textbook, chapterNumber)
+            } catch (_: Exception) {}
+        }
     }
 }
