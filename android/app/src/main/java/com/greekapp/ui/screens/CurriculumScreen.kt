@@ -119,11 +119,15 @@ private fun ChapterItem(
     chapter: Chapter,
     onClick: () -> Unit
 ) {
+    // Chapters with no vocabulary yet are shown as "Coming Soon": dimmed,
+    // non-clickable, and without a progress bar (0/0 progress is meaningless).
+    val cardModifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 4.dp)
+        .let { if (chapter.available) it.clickable(onClick = onClick) else it }
+
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
+        modifier = cardModifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -143,13 +147,33 @@ private fun ChapterItem(
                 Text(
                     text = "Chapter ${chapter.number}",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = if (chapter.available) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
-                Text(
-                    text = "${chapter.cardCount} cards",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (chapter.available) {
+                    Text(
+                        text = "${chapter.cardCount} cards",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    // Coming Soon badge
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = "Coming Soon",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
 
             Text(
@@ -158,19 +182,21 @@ private fun ChapterItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // Progress bar
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                LinearProgressIndicator(
-                    progress = { chapter.progress },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    text = "${(chapter.progress * 100).toInt()}% complete (${chapter.completedCount}/${chapter.cardCount})",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            // Progress bar — only meaningful when the chapter has cards.
+            if (chapter.available) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    LinearProgressIndicator(
+                        progress = { chapter.progress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = "${(chapter.progress * 100).toInt()}% complete (${chapter.completedCount}/${chapter.cardCount})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

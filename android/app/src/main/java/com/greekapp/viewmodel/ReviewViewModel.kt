@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.greekapp.GreekApplication
+import com.greekapp.ReviewSessionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,22 +37,57 @@ class ReviewViewModel(
     val state: StateFlow<ReviewState> = _state.asStateFlow()
 
     init {
-        // Restore an in-progress session across process death, if one was saved.
+        // Restore an in-progress session, preferring whichever source has it.
+        // SavedStateHandle only survives system-initiated death (config changes,
+        // low-memory restore with a bundle); it is lost on swipe-away / `am kill`.
+        // The durable DataStore session survives full process death, so we restore
+        // the SAME batch at the SAME position rather than rebuilding a new one.
         val savedCardsJson = savedStateHandle.get<String>(KEY_CARDS)
         if (savedCardsJson != null) {
-            val cards = parseCards(savedCardsJson)
-            val index = (savedStateHandle.get<Int>(KEY_INDEX) ?: 0).coerceIn(0, cards.size)
-            val revealed = savedStateHandle.get<Boolean>(KEY_REVEALED) ?: false
-            _state.value = ReviewState(
-                cards = cards,
-                currentIndex = index,
-                isAnswerRevealed = revealed,
-                isLoading = false,
-                isComplete = cards.isEmpty() || index >= cards.size
+            restoreFrom(
+                cardsJson = savedCardsJson,
+                index = savedStateHandle.get<Int>(KEY_INDEX) ?: 0,
+                revealed = savedStateHandle.get<Boolean>(KEY_REVEALED) ?: false
             )
         } else {
-            loadCards()
+            // No in-memory state: consult durable storage before building a fresh batch.
+            viewModelScope.launch(Dispatchers.IO) {
+                val persisted = try {
+                    ReviewSessionRepository.load(GreekApplication.appContext)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load persisted session", e)
+                    null
+                }
+                // Only resume if the persisted batch actually has cards. A blank or
+                // empty-array ("[]") payload — or an unparseable one — is NOT resumable;
+                // treating it as a completed session would strand the user on the
+                // completion screen forever. In that case, clear it and build fresh.
+                val persistedCards = persisted?.let { parseCards(it.cardsJson) } ?: emptyList()
+                if (persisted != null && persistedCards.isNotEmpty()) {
+                    // Rehydrate SavedStateHandle too, so a subsequent config change is fast.
+                    savedStateHandle[KEY_CARDS] = persisted.cardsJson
+                    savedStateHandle[KEY_INDEX] = persisted.index
+                    savedStateHandle[KEY_REVEALED] = persisted.revealed
+                    restoreFrom(persisted.cardsJson, persisted.index, persisted.revealed)
+                } else {
+                    if (persisted != null) clearDurableSession()
+                    loadCards()
+                }
+            }
         }
+    }
+
+    /** Set state from a serialized batch + position (no I/O). */
+    private fun restoreFrom(cardsJson: String, index: Int, revealed: Boolean) {
+        val cards = parseCards(cardsJson)
+        val safeIndex = index.coerceIn(0, cards.size)
+        _state.value = ReviewState(
+            cards = cards,
+            currentIndex = safeIndex,
+            isAnswerRevealed = revealed,
+            isLoading = false,
+            isComplete = cards.isEmpty() || safeIndex >= cards.size
+        )
     }
 
     private fun loadCards() {
@@ -78,7 +114,15 @@ class ReviewViewModel(
                 }
 
                 val cards = queue.values.toList()
-                persistSession(cards, 0, false)
+                if (cards.isEmpty()) {
+                    // Nothing to review: clear any stale session and DON'T persist an
+                    // empty batch. Persisting "[]" and then clearing it are two
+                    // unordered coroutines; if the clear lost the race, a stale "[]"
+                    // would be restored as a bogus completed session on next launch.
+                    clearDurableSession()
+                } else {
+                    persistSession(cards, 0, false)
+                }
                 _state.value = ReviewState(
                     cards = cards,
                     currentIndex = 0,
@@ -137,6 +181,7 @@ class ReviewViewModel(
         val s = _state.value
         _state.value = s.copy(isAnswerRevealed = true)
         savedStateHandle[KEY_REVEALED] = true
+        persistProgress(s.currentIndex, true)
     }
 
     /** Retry loading after a load-time error / dismiss the error banner. */
@@ -178,20 +223,58 @@ class ReviewViewModel(
             // Only advance once the review is safely persisted.
             val s = _state.value
             val nextIndex = s.currentIndex + 1
-            _state.value = if (nextIndex >= s.cards.size) {
+            val complete = nextIndex >= s.cards.size
+            _state.value = if (complete) {
                 s.copy(isComplete = true, isSubmitting = false, isAnswerRevealed = false)
             } else {
                 s.copy(currentIndex = nextIndex, isSubmitting = false, isAnswerRevealed = false)
             }
             savedStateHandle[KEY_INDEX] = _state.value.currentIndex
             savedStateHandle[KEY_REVEALED] = false
+            if (complete) {
+                // Session finished: drop the durable copy so the next launch builds
+                // a fresh batch instead of resuming a completed one.
+                clearDurableSession()
+            } else {
+                persistProgress(_state.value.currentIndex, false)
+            }
         }
     }
 
     private fun persistSession(cards: List<Card>, index: Int, revealed: Boolean) {
-        savedStateHandle[KEY_CARDS] = serializeCards(cards)
+        val json = serializeCards(cards)
+        savedStateHandle[KEY_CARDS] = json
         savedStateHandle[KEY_INDEX] = index
         savedStateHandle[KEY_REVEALED] = revealed
+        // Mirror the whole batch to durable storage so it survives process death.
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                ReviewSessionRepository.save(GreekApplication.appContext, json, index, revealed)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to persist review session", e)
+            }
+        }
+    }
+
+    /** Update only the position/revealed flag in durable storage (batch unchanged). */
+    private fun persistProgress(index: Int, revealed: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                ReviewSessionRepository.updateProgress(GreekApplication.appContext, index, revealed)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to persist review progress", e)
+            }
+        }
+    }
+
+    private fun clearDurableSession() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                ReviewSessionRepository.clear(GreekApplication.appContext)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to clear review session", e)
+            }
+        }
     }
 
     val currentCard: Card?

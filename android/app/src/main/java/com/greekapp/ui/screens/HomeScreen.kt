@@ -11,6 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.greekapp.viewmodel.HomeViewModel
 
@@ -21,6 +23,14 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
+
+    // Re-pull stats every time Home becomes visible so cards added elsewhere
+    // (e.g. "+ Add to SRS" in the reader) are reflected in the due count
+    // without needing a cold start. The ViewModel's init already does the
+    // first load; this keeps it fresh on every return to the tab.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refreshStats()
+    }
 
     Column(
         modifier = Modifier

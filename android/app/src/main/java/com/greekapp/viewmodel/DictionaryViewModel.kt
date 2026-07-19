@@ -21,7 +21,8 @@ data class DictionaryEntry(
 data class DictionaryState(
     val query: String = "",
     val results: List<DictionaryEntry> = emptyList(),
-    val isSearching: Boolean = false
+    val isSearching: Boolean = false,
+    val error: String? = null
 )
 
 class DictionaryViewModel : ViewModel() {
@@ -38,12 +39,12 @@ class DictionaryViewModel : ViewModel() {
     private fun search(query: String) {
         searchJob?.cancel()
         if (query.isBlank()) {
-            _state.value = _state.value.copy(results = emptyList(), isSearching = false)
+            _state.value = _state.value.copy(results = emptyList(), isSearching = false, error = null)
             return
         }
-        _state.value = _state.value.copy(isSearching = true)
+        _state.value = _state.value.copy(isSearching = true, error = null)
         searchJob = viewModelScope.launch(Dispatchers.IO) {
-            delay(300)
+            delay(150)
             val core = GreekApplication.greekCore ?: return@launch
             try {
                 val results = core.searchDictionary(query, 50)
@@ -55,10 +56,15 @@ class DictionaryViewModel : ViewModel() {
                             definition = it.definition
                         )
                     },
-                    isSearching = false
+                    isSearching = false,
+                    error = null
                 )
             } catch (e: Exception) {
-                _state.value = _state.value.copy(results = emptyList(), isSearching = false)
+                _state.value = _state.value.copy(
+                    results = emptyList(),
+                    isSearching = false,
+                    error = e.message ?: "Search failed"
+                )
             }
         }
     }

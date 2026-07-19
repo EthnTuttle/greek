@@ -13,7 +13,10 @@ data class Chapter(
     val number: Int,
     val title: String,
     val cardCount: Int,
-    val completedCount: Int
+    val completedCount: Int,
+    // A chapter with no vocabulary yet is "unavailable" and should be surfaced
+    // as coming-soon rather than a normal 0-card entry.
+    val available: Boolean = true
 ) {
     val progress: Float get() = if (cardCount > 0) completedCount.toFloat() / cardCount else 0f
 }
@@ -51,7 +54,8 @@ class CurriculumViewModel : ViewModel() {
                                 number = ch.chapter,
                                 title = ch.title,
                                 cardCount = ch.cardCount,
-                                completedCount = ch.masteredCount
+                                completedCount = ch.masteredCount,
+                                available = ch.available
                             )
                         },
                         isExpanded = (index == 0)

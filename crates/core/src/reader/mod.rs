@@ -135,8 +135,10 @@ fn is_punctuation(ch: char) -> bool {
             | '—'
             | '-'
             | '"'
-            | '"'
-            | '"'
+            | '\u{201C}' // left double quotation mark (“)
+            | '\u{201D}' // right double quotation mark (”)
+            | '\u{00AB}' // left-pointing double angle quotation mark («)
+            | '\u{00BB}' // right-pointing double angle quotation mark (»)
             | '\''
     )
 }

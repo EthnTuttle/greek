@@ -7,6 +7,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import uniffi.uniffi_bindings.GreekCore
@@ -29,10 +32,67 @@ sealed interface InitState {
 // App-wide preferences store (used by Settings + theme).
 val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
+// Durable store for an in-progress review session, so it survives full process
+// death (swipe-away / `am kill`), not just config changes. SavedStateHandle only
+// survives system-initiated death, which is why a killed session used to restart
+// at "1 of N" with a freshly-built batch.
+val Context.reviewSessionDataStore: DataStore<Preferences> by preferencesDataStore(name = "review_session")
+
 object SettingsKeys {
     val DARK_MODE = booleanPreferencesKey("dark_mode")
     val DAILY_REMINDER = booleanPreferencesKey("daily_reminder")
     val AUTO_PLAY_AUDIO = booleanPreferencesKey("auto_play_audio")
+}
+
+object ReviewSessionKeys {
+    // The full batch, serialized as a JSON array of {id, front, back}.
+    val CARDS = stringPreferencesKey("cards")
+    val INDEX = intPreferencesKey("index")
+    val REVEALED = booleanPreferencesKey("revealed")
+}
+
+/** A persisted review session: the original batch plus where the user left off. */
+data class PersistedSession(
+    val cardsJson: String,
+    val index: Int,
+    val revealed: Boolean
+)
+
+/**
+ * Durable persistence for the active review session. The batch is written once
+ * when the session loads and the index/revealed flags are updated as the user
+ * progresses, so a cold start restores the SAME batch at the SAME position
+ * rather than rebuilding a new one.
+ */
+object ReviewSessionRepository {
+    suspend fun load(context: Context): PersistedSession? {
+        val prefs = context.reviewSessionDataStore.data.first()
+        val cardsJson = prefs[ReviewSessionKeys.CARDS] ?: return null
+        return PersistedSession(
+            cardsJson = cardsJson,
+            index = prefs[ReviewSessionKeys.INDEX] ?: 0,
+            revealed = prefs[ReviewSessionKeys.REVEALED] ?: false
+        )
+    }
+
+    suspend fun save(context: Context, cardsJson: String, index: Int, revealed: Boolean) {
+        context.reviewSessionDataStore.edit {
+            it[ReviewSessionKeys.CARDS] = cardsJson
+            it[ReviewSessionKeys.INDEX] = index
+            it[ReviewSessionKeys.REVEALED] = revealed
+        }
+    }
+
+    suspend fun updateProgress(context: Context, index: Int, revealed: Boolean) {
+        context.reviewSessionDataStore.edit {
+            it[ReviewSessionKeys.INDEX] = index
+            it[ReviewSessionKeys.REVEALED] = revealed
+        }
+    }
+
+    suspend fun clear(context: Context) {
+        context.reviewSessionDataStore.edit { it.clear() }
+    }
 }
 
 /** Thin repository over DataStore. Dark mode is nullable: null == follow system. */
@@ -67,6 +127,11 @@ class GreekApplication : Application() {
         var isInitialized: Boolean = false
             private set
 
+        // Application context for repositories that need DataStore access outside
+        // of a composable (e.g. ReviewViewModel persisting its session).
+        lateinit var appContext: Context
+            private set
+
         private val _initState = MutableStateFlow<InitState>(InitState.Loading)
         val initState: StateFlow<InitState> = _initState.asStateFlow()
     }
@@ -75,6 +140,7 @@ class GreekApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        appContext = applicationContext
         System.loadLibrary("uniffi_bindings")
 
         // Heavy work (113MB asset copy + JSON merge + Rust core init) must run off the

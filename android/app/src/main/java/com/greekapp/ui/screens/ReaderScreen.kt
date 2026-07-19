@@ -1,5 +1,6 @@
 package com.greekapp.ui.screens
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,7 +19,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -160,7 +163,7 @@ private fun SectionSelector(
                 Icon(Icons.Default.ArrowDropDown, contentDescription = null)
             },
             modifier = Modifier
-                .menuAnchor()
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 .fillMaxWidth()
         )
         ExposedDropdownMenu(
@@ -228,7 +231,12 @@ private fun ClickableGreekText(
         }
     }
 
-    androidx.compose.foundation.text.ClickableText(
+    // Capture the laid-out text so a tap position can be mapped back to a character
+    // offset, then to the "WORD" annotation covering it. Replaces the deprecated
+    // ClickableText while preserving the exact tap-to-analyze behavior.
+    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+
+    Text(
         text = annotatedText,
         style = TextStyle(
             fontFamily = GreekFontFamily,
@@ -236,11 +244,15 @@ private fun ClickableGreekText(
             lineHeight = 32.sp,
             color = onSurface
         ),
-        onClick = { offset ->
-            annotatedText.getStringAnnotations(tag = "WORD", start = offset, end = offset)
-                .firstOrNull()?.let { annotation ->
-                    onWordClick(annotation.item)
-                }
+        onTextLayout = { layoutResult = it },
+        modifier = Modifier.pointerInput(annotatedText) {
+            detectTapGestures { pos ->
+                val offset = layoutResult?.getOffsetForPosition(pos) ?: return@detectTapGestures
+                annotatedText.getStringAnnotations(tag = "WORD", start = offset, end = offset)
+                    .firstOrNull()?.let { annotation ->
+                        onWordClick(annotation.item)
+                    }
+            }
         }
     )
 }
