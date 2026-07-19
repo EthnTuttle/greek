@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.greekapp.ui.theme.GreekFontFamily
@@ -22,12 +23,37 @@ fun ReviewScreen(
     val state by viewModel.state.collectAsState()
     val card = viewModel.currentCard
 
+    if (state.isLoading) {
+        LoadingScreen()
+        return
+    }
+
+    // Load-time failure with no cards to show: offer a retry instead of a blank screen.
+    if (state.errorMessage != null && card == null) {
+        ReviewMessageScreen(
+            title = "Something went wrong",
+            message = state.errorMessage!!,
+            buttonText = "Try Again",
+            onButton = { viewModel.retryLoad() }
+        )
+        return
+    }
+
     if (state.isComplete) {
         ReviewCompleteScreen(onDone = onComplete)
         return
     }
 
-    if (card == null) return
+    // Queue is empty (nothing due, no new cards available): friendly empty state.
+    if (card == null) {
+        ReviewMessageScreen(
+            title = "No cards due",
+            message = "Great job — you're all caught up! Unlock a new chapter to keep learning.",
+            buttonText = "Done",
+            onButton = onComplete
+        )
+        return
+    }
 
     Column(
         modifier = Modifier
@@ -69,13 +95,21 @@ fun ReviewScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Front (Greek)
+                // Front (Greek) — pick a smaller style for longer text so it never
+                // clips on narrow screens or with large system font scaling.
+                val frontStyle = when {
+                    card.front.length > 24 -> MaterialTheme.typography.headlineMedium
+                    card.front.length > 14 -> MaterialTheme.typography.headlineLarge
+                    else -> MaterialTheme.typography.displayMedium
+                }
                 Text(
                     text = card.front,
-                    style = MaterialTheme.typography.displayMedium,
+                    style = frontStyle,
                     fontFamily = GreekFontFamily,
                     fontWeight = FontWeight.Normal,
                     textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 4,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
@@ -93,10 +127,25 @@ fun ReviewScreen(
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Normal,
                         textAlign = TextAlign.Center,
+                        overflow = TextOverflow.Ellipsis,
+                        maxLines = 6,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
+        }
+
+        // Inline error banner (e.g. a review failed to save) — the card stays put.
+        if (state.errorMessage != null) {
+            Text(
+                text = state.errorMessage!!,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            )
         }
 
         // Action buttons
@@ -122,6 +171,7 @@ fun ReviewScreen(
                 ) {
                     OutlinedButton(
                         onClick = { viewModel.answerCard(0) },
+                        enabled = !state.isSubmitting,
                         modifier = Modifier
                             .weight(1f)
                             .height(56.dp),
@@ -133,6 +183,7 @@ fun ReviewScreen(
                     }
                     OutlinedButton(
                         onClick = { viewModel.answerCard(1) },
+                        enabled = !state.isSubmitting,
                         modifier = Modifier
                             .weight(1f)
                             .height(56.dp)
@@ -146,6 +197,7 @@ fun ReviewScreen(
                 ) {
                     Button(
                         onClick = { viewModel.answerCard(2) },
+                        enabled = !state.isSubmitting,
                         modifier = Modifier
                             .weight(1f)
                             .height(56.dp)
@@ -154,6 +206,7 @@ fun ReviewScreen(
                     }
                     Button(
                         onClick = { viewModel.answerCard(3) },
+                        enabled = !state.isSubmitting,
                         modifier = Modifier
                             .weight(1f)
                             .height(56.dp),
@@ -165,6 +218,64 @@ fun ReviewScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LoadingScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator()
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Loading your cards...",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun ReviewMessageScreen(
+    title: String,
+    message: String,
+    buttonText: String,
+    onButton: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(
+            onClick = onButton,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+        ) {
+            Text(buttonText)
         }
     }
 }

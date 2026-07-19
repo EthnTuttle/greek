@@ -45,36 +45,37 @@ impl SrsEngine {
         }
     }
 
-    /// Get cards that are due for review (due_date <= now), ordered by most overdue first
-    pub fn get_due_cards(&self, db: &Database, limit: usize) -> Vec<CardWithState> {
+    /// Get cards that are due for review (due_date <= now), ordered by most overdue first.
+    /// Propagates SQL errors instead of panicking so callers can surface a recoverable error.
+    pub fn get_due_cards(
+        &self,
+        db: &Database,
+        limit: usize,
+    ) -> anyhow::Result<Vec<CardWithState>> {
         let now = chrono_now();
-        let mut stmt = db
-            .conn()
-            .prepare(
-                "SELECT card_id, stability, difficulty, last_review, due_date, reps, lapses
+        let mut stmt = db.conn().prepare(
+            "SELECT card_id, stability, difficulty, last_review, due_date, reps, lapses
                  FROM memory_states
                  WHERE due_date <= ?1
                  ORDER BY due_date ASC
                  LIMIT ?2",
-            )
-            .unwrap_or_else(|e| panic!("Failed to prepare due cards query: {e}"));
+        )?;
 
-        let rows = stmt
-            .query_map(rusqlite::params![now, limit as i64], |row| {
-                Ok(MemoryStateRow {
-                    card_id: row.get(0)?,
-                    stability: row.get(1)?,
-                    difficulty: row.get(2)?,
-                    last_review: row.get(3)?,
-                    due_date: row.get(4)?,
-                    reps: row.get(5)?,
-                    lapses: row.get(6)?,
-                })
+        let rows = stmt.query_map(rusqlite::params![now, limit as i64], |row| {
+            Ok(MemoryStateRow {
+                card_id: row.get(0)?,
+                stability: row.get(1)?,
+                difficulty: row.get(2)?,
+                last_review: row.get(3)?,
+                due_date: row.get(4)?,
+                reps: row.get(5)?,
+                lapses: row.get(6)?,
             })
-            .unwrap_or_else(|e| panic!("Failed to query due cards: {e}"));
+        })?;
 
-        rows.filter_map(|row| {
-            let memory = row.ok()?;
+        let mut result = Vec::new();
+        for row in rows {
+            let memory = row?;
             // Build a minimal card from the memory state
             // In a real app, card content would be loaded from a separate cards table/file
             let card = Card {
@@ -86,12 +87,13 @@ impl SrsEngine {
                 pos: String::new(),
                 tags: Vec::new(),
             };
-            Some(CardWithState {
+            result.push(CardWithState {
                 card,
                 memory: Some(memory),
-            })
-        })
-        .collect()
+            });
+        }
+
+        Ok(result)
     }
 
     /// Get new cards (no memory state) for a given textbook/chapter, in order.
@@ -225,6 +227,14 @@ impl Default for SrsEngine {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Returns the current time as an ISO 8601 string (UTC), e.g.
+/// "2026-07-15T12:00:00Z". Public so other layers (UniFFI stats,
+/// card creation) can produce due-date strings in the SAME format
+/// that `get_due_cards` compares against.
+pub fn now_iso8601() -> String {
+    chrono_now()
 }
 
 /// Returns the current time as an ISO 8601 string (UTC).
@@ -396,7 +406,7 @@ mod tests {
             .unwrap();
 
         let engine = SrsEngine::new();
-        let due = engine.get_due_cards(&db, 10);
+        let due = engine.get_due_cards(&db, 10).unwrap();
 
         // Only the overdue card should be returned
         assert_eq!(due.len(), 1);

@@ -1,10 +1,35 @@
 use greek_core::{
-    Analysis, Card, CardWithState, ChapterInfo, Curriculum, CurriculumInfo, Database, MorphologyDb,
-    Reader, SearchEngine, SearchResult, SrsEngine, TextSection, Token,
+    now_iso8601, Analysis, Card, CardWithState, ChapterInfo, Curriculum, CurriculumInfo, Database,
+    MorphologyDb, Reader, SearchEngine, SearchResult, SrsEngine, TextSection, Token,
 };
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 uniffi::setup_scaffolding!();
+
+/// Errors surfaced to the Kotlin layer. UniFFI turns these into a
+/// checked `GreekException` so callers can recover instead of crashing.
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum GreekError {
+    #[error("database error: {msg}")]
+    Database { msg: String },
+}
+
+impl From<anyhow::Error> for GreekError {
+    fn from(e: anyhow::Error) -> Self {
+        GreekError::Database {
+            msg: e.to_string(),
+        }
+    }
+}
+
+impl From<rusqlite::Error> for GreekError {
+    fn from(e: rusqlite::Error) -> Self {
+        GreekError::Database {
+            msg: e.to_string(),
+        }
+    }
+}
 
 // --- Data transfer types for UniFFI ---
 
@@ -62,6 +87,7 @@ pub struct ChapterView {
     pub card_count: i32,
     pub mastered_count: i32,
     pub unlocked: bool,
+    pub available: bool,
 }
 
 #[derive(uniffi::Record)]
@@ -161,6 +187,7 @@ fn chapter_to_view(c: &ChapterInfo) -> ChapterView {
         card_count: c.card_count,
         mastered_count: c.mastered_count,
         unlocked: c.unlocked,
+        available: c.available,
     }
 }
 
@@ -191,25 +218,40 @@ pub struct GreekCore {
     morphology: MorphologyDb,
     search: SearchEngine,
     cards: Vec<Card>,
+    /// Index of card id -> position in `cards`, built once at construction
+    /// so due-card enrichment is O(1) per card instead of O(n).
+    card_index: HashMap<String, usize>,
+}
+
+/// Build a card id -> index map for O(1) lookups.
+fn build_card_index(cards: &[Card]) -> HashMap<String, usize> {
+    cards
+        .iter()
+        .enumerate()
+        .map(|(i, c)| (c.id.clone(), i))
+        .collect()
 }
 
 #[uniffi::export]
 impl GreekCore {
     #[uniffi::constructor]
-    pub fn new(db_path: String, morphology_db_path: Option<String>) -> Arc<Self> {
-        let db =
-            Database::open(&db_path, morphology_db_path.as_deref()).expect("Failed to open database");
+    pub fn new(
+        db_path: String,
+        morphology_db_path: Option<String>,
+    ) -> Result<Arc<Self>, GreekError> {
+        let db = Database::open(&db_path, morphology_db_path.as_deref())?;
         let srs = SrsEngine::new();
         let morphology = MorphologyDb::new();
         let search = SearchEngine::new();
 
-        Arc::new(Self {
+        Ok(Arc::new(Self {
             db: Mutex::new(db),
             srs: Mutex::new(srs),
             morphology,
             search,
             cards: Vec::new(),
-        })
+            card_index: HashMap::new(),
+        }))
     }
 
     #[uniffi::constructor]
@@ -217,40 +259,49 @@ impl GreekCore {
         db_path: String,
         morphology_db_path: Option<String>,
         cards_json: String,
-    ) -> Arc<Self> {
-        let db =
-            Database::open(&db_path, morphology_db_path.as_deref()).expect("Failed to open database");
+    ) -> Result<Arc<Self>, GreekError> {
+        let db = Database::open(&db_path, morphology_db_path.as_deref())?;
         let srs = SrsEngine::new();
         let morphology = MorphologyDb::new();
         let search = SearchEngine::new();
         let cards: Vec<Card> = serde_json::from_str(&cards_json).unwrap_or_default();
+        let card_index = build_card_index(&cards);
 
-        Arc::new(Self {
+        Ok(Arc::new(Self {
             db: Mutex::new(db),
             srs: Mutex::new(srs),
             morphology,
             search,
             cards,
-        })
+            card_index,
+        }))
     }
 
     // --- SRS Operations ---
 
-    pub fn get_due_cards(&self, limit: i32) -> Vec<CardWithStateView> {
+    pub fn get_due_cards(&self, limit: i32) -> Result<Vec<CardWithStateView>, GreekError> {
         let db = self.db.lock().unwrap();
         let srs = self.srs.lock().unwrap();
-        let due = srs.get_due_cards(&db, limit as usize);
+        let due = srs.get_due_cards(&db, limit as usize)?;
 
         let mut result: Vec<CardWithStateView> = Vec::new();
         for cws in &due {
             let mut view = card_with_state_to_view(cws);
-            if let Some(card) = self.cards.iter().find(|c| c.id == cws.card.id) {
-                view.card = card_to_view(card);
+            if let Some(&idx) = self.card_index.get(&cws.card.id) {
+                view.card = card_to_view(&self.cards[idx]);
+            } else if let Ok((front, back)) = db.conn().query_row(
+                "SELECT front, back FROM lookup_cards WHERE card_id = ?1",
+                [&cws.card.id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            ) {
+                // Card added via the reader's "Add to SRS" lookup flow.
+                view.card.front = front;
+                view.card.back = back;
             }
             result.push(view);
         }
 
-        result
+        Ok(result)
     }
 
     pub fn get_new_cards(&self, textbook: String, chapter: i32, limit: i32) -> Vec<CardView> {
@@ -259,7 +310,9 @@ impl GreekCore {
         let chapter_cards: Vec<&Card> = self
             .cards
             .iter()
-            .filter(|c| c.chapter == chapter && c.tags.iter().any(|t| t.contains(&textbook)))
+            .filter(|c| {
+                c.chapter == chapter && greek_core::card_in_textbook(c, &textbook)
+            })
             .collect();
 
         let has_state: std::collections::HashSet<String> = db
@@ -291,30 +344,37 @@ impl GreekCore {
     pub fn get_review_stats(&self) -> ReviewStats {
         let db = self.db.lock().unwrap();
 
+        // Use the SAME now-string format that get_due_cards compares against
+        // (ISO-8601 with a 'T'), so same-day due cards are counted correctly.
+        let now = now_iso8601();
         let due_count: i32 = db
             .conn()
             .query_row(
-                "SELECT COUNT(*) FROM memory_states WHERE due_date <= datetime('now')",
-                [],
+                "SELECT COUNT(*) FROM memory_states WHERE due_date <= ?1",
+                [&now],
                 |row| row.get(0),
             )
             .unwrap_or(0);
 
+        // Today's date prefix (YYYY-MM-DD) for comparing ISO-8601 timestamps.
+        let today = &now[..10.min(now.len())];
         let reviewed_today: i32 = db
             .conn()
             .query_row(
-                "SELECT COUNT(*) FROM review_logs WHERE timestamp >= date('now')",
-                [],
+                "SELECT COUNT(*) FROM review_logs WHERE timestamp >= ?1",
+                [today],
                 |row| row.get(0),
             )
             .unwrap_or(0);
+
+        let streak_days = compute_streak_days(&db);
 
         let total_cards = self.cards.len() as i32;
 
         ReviewStats {
             due_count,
             reviewed_today,
-            streak_days: 0,
+            streak_days,
             total_cards,
         }
     }
@@ -352,7 +412,7 @@ impl GreekCore {
 
     pub fn get_chapters(&self, textbook: String) -> Vec<ChapterView> {
         let db = self.db.lock().unwrap();
-        Curriculum::get_chapters(&db, &textbook)
+        Curriculum::get_chapters(&db, &textbook, &self.cards)
             .iter()
             .map(chapter_to_view)
             .collect()
@@ -371,6 +431,164 @@ impl GreekCore {
             .map(section_to_view)
             .collect()
     }
+
+    // --- Known-words tracking (reader) ---
+
+    /// Mark a word (lemma or surface form) as known/unknown for the user.
+    pub fn mark_word_known(&self, word: String, known: bool) -> Result<(), GreekError> {
+        let db = self.db.lock().unwrap();
+        db.conn().execute(
+            "INSERT INTO known_words (word, known, updated_at)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(word) DO UPDATE SET known = excluded.known, updated_at = excluded.updated_at",
+            rusqlite::params![word, known as i32, now_iso8601()],
+        )?;
+        Ok(())
+    }
+
+    /// Returns true if the word has been explicitly marked known.
+    pub fn is_word_known(&self, word: String) -> bool {
+        let db = self.db.lock().unwrap();
+        db.conn()
+            .query_row(
+                "SELECT known FROM known_words WHERE word = ?1",
+                [&word],
+                |row| row.get::<_, i32>(0).map(|v| v != 0),
+            )
+            .unwrap_or(false)
+    }
+
+    /// Return all words the user has marked as known.
+    pub fn get_known_words(&self) -> Vec<String> {
+        let db = self.db.lock().unwrap();
+        db.conn()
+            .prepare("SELECT word FROM known_words WHERE known = 1")
+            .ok()
+            .and_then(|mut stmt| {
+                stmt.query_map([], |row| row.get::<_, String>(0))
+                    .ok()
+                    .map(|rows| rows.filter_map(|r| r.ok()).collect())
+            })
+            .unwrap_or_default()
+    }
+
+    // --- Add card from reader lookup ---
+
+    /// Create a new SRS card + initial (immediately-due) memory_state for a word
+    /// looked up in the reader. The card id is derived from the lemma so repeated
+    /// lookups of the same word are idempotent (no-op if it already exists).
+    pub fn add_card_from_lookup(
+        &self,
+        lemma: String,
+        form: String,
+        definition: String,
+    ) -> Result<String, GreekError> {
+        let card_id = format!("lookup-{}", lemma);
+        let db = self.db.lock().unwrap();
+
+        // If a memory_state already exists for this card, treat as a no-op.
+        let exists: bool = db
+            .conn()
+            .query_row(
+                "SELECT 1 FROM memory_states WHERE card_id = ?1",
+                [&card_id],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+
+        // Persist the card content (front = the Greek word, back = definition)
+        // so it survives restarts and can be shown when the card is studied.
+        // The lemma headword is preferred for the front; fall back to the form.
+        let front = if form.is_empty() { lemma.clone() } else { form };
+        db.conn().execute(
+            "INSERT INTO lookup_cards (card_id, front, back)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(card_id) DO UPDATE SET front = excluded.front, back = excluded.back",
+            rusqlite::params![card_id, front, definition],
+        )?;
+
+        if !exists {
+            let now = now_iso8601();
+            // Initial state: neutral FSRS-ish values, due immediately.
+            db.conn().execute(
+                "INSERT INTO memory_states (card_id, stability, difficulty, last_review, due_date, reps, lapses)
+                 VALUES (?1, ?2, ?3, NULL, ?4, 0, 0)",
+                rusqlite::params![card_id, 0.0_f32, 0.0_f32, now],
+            )?;
+        }
+
+        Ok(card_id)
+    }
+}
+
+/// Count consecutive calendar days (working backward from today) that have
+/// at least one review in `review_logs`. Timestamps are ISO-8601 (with a 'T');
+/// we compare on the YYYY-MM-DD date prefix.
+fn compute_streak_days(db: &Database) -> i32 {
+    // Distinct review days, most recent first.
+    let days: Vec<String> = db
+        .conn()
+        .prepare("SELECT DISTINCT substr(timestamp, 1, 10) AS d FROM review_logs ORDER BY d DESC")
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| row.get::<_, String>(0))
+                .ok()
+                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        })
+        .unwrap_or_default();
+
+    if days.is_empty() {
+        return 0;
+    }
+
+    let now = now_iso8601();
+    let today = &now[..10.min(now.len())];
+    let today_days = date_to_epoch_days(today);
+    let yesterday_days = today_days.map(|d| d - 1);
+
+    // The streak is only "current" if the most recent review was today or
+    // yesterday; otherwise it has been broken.
+    let most_recent = date_to_epoch_days(&days[0]);
+    match (most_recent, today_days) {
+        (Some(mr), Some(_)) => {
+            if Some(mr) != today_days && Some(mr) != yesterday_days {
+                return 0;
+            }
+        }
+        _ => return 0,
+    }
+
+    let mut streak = 0i32;
+    let mut expected = most_recent;
+    for day in &days {
+        let d = date_to_epoch_days(day);
+        if d == expected {
+            streak += 1;
+            expected = expected.map(|e| e - 1);
+        } else {
+            break;
+        }
+    }
+
+    streak
+}
+
+/// Parse a "YYYY-MM-DD" date into days since a fixed epoch (proleptic Gregorian).
+fn date_to_epoch_days(date: &str) -> Option<i64> {
+    if date.len() < 10 {
+        return None;
+    }
+    let year: i64 = date.get(0..4)?.parse().ok()?;
+    let month: i64 = date.get(5..7)?.parse().ok()?;
+    let day: i64 = date.get(8..10)?.parse().ok()?;
+
+    // Howard Hinnant's days_from_civil algorithm.
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146097 + doe - 719468)
 }
 
 // --- Standalone functions ---

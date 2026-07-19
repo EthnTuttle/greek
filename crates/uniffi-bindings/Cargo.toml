@@ -11,6 +11,9 @@ name = "uniffi_bindings"
 uniffi = { version = "0.28", features = ["cli"] }
 greek-core = { path = "../core" }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
+rusqlite = { workspace = true }
+anyhow = { workspace = true }
 
 [[bin]]
 name = "uniffi-bindgen"

@@ -1,5 +1,8 @@
 package com.greekapp.navigation
 
+import android.app.Activity
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book
@@ -13,10 +16,16 @@ import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.navigation.NavController
+import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -47,19 +56,40 @@ val bottomNavItems = listOf(
     Screen.Settings
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+private fun NavController.navigateToTab(route: String) {
+    navigate(route) {
+        // Pop up to the start destination of the graph to
+        // avoid building up a large stack of destinations
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+        // Avoid multiple copies of the same destination when
+        // reselecting the same item
+        launchSingleTop = true
+        // Restore state when reselecting a previously selected item
+        restoreState = true
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
+    // Use a side navigation rail on medium+ widths (tablets / unfolded foldables /
+    // landscape), and the bottom navigation bar on compact (phone) widths.
+    val activity = LocalContext.current as Activity
+    val windowSizeClass = calculateWindowSizeClass(activity)
+    val useNavRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+
+    if (useNavRail) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            NavigationRail {
                 bottomNavItems.forEach { screen ->
-                    val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                    NavigationBarItem(
+                    val selected = currentDestination.isSelected(screen)
+                    NavigationRailItem(
                         icon = {
                             Icon(
                                 imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
@@ -68,64 +98,81 @@ fun AppNavigation() {
                         },
                         label = { Text(screen.title) },
                         selected = selected,
-                        onClick = {
-                            navController.navigate(screen.route) {
-                                // Pop up to the start destination of the graph to
-                                // avoid building up a large stack of destinations
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                // Avoid multiple copies of the same destination when
-                                // reselecting the same item
-                                launchSingleTop = true
-                                // Restore state when reselecting a previously selected item
-                                restoreState = true
-                            }
-                        }
+                        onClick = { navController.navigateToTab(screen.route) }
                     )
                 }
             }
+            AppNavHost(navController = navController, modifier = Modifier.fillMaxSize())
         }
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Home.route,
-            modifier = Modifier.padding(innerPadding)
-        ) {
-            composable(Screen.Home.route) {
-                HomeScreen(
-                    onStartReview = {
-                        navController.navigate(Screen.Review.route)
-                    },
-                    onContinueReading = {
-                        navController.navigate(Screen.Reader.route)
+    } else {
+        Scaffold(
+            bottomBar = {
+                NavigationBar {
+                    bottomNavItems.forEach { screen ->
+                        val selected = currentDestination.isSelected(screen)
+                        NavigationBarItem(
+                            icon = {
+                                Icon(
+                                    imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                    contentDescription = screen.title
+                                )
+                            },
+                            label = { Text(screen.title) },
+                            selected = selected,
+                            onClick = { navController.navigateToTab(screen.route) }
+                        )
                     }
-                )
+                }
             }
+        ) { innerPadding ->
+            AppNavHost(navController = navController, modifier = Modifier.padding(innerPadding))
+        }
+    }
+}
 
-            composable(Screen.Review.route) {
-                ReviewScreen(
-                    onComplete = {
-                        navController.popBackStack()
-                    }
-                )
-            }
+private fun NavDestination?.isSelected(screen: Screen): Boolean =
+    this?.hierarchy?.any { it.route == screen.route } == true
 
-            composable(Screen.Reader.route) {
-                ReaderScreen()
-            }
+@Composable
+private fun AppNavHost(navController: androidx.navigation.NavHostController, modifier: Modifier = Modifier) {
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Home.route,
+        modifier = modifier
+    ) {
+        composable(Screen.Home.route) {
+            HomeScreen(
+                onStartReview = {
+                    navController.navigate(Screen.Review.route)
+                },
+                onContinueReading = {
+                    navController.navigate(Screen.Reader.route)
+                }
+            )
+        }
 
-            composable(Screen.Curriculum.route) {
-                CurriculumScreen()
-            }
+        composable(Screen.Review.route) {
+            ReviewScreen(
+                onComplete = {
+                    navController.popBackStack()
+                }
+            )
+        }
 
-            composable(Screen.Dictionary.route) {
-                DictionaryScreen()
-            }
+        composable(Screen.Reader.route) {
+            ReaderScreen()
+        }
 
-            composable(Screen.Settings.route) {
-                SettingsScreen()
-            }
+        composable(Screen.Curriculum.route) {
+            CurriculumScreen()
+        }
+
+        composable(Screen.Dictionary.route) {
+            DictionaryScreen()
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen()
         }
     }
 }

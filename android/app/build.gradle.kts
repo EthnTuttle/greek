@@ -67,10 +67,14 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3-window-size-class")
     implementation("androidx.compose.material:material-icons-extended")
 
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.8.5")
+
+    // DataStore (persisted settings)
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
@@ -88,4 +92,38 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+}
+
+// Syncs the shared card JSON + morphology DB from the repo's data/ directory into
+// the app's assets so contributors don't have to copy files by hand. Idempotent:
+// Copy is up-to-date-aware and only re-copies when sources change.
+val dataDir = rootProject.projectDir.parentFile.resolve("data")
+val assetsDir = projectDir.resolve("src/main/assets")
+
+val syncCardData by tasks.registering(Copy::class) {
+    description = "Copy card JSON files from data/cards into app assets."
+    group = "greek"
+    from(dataDir.resolve("cards")) {
+        include("*.json")
+    }
+    into(assetsDir.resolve("cards"))
+}
+
+val syncMorphologyDb by tasks.registering(Copy::class) {
+    description = "Copy the morphology SQLite database from data/ into app assets."
+    group = "greek"
+    from(dataDir) {
+        include("morphology.sqlite")
+    }
+    into(assetsDir)
+}
+
+val syncAssets by tasks.registering {
+    description = "Sync all shared data files (cards + morphology DB) into app assets."
+    group = "greek"
+    dependsOn(syncCardData, syncMorphologyDb)
+}
+
+tasks.named("preBuild") {
+    dependsOn(syncAssets)
 }

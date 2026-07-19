@@ -12,11 +12,24 @@ use unicode_normalization::UnicodeNormalization;
 const BATCH_SIZE: usize = 10_000;
 const PROGRESS_INTERVAL: usize = 100_000;
 
-const XML_FILES: &[&str] = &[
-    "/tmp/morpheus-data/MorpheusGreek1-319492.xml",
-    "/tmp/morpheus-data/MorpheusGreek319493-638984.xml",
-    "/tmp/morpheus-data/MorpheusGreek638985-958476.xml",
+/// Default directory containing the Morpheus XML dumps. Override with the
+/// `MORPHEUS_DATA_DIR` environment variable.
+const DEFAULT_MORPHEUS_DIR: &str = "/tmp/morpheus-data";
+
+const XML_FILE_NAMES: &[&str] = &[
+    "MorpheusGreek1-319492.xml",
+    "MorpheusGreek319493-638984.xml",
+    "MorpheusGreek638985-958476.xml",
 ];
+
+/// Resolve the full paths of the Morpheus XML files, honoring the
+/// `MORPHEUS_DATA_DIR` env var (defaults to `/tmp/morpheus-data`).
+fn morpheus_xml_files() -> Vec<std::path::PathBuf> {
+    let dir = std::env::var("MORPHEUS_DATA_DIR")
+        .unwrap_or_else(|_| DEFAULT_MORPHEUS_DIR.to_string());
+    let base = Path::new(&dir);
+    XML_FILE_NAMES.iter().map(|name| base.join(name)).collect()
+}
 
 /// Maps first character of AGDT postag to part-of-speech label
 fn postag_to_pos(postag: &str) -> &'static str {
@@ -331,8 +344,8 @@ fn main() -> Result<()> {
     let mut total_entries = 0usize;
     let mut total_errors = 0usize;
 
-    for (i, file_path) in XML_FILES.iter().enumerate() {
-        let path = Path::new(file_path);
+    let xml_files = morpheus_xml_files();
+    for (i, path) in xml_files.iter().enumerate() {
         eprintln!(
             "Processing file {}... ({})",
             i + 1,

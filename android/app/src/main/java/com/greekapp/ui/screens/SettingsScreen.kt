@@ -1,22 +1,38 @@
 package com.greekapp.ui.screens
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.greekapp.SettingsRepository
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen() {
-    var notificationsEnabled by remember { mutableStateOf(true) }
-    var darkModeEnabled by remember { mutableStateOf(false) }
-    var autoPlayAudio by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val notificationsEnabled by SettingsRepository.dailyReminderFlow(context)
+        .collectAsStateWithLifecycle(initialValue = true)
+    // Dark mode: null == follow system; the switch reflects the effective state.
+    val darkModePref by SettingsRepository.darkModeFlow(context)
+        .collectAsStateWithLifecycle(initialValue = null)
+    val darkModeEnabled = darkModePref ?: isSystemInDarkTheme()
+    val autoPlayAudio by SettingsRepository.autoPlayAudioFlow(context)
+        .collectAsStateWithLifecycle(initialValue = true)
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
         Text(
@@ -43,7 +59,7 @@ fun SettingsScreen() {
                     title = "Daily reminder",
                     description = "Get notified when you have cards due",
                     checked = notificationsEnabled,
-                    onCheckedChange = { notificationsEnabled = it }
+                    onCheckedChange = { scope.launch { SettingsRepository.setDailyReminder(context, it) } }
                 )
 
                 Divider()
@@ -53,7 +69,7 @@ fun SettingsScreen() {
                     title = "Dark mode",
                     description = "Use dark theme for the app",
                     checked = darkModeEnabled,
-                    onCheckedChange = { darkModeEnabled = it }
+                    onCheckedChange = { scope.launch { SettingsRepository.setDarkMode(context, it) } }
                 )
 
                 Divider()
@@ -63,7 +79,7 @@ fun SettingsScreen() {
                     title = "Auto-play audio",
                     description = "Automatically play pronunciation when revealing cards",
                     checked = autoPlayAudio,
-                    onCheckedChange = { autoPlayAudio = it }
+                    onCheckedChange = { scope.launch { SettingsRepository.setAutoPlayAudio(context, it) } }
                 )
             }
         }

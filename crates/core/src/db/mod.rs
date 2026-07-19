@@ -48,6 +48,21 @@ impl Database {
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS known_words(
+                word TEXT PRIMARY KEY,
+                known INTEGER NOT NULL DEFAULT 1,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS lookup_cards(
+                card_id TEXT PRIMARY KEY,
+                front TEXT NOT NULL,
+                back TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_memory_states_due_date
+                ON memory_states(due_date);
             ",
         )?;
 

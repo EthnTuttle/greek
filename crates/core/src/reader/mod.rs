@@ -23,11 +23,11 @@ impl Reader {
     pub fn get_sections() -> Vec<TextSection> {
         let texts = vec![
             (
-                "athenaze-ch1-sample",
-                "Athenaze Chapter 1 Sample",
-                "Adapted",
-                "ὁ Δικαιόπολις Ἀθηναῖός ἐστιν. ὁ Δικαιόπολις οἰκεῖ ἐν τοῖς ἀγροῖς. ὁ κλῆρος μικρός ἐστιν, καλὸς δέ. ὁ Δικαιόπολις γεωργός ἐστιν. πονεῖ δὲ ὁ γεωργὸς ἐν τῷ ἀγρῷ.",
-                0.2, // Very easy - Ch.1 vocabulary
+                "aesop-north-wind-and-sun",
+                "The North Wind and the Sun (Βορέας καὶ Ἥλιος)",
+                "Aesop (public domain)",
+                "Βορέας καὶ Ἥλιος περὶ δυνάμεως ἤριζον· ἔδοξε δὲ αὐτοῖς ἐκείνῳ τὴν νίκην δοῦναι, ὃς ἂν αὐτῶν ὁδοιπόρον ἐκδύσῃ. καὶ ὁ Βορέας ἀρξάμενος σφοδρὸς ἦν· τοῦ δὲ ἀνθρώπου ἀντεχομένου τῆς ἐσθῆτος, μᾶλλον ἐπέκειτο. ὁ δὲ ὑπὸ τοῦ ψύχους καταπονούμενος μᾶλλον καὶ ἑτέραν ἐσθῆτα προσελάμβανεν, ἕως ἀποκαμὼν ὁ Βορέας τῷ Ἡλίῳ παρέδωκεν. ὁ δὲ τὸ μὲν πρῶτον μετρίως προσέλαμψε· τοῦ δὲ ἀνθρώπου τὰ ἱμάτια ἀποτιθεμένου, σφοδρότερον τὴν θέρμην ἐπέτεινεν, ἕως ὑπὸ τῆς ἀλέας μηκέτι ἀντέχων ἀποδυσάμενος ἀπῄει.",
+                0.3, // Easy - classic beginner fable
             ),
             (
                 "xenophon-anabasis-1-1-1",
@@ -149,7 +149,7 @@ mod tests {
     fn test_get_sections() {
         let sections = Reader::get_sections();
         assert_eq!(sections.len(), 3);
-        assert_eq!(sections[0].id, "athenaze-ch1-sample");
+        assert_eq!(sections[0].id, "aesop-north-wind-and-sun");
         assert_eq!(sections[1].id, "xenophon-anabasis-1-1-1");
         assert!(!sections[0].tokens.is_empty());
     }

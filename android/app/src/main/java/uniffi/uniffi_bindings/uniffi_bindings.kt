@@ -740,6 +740,14 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -767,11 +775,15 @@ internal interface UniffiLib : Library {
     ): Pointer
     fun uniffi_uniffi_bindings_fn_constructor_greekcore_new_with_cards(`dbPath`: RustBuffer.ByValue,`morphologyDbPath`: RustBuffer.ByValue,`cardsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
+    fun uniffi_uniffi_bindings_fn_method_greekcore_add_card_from_lookup(`ptr`: Pointer,`lemma`: RustBuffer.ByValue,`form`: RustBuffer.ByValue,`definition`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_chapters(`ptr`: Pointer,`textbook`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_curricula(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_due_cards(`ptr`: Pointer,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_get_known_words(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_new_cards(`ptr`: Pointer,`textbook`: RustBuffer.ByValue,`chapter`: Int,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -779,8 +791,12 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_text_sections(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_is_word_known(`ptr`: Pointer,`word`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     fun uniffi_uniffi_bindings_fn_method_greekcore_lookup_word(`ptr`: Pointer,`form`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_mark_word_known(`ptr`: Pointer,`word`: RustBuffer.ByValue,`known`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun uniffi_uniffi_bindings_fn_method_greekcore_search_dictionary(`ptr`: Pointer,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_submit_review(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`rating`: Byte,uniffi_out_err: UniffiRustCallStatus, 
@@ -903,11 +919,15 @@ internal interface UniffiLib : Library {
     ): Unit
     fun uniffi_uniffi_bindings_checksum_func_parse_postag(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_chapters(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_curricula(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_due_cards(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_get_known_words(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_new_cards(
     ): Short
@@ -915,7 +935,11 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_text_sections(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_is_word_known(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_lookup_word(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_mark_word_known(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_search_dictionary(
     ): Short
@@ -947,13 +971,19 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_func_parse_postag() != 29183.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup() != 26712.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_chapters() != 19677.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_curricula() != 39182.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_due_cards() != 22103.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_due_cards() != 49115.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_known_words() != 26024.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_new_cards() != 38920.toShort()) {
@@ -965,7 +995,13 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_text_sections() != 7973.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_is_word_known() != 22965.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_lookup_word() != 55988.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_mark_word_known() != 57534.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_search_dictionary() != 42616.toShort()) {
@@ -977,10 +1013,10 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_unlock_chapter() != 18997.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_constructor_greekcore_new() != 32397.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_constructor_greekcore_new() != 50505.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_constructor_greekcore_new_with_cards() != 5588.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_constructor_greekcore_new_with_cards() != 40901.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -1366,11 +1402,23 @@ private class JavaLangRefCleanable(
 }
 public interface GreekCoreInterface {
     
+    /**
+     * Create a new SRS card + initial (immediately-due) memory_state for a word
+     * looked up in the reader. The card id is derived from the lemma so repeated
+     * lookups of the same word are idempotent (no-op if it already exists).
+     */
+    fun `addCardFromLookup`(`lemma`: kotlin.String, `form`: kotlin.String, `definition`: kotlin.String): kotlin.String
+    
     fun `getChapters`(`textbook`: kotlin.String): List<ChapterView>
     
     fun `getCurricula`(): List<CurriculumView>
     
     fun `getDueCards`(`limit`: kotlin.Int): List<CardWithStateView>
+    
+    /**
+     * Return all words the user has marked as known.
+     */
+    fun `getKnownWords`(): List<kotlin.String>
     
     fun `getNewCards`(`textbook`: kotlin.String, `chapter`: kotlin.Int, `limit`: kotlin.Int): List<CardView>
     
@@ -1378,7 +1426,17 @@ public interface GreekCoreInterface {
     
     fun `getTextSections`(): List<TextSectionView>
     
+    /**
+     * Returns true if the word has been explicitly marked known.
+     */
+    fun `isWordKnown`(`word`: kotlin.String): kotlin.Boolean
+    
     fun `lookupWord`(`form`: kotlin.String): List<AnalysisView>
+    
+    /**
+     * Mark a word (lemma or surface form) as known/unknown for the user.
+     */
+    fun `markWordKnown`(`word`: kotlin.String, `known`: kotlin.Boolean)
     
     fun `searchDictionary`(`query`: kotlin.String, `limit`: kotlin.Int): List<SearchResultView>
     
@@ -1408,7 +1466,7 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     constructor(`dbPath`: kotlin.String, `morphologyDbPath`: kotlin.String?) :
         this(
-    uniffiRustCall() { _status ->
+    uniffiRustCallWithError(GreekException) { _status ->
     UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_constructor_greekcore_new(
         FfiConverterString.lower(`dbPath`),FfiConverterOptionalString.lower(`morphologyDbPath`),_status)
 }
@@ -1477,6 +1535,24 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
         }
     }
 
+    
+    /**
+     * Create a new SRS card + initial (immediately-due) memory_state for a word
+     * looked up in the reader. The card id is derived from the lemma so repeated
+     * lookups of the same word are idempotent (no-op if it already exists).
+     */
+    @Throws(GreekException::class)override fun `addCardFromLookup`(`lemma`: kotlin.String, `form`: kotlin.String, `definition`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_add_card_from_lookup(
+        it, FfiConverterString.lower(`lemma`),FfiConverterString.lower(`form`),FfiConverterString.lower(`definition`),_status)
+}
+    }
+    )
+    }
+    
+
     override fun `getChapters`(`textbook`: kotlin.String): List<ChapterView> {
             return FfiConverterSequenceTypeChapterView.lift(
     callWithPointer {
@@ -1501,12 +1577,28 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     
 
-    override fun `getDueCards`(`limit`: kotlin.Int): List<CardWithStateView> {
+    
+    @Throws(GreekException::class)override fun `getDueCards`(`limit`: kotlin.Int): List<CardWithStateView> {
             return FfiConverterSequenceTypeCardWithStateView.lift(
     callWithPointer {
-    uniffiRustCall() { _status ->
+    uniffiRustCallWithError(GreekException) { _status ->
     UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_get_due_cards(
         it, FfiConverterInt.lower(`limit`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Return all words the user has marked as known.
+     */override fun `getKnownWords`(): List<kotlin.String> {
+            return FfiConverterSequenceString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_get_known_words(
+        it, _status)
 }
     }
     )
@@ -1549,6 +1641,21 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     
 
+    
+    /**
+     * Returns true if the word has been explicitly marked known.
+     */override fun `isWordKnown`(`word`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_is_word_known(
+        it, FfiConverterString.lower(`word`),_status)
+}
+    }
+    )
+    }
+    
+
     override fun `lookupWord`(`form`: kotlin.String): List<AnalysisView> {
             return FfiConverterSequenceTypeAnalysisView.lift(
     callWithPointer {
@@ -1559,6 +1666,21 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     )
     }
+    
+
+    
+    /**
+     * Mark a word (lemma or surface form) as known/unknown for the user.
+     */
+    @Throws(GreekException::class)override fun `markWordKnown`(`word`: kotlin.String, `known`: kotlin.Boolean)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_mark_word_known(
+        it, FfiConverterString.lower(`word`),FfiConverterBoolean.lower(`known`),_status)
+}
+    }
+    
     
 
     override fun `searchDictionary`(`query`: kotlin.String, `limit`: kotlin.Int): List<SearchResultView> {
@@ -1601,9 +1723,10 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
 
     
     companion object {
-         fun `newWithCards`(`dbPath`: kotlin.String, `morphologyDbPath`: kotlin.String?, `cardsJson`: kotlin.String): GreekCore {
+        
+    @Throws(GreekException::class) fun `newWithCards`(`dbPath`: kotlin.String, `morphologyDbPath`: kotlin.String?, `cardsJson`: kotlin.String): GreekCore {
             return FfiConverterTypeGreekCore.lift(
-    uniffiRustCall() { _status ->
+    uniffiRustCallWithError(GreekException) { _status ->
     UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_constructor_greekcore_new_with_cards(
         FfiConverterString.lower(`dbPath`),FfiConverterOptionalString.lower(`morphologyDbPath`),FfiConverterString.lower(`cardsJson`),_status)
 }
@@ -1803,7 +1926,8 @@ data class ChapterView (
     var `title`: kotlin.String, 
     var `cardCount`: kotlin.Int, 
     var `masteredCount`: kotlin.Int, 
-    var `unlocked`: kotlin.Boolean
+    var `unlocked`: kotlin.Boolean, 
+    var `available`: kotlin.Boolean
 ) {
     
     companion object
@@ -1820,6 +1944,7 @@ public object FfiConverterTypeChapterView: FfiConverterRustBuffer<ChapterView> {
             FfiConverterInt.read(buf),
             FfiConverterInt.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -1828,7 +1953,8 @@ public object FfiConverterTypeChapterView: FfiConverterRustBuffer<ChapterView> {
             FfiConverterString.allocationSize(value.`title`) +
             FfiConverterInt.allocationSize(value.`cardCount`) +
             FfiConverterInt.allocationSize(value.`masteredCount`) +
-            FfiConverterBoolean.allocationSize(value.`unlocked`)
+            FfiConverterBoolean.allocationSize(value.`unlocked`) +
+            FfiConverterBoolean.allocationSize(value.`available`)
     )
 
     override fun write(value: ChapterView, buf: ByteBuffer) {
@@ -1837,6 +1963,7 @@ public object FfiConverterTypeChapterView: FfiConverterRustBuffer<ChapterView> {
             FfiConverterInt.write(value.`cardCount`, buf)
             FfiConverterInt.write(value.`masteredCount`, buf)
             FfiConverterBoolean.write(value.`unlocked`, buf)
+            FfiConverterBoolean.write(value.`available`, buf)
     }
 }
 
@@ -2034,6 +2161,69 @@ public object FfiConverterTypeTokenView: FfiConverterRustBuffer<TokenView> {
             FfiConverterString.write(value.`surface`, buf)
             FfiConverterBoolean.write(value.`whitespaceAfter`, buf)
     }
+}
+
+
+
+
+
+/**
+ * Errors surfaced to the Kotlin layer. UniFFI turns these into a
+ * checked `GreekException` so callers can recover instead of crashing.
+ */
+sealed class GreekException: kotlin.Exception() {
+    
+    class Database(
+        
+        val `msg`: kotlin.String
+        ) : GreekException() {
+        override val message
+            get() = "msg=${ `msg` }"
+    }
+    
+
+    companion object ErrorHandler : UniffiRustCallStatusErrorHandler<GreekException> {
+        override fun lift(error_buf: RustBuffer.ByValue): GreekException = FfiConverterTypeGreekError.lift(error_buf)
+    }
+
+    
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGreekError : FfiConverterRustBuffer<GreekException> {
+    override fun read(buf: ByteBuffer): GreekException {
+        
+
+        return when(buf.getInt()) {
+            1 -> GreekException.Database(
+                FfiConverterString.read(buf),
+                )
+            else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: GreekException): ULong {
+        return when(value) {
+            is GreekException.Database -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`msg`)
+            )
+        }
+    }
+
+    override fun write(value: GreekException, buf: ByteBuffer) {
+        when(value) {
+            is GreekException.Database -> {
+                buf.putInt(1)
+                FfiConverterString.write(value.`msg`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+
 }
 
 

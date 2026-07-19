@@ -73,7 +73,7 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
-            enabled = state.dueCardsCount > 0
+            enabled = state.dueCardsCount > 0 || state.totalCards > 0
         ) {
             Text(
                 text = "Start Review",
@@ -86,8 +86,7 @@ fun HomeScreen(
             onClick = onContinueReading,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
-            enabled = state.hasRecentReading
+                .height(56.dp)
         ) {
             Text(
                 text = "Continue Reading",
@@ -140,9 +139,9 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            StatItem(label = "Words learned", value = "127")
-            StatItem(label = "Chapters", value = "3")
-            StatItem(label = "Hours", value = "12.5")
+            StatItem(label = "Words learned", value = "${state.wordsLearned}")
+            StatItem(label = "Chapters", value = "${state.chaptersUnlocked}")
+            StatItem(label = "Reviewed today", value = "${state.reviewedToday}")
         }
     }
 }
