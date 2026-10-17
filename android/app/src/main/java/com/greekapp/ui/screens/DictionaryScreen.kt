@@ -12,9 +12,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.greekapp.R
 import com.greekapp.ui.theme.GreekFontFamily
 import com.greekapp.viewmodel.DictionaryEntry
 import com.greekapp.viewmodel.DictionaryViewModel
@@ -35,6 +37,11 @@ fun DictionaryScreen(
             text = "Dictionary",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = stringResource(R.string.dictionary_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(16.dp))
 

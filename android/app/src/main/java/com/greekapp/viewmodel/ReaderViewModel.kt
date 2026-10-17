@@ -3,7 +3,7 @@ package com.greekapp.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.greekapp.GreekApplication
+import com.greekapp.core.CoreProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,7 +63,7 @@ class ReaderViewModel(
 
     private fun loadText() {
         viewModelScope.launch(Dispatchers.IO) {
-            val core = GreekApplication.greekCore ?: run {
+            val core = CoreProvider.current() ?: run {
                 _state.value = _state.value.copy(
                     text = "Reader is unavailable.",
                     title = "Reader",
@@ -129,7 +129,7 @@ class ReaderViewModel(
         val normalized = normalizeGreekWord(word)
         if (normalized.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
-            val core = GreekApplication.greekCore ?: return@launch
+            val core = CoreProvider.current() ?: return@launch
             val known = runCatching { core.isWordKnown(normalized) }.getOrDefault(false)
             try {
                 val results = core.lookupWord(normalized)
@@ -194,7 +194,7 @@ class ReaderViewModel(
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            val core = GreekApplication.greekCore ?: return@launch
+            val core = CoreProvider.current() ?: return@launch
             try {
                 core.addCardFromLookup(analysis.lemma, analysis.word, analysis.definition)
                 _state.value = _state.value.copy(
@@ -218,7 +218,7 @@ class ReaderViewModel(
         val key = normalizeGreekWord(analysis.word)
         if (key.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
-            val core = GreekApplication.greekCore ?: return@launch
+            val core = CoreProvider.current() ?: return@launch
             try {
                 core.markWordKnown(key, known)
                 val updated = if (known) _state.value.knownWords + key

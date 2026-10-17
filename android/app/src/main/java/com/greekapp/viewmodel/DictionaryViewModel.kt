@@ -2,7 +2,7 @@ package com.greekapp.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.greekapp.GreekApplication
+import com.greekapp.core.CoreProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,7 +45,7 @@ class DictionaryViewModel : ViewModel() {
         _state.value = _state.value.copy(isSearching = true, error = null)
         searchJob = viewModelScope.launch(Dispatchers.IO) {
             delay(150)
-            val core = GreekApplication.greekCore ?: return@launch
+            val core = CoreProvider.current() ?: return@launch
             try {
                 val results = core.searchDictionary(query, 50)
                 _state.value = _state.value.copy(

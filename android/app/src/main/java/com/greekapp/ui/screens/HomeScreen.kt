@@ -74,6 +74,12 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
+                // Daily new-card intake against the fixed budget of 10.
+                Text(
+                    text = "New today: ${state.newCardsToday} / 10",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             }
         }
 

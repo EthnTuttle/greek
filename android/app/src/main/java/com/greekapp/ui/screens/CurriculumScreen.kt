@@ -10,8 +10,10 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -26,32 +28,52 @@ fun CurriculumScreen(
     viewModel: CurriculumViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
+    // Surface unlock-hint messages (tapped a locked chapter with a known
+    // requirement) as a transient snackbar.
+    LaunchedEffect(state.unlockHint) {
+        val hint = state.unlockHint
+        if (hint != null) {
+            snackbarHostState.showSnackbar(hint)
+            viewModel.hintShown()
+        }
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize()
     ) {
-        Text(
-            text = "Curriculum",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            state.sections.forEach { section ->
-                item(key = section.name) {
-                    SectionCard(
-                        section = section,
-                        onToggle = { viewModel.toggleSection(section.name) },
-                        onChapterClick = { chapter -> viewModel.startChapter(chapter.number) }
-                    )
+            Text(
+                text = "Curriculum",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                state.sections.forEach { section ->
+                    item(key = section.name) {
+                        SectionCard(
+                            section = section,
+                            onToggle = { viewModel.toggleSection(section.name) },
+                            onChapterClick = { chapter -> viewModel.onChapterTapped(chapter.number) }
+                        )
+                    }
                 }
             }
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
 

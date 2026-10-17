@@ -20,6 +20,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import com.greekapp.core.CoreProvider
+import com.greekapp.core.RustCoreAdapter
+import com.greekapp.reminder.ReminderScheduler
 import uniffi.uniffi_bindings.GreekCore
 
 /** Observable lifecycle of the Rust core initialization. */
@@ -41,7 +44,6 @@ val Context.reviewSessionDataStore: DataStore<Preferences> by preferencesDataSto
 object SettingsKeys {
     val DARK_MODE = booleanPreferencesKey("dark_mode")
     val DAILY_REMINDER = booleanPreferencesKey("daily_reminder")
-    val AUTO_PLAY_AUDIO = booleanPreferencesKey("auto_play_audio")
 }
 
 object ReviewSessionKeys {
@@ -103,19 +105,12 @@ object SettingsRepository {
     fun dailyReminderFlow(context: Context): Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.DAILY_REMINDER] ?: true }
 
-    fun autoPlayAudioFlow(context: Context): Flow<Boolean> =
-        context.settingsDataStore.data.map { it[SettingsKeys.AUTO_PLAY_AUDIO] ?: true }
-
     suspend fun setDarkMode(context: Context, value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.DARK_MODE] = value }
     }
 
     suspend fun setDailyReminder(context: Context, value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.DAILY_REMINDER] = value }
-    }
-
-    suspend fun setAutoPlayAudio(context: Context, value: Boolean) {
-        context.settingsDataStore.edit { it[SettingsKeys.AUTO_PLAY_AUDIO] = value }
     }
 }
 
@@ -180,6 +175,7 @@ class GreekApplication : Application() {
                 // GreekCore.newWithCards now throws GreekException on failure.
                 val core = GreekCore.newWithCards(dbPath, morphFile.absolutePath, allCardsJson)
                 greekCore = core
+                CoreProvider.core = RustCoreAdapter(core)
                 isInitialized = true
                 _initState.value = InitState.Ready
 
@@ -189,5 +185,9 @@ class GreekApplication : Application() {
                 _initState.value = InitState.Error(e.message ?: "Failed to initialize the Greek core.")
             }
         }
+
+        // Re-arm (or cancel) the daily-reminder alarm from the persisted
+        // preference on every cold start.
+        ReminderScheduler.syncFromPreferences(this)
     }
 }

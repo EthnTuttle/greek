@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.greekapp.SettingsRepository
+import com.greekapp.reminder.ReminderScheduler
 import kotlinx.coroutines.launch
 
 @Composable
@@ -26,8 +27,6 @@ fun SettingsScreen() {
     val darkModePref by SettingsRepository.darkModeFlow(context)
         .collectAsStateWithLifecycle(initialValue = null)
     val darkModeEnabled = darkModePref ?: isSystemInDarkTheme()
-    val autoPlayAudio by SettingsRepository.autoPlayAudioFlow(context)
-        .collectAsStateWithLifecycle(initialValue = true)
 
     Column(
         modifier = Modifier
@@ -59,7 +58,10 @@ fun SettingsScreen() {
                     title = "Daily reminder",
                     description = "Get notified when you have cards due",
                     checked = notificationsEnabled,
-                    onCheckedChange = { scope.launch { SettingsRepository.setDailyReminder(context, it) } }
+                    onCheckedChange = {
+                        scope.launch { SettingsRepository.setDailyReminder(context, it) }
+                        ReminderScheduler.setEnabled(context, it)
+                    }
                 )
 
                 Divider()
@@ -70,16 +72,6 @@ fun SettingsScreen() {
                     description = "Use dark theme for the app",
                     checked = darkModeEnabled,
                     onCheckedChange = { scope.launch { SettingsRepository.setDarkMode(context, it) } }
-                )
-
-                Divider()
-
-                // Auto-play audio
-                SettingItem(
-                    title = "Auto-play audio",
-                    description = "Automatically play pronunciation when revealing cards",
-                    checked = autoPlayAudio,
-                    onCheckedChange = { scope.launch { SettingsRepository.setAutoPlayAudio(context, it) } }
                 )
             }
         }

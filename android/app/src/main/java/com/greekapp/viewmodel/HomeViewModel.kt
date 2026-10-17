@@ -2,7 +2,7 @@ package com.greekapp.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.greekapp.GreekApplication
+import com.greekapp.core.CoreProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +16,7 @@ data class HomeState(
     val reviewedToday: Int = 0,
     val wordsLearned: Int = 0,
     val chaptersUnlocked: Int = 0,
+    val newCardsToday: Int = 0,
     val isLoading: Boolean = true
 )
 
@@ -27,7 +28,7 @@ class HomeViewModel : ViewModel() {
 
     fun refreshStats() {
         viewModelScope.launch(Dispatchers.IO) {
-            val core = GreekApplication.greekCore ?: return@launch
+            val core = CoreProvider.current() ?: return@launch
             try {
                 val stats = core.getReviewStats()
                 // Words learned: count of words the user has marked known (real, Rust-backed).
@@ -44,6 +45,12 @@ class HomeViewModel : ViewModel() {
                 } catch (e: Exception) {
                     0
                 }
+                // New cards studied today (counts against the daily new-card budget).
+                val newCardsToday = try {
+                    core.newCardsToday().toInt()
+                } catch (e: Exception) {
+                    0
+                }
                 _state.value = HomeState(
                     dueCardsCount = stats.dueCount,
                     streak = stats.streakDays,
@@ -51,6 +58,7 @@ class HomeViewModel : ViewModel() {
                     reviewedToday = stats.reviewedToday,
                     wordsLearned = wordsLearned,
                     chaptersUnlocked = chaptersUnlocked,
+                    newCardsToday = newCardsToday,
                     isLoading = false
                 )
             } catch (e: Exception) {

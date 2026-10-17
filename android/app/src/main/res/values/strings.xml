@@ -36,6 +36,7 @@
     <string name="curriculum_progress">%d%% complete</string>
 
     <!-- Dictionary Screen -->
+    <string name="dictionary_subtitle">Morpheus glosses (LSJ pending)</string>
     <string name="dictionary_search">Search dictionary…</string>
     <string name="dictionary_no_results">No results found</string>
 

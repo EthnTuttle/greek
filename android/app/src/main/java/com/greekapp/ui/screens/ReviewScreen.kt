@@ -162,6 +162,9 @@ fun ReviewScreen(
                 )
             }
         } else {
+            // Interval hints under each rating (loaded while the answer was
+            // hidden); when the preview is unavailable the buttons are plain.
+            val preview = state.intervalPreview
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -179,7 +182,10 @@ fun ReviewScreen(
                             contentColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Text("Again")
+                        RatingLabel(
+                            label = "Again",
+                            interval = preview?.let { formatIntervalLabel(it.againSecs) }
+                        )
                     }
                     OutlinedButton(
                         onClick = { viewModel.answerCard(1) },
@@ -188,7 +194,10 @@ fun ReviewScreen(
                             .weight(1f)
                             .height(56.dp)
                     ) {
-                        Text("Hard")
+                        RatingLabel(
+                            label = "Hard",
+                            interval = preview?.let { formatIntervalLabel(it.hardSecs) }
+                        )
                     }
                 }
                 Row(
@@ -202,7 +211,10 @@ fun ReviewScreen(
                             .weight(1f)
                             .height(56.dp)
                     ) {
-                        Text("Good")
+                        RatingLabel(
+                            label = "Good",
+                            interval = preview?.let { formatIntervalLabel(it.goodSecs) }
+                        )
                     }
                     Button(
                         onClick = { viewModel.answerCard(3) },
@@ -214,12 +226,44 @@ fun ReviewScreen(
                             containerColor = MaterialTheme.colorScheme.secondary
                         )
                     ) {
-                        Text("Easy")
+                        RatingLabel(
+                            label = "Easy",
+                            interval = preview?.let { formatIntervalLabel(it.easySecs) }
+                        )
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Rating button content: the rating name, with the scheduled interval
+ * ("10m", "1h", "4d", …) on a smaller second line when a preview is available.
+ */
+@Composable
+private fun RatingLabel(label: String, interval: String?) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(label)
+        if (interval != null) {
+            Text(
+                text = interval,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+    }
+}
+
+/**
+ * Format an interval in seconds as a compact label: minutes below an hour,
+ * hours below two days, rounded days beyond that.
+ */
+private fun formatIntervalLabel(secs: UInt): String = when {
+    secs < 3600u -> "${(secs + 30u) / 60u}m"
+    secs < 172800u -> "${(secs + 1800u) / 3600u}h"
+    else -> "${(secs + 43200u) / 86400u}d"
 }
 
 @Composable

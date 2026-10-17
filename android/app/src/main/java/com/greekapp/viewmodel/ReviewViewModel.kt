@@ -6,6 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.greekapp.GreekApplication
 import com.greekapp.ReviewSessionRepository
+import com.greekapp.core.CoreProvider
+import com.greekapp.core.GreekCoreApi
+import com.greekapp.core.IntervalPreviewData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +30,9 @@ data class ReviewState(
     val isComplete: Boolean = false,
     val isLoading: Boolean = true,
     val isSubmitting: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** Next-interval preview for the current card; null → plain rating labels. */
+    val intervalPreview: IntervalPreviewData? = null
 )
 
 class ReviewViewModel(
@@ -88,11 +93,15 @@ class ReviewViewModel(
             isLoading = false,
             isComplete = cards.isEmpty() || safeIndex >= cards.size
         )
+        // Preload the interval preview when resuming onto an unanswered card.
+        if (!revealed && safeIndex < cards.size) {
+            loadIntervalPreview(cards[safeIndex].id)
+        }
     }
 
     private fun loadCards() {
         viewModelScope.launch(Dispatchers.IO) {
-            val core = GreekApplication.greekCore
+            val core = CoreProvider.current()
             if (core == null) {
                 _state.value = _state.value.copy(
                     isLoading = false,
@@ -130,6 +139,9 @@ class ReviewViewModel(
                     isLoading = false,
                     isComplete = cards.isEmpty()
                 )
+                if (cards.isNotEmpty()) {
+                    loadIntervalPreview(cards.first().id)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load review queue", e)
                 _state.value = _state.value.copy(
@@ -142,7 +154,7 @@ class ReviewViewModel(
     }
 
     private fun fillWithNewCards(
-        core: uniffi.uniffi_bindings.GreekCore,
+        core: GreekCoreApi,
         queue: LinkedHashMap<String, Card>
     ) {
         val curricula = try {
@@ -198,7 +210,7 @@ class ReviewViewModel(
         _state.value = currentState.copy(isSubmitting = true, errorMessage = null)
 
         viewModelScope.launch(Dispatchers.IO) {
-            val core = GreekApplication.greekCore
+            val core = CoreProvider.current()
             if (core == null) {
                 // Hold the card; do not advance or drop the review.
                 _state.value = _state.value.copy(
@@ -223,11 +235,35 @@ class ReviewViewModel(
             // Only advance once the review is safely persisted.
             val s = _state.value
             val nextIndex = s.currentIndex + 1
-            val complete = nextIndex >= s.cards.size
+
+            // In-session requeue: a card rated Again can become due again within
+            // minutes. Pull anything newly due and append it to the END of the
+            // session (skipping cards still waiting in the queue) so lapses are
+            // seen again before the session ends. Growth is capped so a string
+            // of lapses can't extend the session forever.
+            var cards = s.cards
+            if (cards.size < MAX_SESSION_CARDS) {
+                val remainingIds = cards.drop(nextIndex).mapTo(HashSet()) { it.id }
+                val dueAgain = try {
+                    core.getDueCards(1)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Requeue check failed after reviewing ${card.id}", e)
+                    emptyList()
+                }
+                for (dc in dueAgain) {
+                    if (cards.size >= MAX_SESSION_CARDS) break
+                    if (dc.card.id !in remainingIds) {
+                        cards = cards + Card(dc.card.id, dc.card.front, dc.card.back)
+                    }
+                }
+            }
+            val sessionGrew = cards.size != s.cards.size
+
+            val complete = nextIndex >= cards.size
             _state.value = if (complete) {
-                s.copy(isComplete = true, isSubmitting = false, isAnswerRevealed = false)
+                s.copy(cards = cards, isComplete = true, isSubmitting = false, isAnswerRevealed = false)
             } else {
-                s.copy(currentIndex = nextIndex, isSubmitting = false, isAnswerRevealed = false)
+                s.copy(cards = cards, currentIndex = nextIndex, isSubmitting = false, isAnswerRevealed = false, intervalPreview = null)
             }
             savedStateHandle[KEY_INDEX] = _state.value.currentIndex
             savedStateHandle[KEY_REVEALED] = false
@@ -235,8 +271,40 @@ class ReviewViewModel(
                 // Session finished: drop the durable copy so the next launch builds
                 // a fresh batch instead of resuming a completed one.
                 clearDurableSession()
+            } else if (sessionGrew) {
+                // The batch changed, so persist the whole thing (not just the
+                // position) — a process-death resume must replay the SAME grown
+                // session, including the requeued cards.
+                persistSession(cards, _state.value.currentIndex, false)
             } else {
                 persistProgress(_state.value.currentIndex, false)
+            }
+            if (!complete) {
+                loadIntervalPreview(cards[nextIndex].id)
+            }
+        }
+    }
+
+    /**
+     * Fetch the next-interval preview for the card that just became current
+     * (while its answer is still hidden) so the rating buttons can show
+     * "10m / 1h / 1d"-style hints the moment the answer is revealed.
+     * Best-effort: a failure or null result leaves the buttons label-only.
+     */
+    private fun loadIntervalPreview(cardId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val core = CoreProvider.current() ?: return@launch
+            val preview = try {
+                core.previewIntervals(cardId)
+            } catch (e: Exception) {
+                Log.e(TAG, "previewIntervals failed for $cardId", e)
+                null
+            }
+            // Discard the result if the user has already moved to another card.
+            val s = _state.value
+            val stillCurrent = s.cards.getOrNull(s.currentIndex)?.id == cardId
+            if (stillCurrent) {
+                _state.value = s.copy(intervalPreview = preview)
             }
         }
     }
@@ -315,6 +383,8 @@ class ReviewViewModel(
     companion object {
         private const val TAG = "ReviewViewModel"
         private const val SESSION_SIZE = 20
+        /** Hard cap on session growth from in-session requeueing (Again lapses). */
+        private const val MAX_SESSION_CARDS = SESSION_SIZE + 40
         private const val KEY_CARDS = "review_cards"
         private const val KEY_INDEX = "review_index"
         private const val KEY_REVEALED = "review_revealed"
