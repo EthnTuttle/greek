@@ -1,0 +1,86 @@
+# Curated lemma gloss overrides for data/morphology.sqlite
+# Columns: headword <TAB> pos <TAB> gloss
+# "pos" must match lemmas.pos as stored (most verbs are stored as "unknown").
+# One TSV row may update several lemma rows (homographs sharing headword+pos,
+# e.g. the sum/ibo pairs of εἰμί/εἶμι compounds).
+# Apply with: python3 tools/data-pipeline/overrides/apply_overrides.py data/morphology.sqlite data/overrides/lemma_glosses.tsv
+αἱρέω	unknown	to take, seize, capture; (mid.) to choose
+βασιλεύς	noun	king, chief
+βουφόνια	noun	the Bouphonia, an ox-slaying festival at Athens
+γίγνομαι	unknown	to become, come into being, be born, happen
+γράφω	unknown	to write; to draw, paint; to indict
+δείκνυμι	unknown	to show, point out, display
+δηλόω	unknown	to make clear, show, reveal
+διαφθείρω	unknown	to destroy utterly; to corrupt, ruin, bribe
+δοκέω	unknown	to seem, seem good; to think, suppose; (δοκεῖ) it seems best
+δύω	unknown	to enter, cause to sink; (intr.) to sink, set (of the sun); (mid.) to put on
+εἰμί	unknown	to be; to exist
+ζεύγνυμι	unknown	to yoke, join together, bind
+θαυμάζω	unknown	to wonder at, marvel; to be astonished, admire
+θεός	noun	god, goddess
+καθίστημι	unknown	to set down; to establish, appoint, bring into a state
+καταλιμπάνω	unknown	to leave behind, abandon, forsake
+κομίζω	unknown	to carry, bring, convey; (mid.) acquire, recover; to take care of
+κρίνω	unknown	to separate, distinguish; to choose; to judge, decide
+κρατέω	unknown	to be strong; to rule over, be master of; to prevail, conquer
+λόγος	noun	word, speech, account, reason
+μένω	unknown	to stay, remain; to wait (for); to last
+μέτειμι	unknown	to be with, be among, partake of; to go between, go after
+μιμνήσκω	unknown	to remind, put in mind of; (mid./pass.) to remember, make mention of
+νέω	adverb	new, young (poetic); next year
+νομίζω	unknown	to practice, hold as a custom; to think, believe; to acknowledge
+πάρειμι	unknown	to be present, be at hand; to pass by, go by
+πάσχω	unknown	to suffer, experience; to be treated, be affected
+παρίστημι	unknown	to set beside, present, furnish; (intr.) to stand beside, assist
+παραδίδωμι	unknown	to hand over, deliver, transmit, entrust
+παρακαλέω	unknown	to call to, summon; to exhort, encourage, beseech; to comfort
+περίειμι	unknown	to be around, surpass, excel; to survive
+ποιέω	unknown	to make, do; to bring about; to compose (poetry)
+πράσσω	unknown	to do, accomplish, effect; to fare; to pass through, exact
+προστίθημι	unknown	to add, put to; to give besides, attribute
+πρόειμι	unknown	to go forward, advance; to be before
+πρόσειμι	unknown	to be present besides; to approach, go towards
+πρᾶος	adjective	mild, soft, gentle, meek
+στέλλω	unknown	to equip, make ready; to send, dispatch
+συμβαίνω	unknown	to happen, come to pass; to agree; to meet
+συμπάρειμι	unknown	to be present together
+συμπάρειμι	verb	to accompany, go along with
+συνεστέος	adjective	(verbal adj. of σύνειμι) to be associated with, one must consort with
+σύνειμι	unknown	to be with, associate with; to come together, assemble
+τις	pronoun	anyone, anything; someone, something; a certain
+τρέφω	unknown	to nourish, feed, rear, bring up; to thicken, curdle
+τυγχάνω	unknown	to hit the mark; to obtain, attain; to happen to (be, do)
+φαίνω	unknown	to show, reveal, make known; (pass.) to appear, seem
+φημί	unknown	to say, speak; to assert, affirm; to say yes
+φιλέω	unknown	to love, be fond of
+χράω	unknown	to deliver an oracle; (mid.) consult an oracle; to furnish what is needful; to fall upon, attack
+χώρα	noun	land, country, place, space
+ἀνίημι	unknown	to send up; to let go, release
+ἀνίστημι	unknown	to raise up, appoint; (intr.) to stand up, rise
+ἀναιρέω	unknown	to take up, lift; to destroy, kill; (of an oracle) to answer
+ἀξιόω	unknown	to think fit, deem worthy; to demand; to expect, claim
+ἀποδίδωμι	unknown	to give back, return; to render; to pay; to sell
+ἀποδείκνυμι	unknown	to point out, display; to appoint; to show by argument, prove
+ἀπολύω	unknown	to release, set free; to acquit; (mid.) to ransom
+ἀφίημι	unknown	to let go, release; to send forth; to leave alone
+ἄνθρωπος	noun	man, human being
+ἄπειμι	unknown	to be away, be absent; to go away, depart
+ἄρχω	unknown	to rule, command, govern; (mid.) to begin
+ἐγκελεύω	unknown	to urge on, command, enjoin
+ἐγώ	pronoun	I, me
+ἐπιδείκνυμι	unknown	to exhibit, show forth, display; to prove
+ἐπιπάρειμι	unknown	to be present besides; to go up to
+ἐφίημι	unknown	to send to or against, launch; (mid.) to aim at, long for
+ἐφίστημι	unknown	to set over; to bring to a stand, stop; to stand upon
+ἔνειμι	unknown	to be in, be within; (ἔνεστι) it is possible
+ἔπειμι	unknown	to be upon, be over; to come upon, attack; to follow
+ἰνδάλλομαι	unknown	to appear, seem; to resemble
+ἱστάω	unknown	to make stand, place (Ionic form of ἵστημι)
+ἵστημι	unknown	to make stand, set up; (intr.) to stand, stand still
+ὁμολογέω	unknown	to agree with, consent; to confess, admit
+ὁράω	unknown	to see, look; to perceive
+ὁρίζω	unknown	to bound, delimit; to define, determine; to appoint
+ὁρμάω	unknown	to set in motion, urge on; (mid./intr.) to set out, start
+ὅς	adverb	who, which, that
+ὑπάρχω	unknown	to exist, be; to belong to, be available; to begin
+ὕπειμι	unknown	to be under, lie beneath; to go under, withdraw; to approach stealthily

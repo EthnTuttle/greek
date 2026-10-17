@@ -30,6 +30,20 @@ pub struct MemoryStateRow {
     pub lapses: i32,
 }
 
+/// Default maximum number of *new* cards introduced per UTC day.
+pub const DEFAULT_DAILY_NEW_CAP: u32 = 10;
+
+/// Per-rating due-interval preview, in wall-clock seconds from now.
+/// Converted from FSRS's fractional-day intervals (`days * 86400`, rounded)
+/// so callers can show human-friendly labels without day-math.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct IntervalPreview {
+    pub again_secs: u32,
+    pub hard_secs: u32,
+    pub good_secs: u32,
+    pub easy_secs: u32,
+}
+
 pub struct SrsEngine {
     fsrs: FSRS,
     desired_retention: f32,
@@ -112,41 +126,46 @@ impl SrsEngine {
         Vec::new()
     }
 
+    /// Preview the intervals FSRS would assign to each rating for `card_id`
+    /// if it were reviewed right now. An unknown card is treated as new and
+    /// still returns `Some`; `None` is returned only on error (SQL/FSRS).
+    pub fn preview_intervals(&self, db: &Database, card_id: &str) -> Option<IntervalPreview> {
+        let current_state = load_memory_state(db, card_id);
+        let now = chrono_now();
+        let elapsed_days = elapsed_days_since(current_state.as_ref(), &now);
+
+        let memory_state = current_state.as_ref().map(|s| MemoryState {
+            stability: s.stability,
+            difficulty: s.difficulty,
+        });
+
+        let next_states = self
+            .fsrs
+            .next_states(memory_state, self.desired_retention, elapsed_days)
+            .ok()?;
+
+        Some(IntervalPreview {
+            again_secs: interval_days_to_secs(next_states.again.interval),
+            hard_secs: interval_days_to_secs(next_states.hard.interval),
+            good_secs: interval_days_to_secs(next_states.good.interval),
+            easy_secs: interval_days_to_secs(next_states.easy.interval),
+        })
+    }
+
     /// Submit a review and update the memory state
     pub fn submit_review(&self, db: &Database, card_id: &str, rating: u8) -> anyhow::Result<()> {
         let now = chrono_now();
 
         // Load current memory state
-        let current_state: Option<MemoryStateRow> = db
-            .conn()
-            .query_row(
-                "SELECT card_id, stability, difficulty, last_review, due_date, reps, lapses
-                 FROM memory_states WHERE card_id = ?1",
-                [card_id],
-                |row| {
-                    Ok(MemoryStateRow {
-                        card_id: row.get(0)?,
-                        stability: row.get(1)?,
-                        difficulty: row.get(2)?,
-                        last_review: row.get(3)?,
-                        due_date: row.get(4)?,
-                        reps: row.get(5)?,
-                        lapses: row.get(6)?,
-                    })
-                },
-            )
-            .ok();
+        let current_state: Option<MemoryStateRow> = load_memory_state(db, card_id);
 
-        // Calculate elapsed days since last review
-        let elapsed_days: u32 = if let Some(ref state) = current_state {
-            if let Some(ref last_review) = state.last_review {
-                days_between(last_review, &now)
-            } else {
-                0
-            }
-        } else {
-            0
-        };
+        // Calculate elapsed days since last review.
+        // NOTE: same-day re-reviews saturate at 0 (`days_between` uses
+        // `saturating_sub` on whole-day granularity). That is intentional:
+        // with sub-day learning intervals, the wall-clock gap is carried by
+        // the stored due_date, while FSRS's time-decay only consumes
+        // whole-day gaps.
+        let elapsed_days: u32 = elapsed_days_since(current_state.as_ref(), &now);
 
         // Build FSRS memory state
         let memory_state = current_state.as_ref().map(|s| MemoryState {
@@ -237,18 +256,82 @@ pub fn now_iso8601() -> String {
     chrono_now()
 }
 
+/// Count of cards introduced (first-ever review) on today's UTC date.
+/// A card counts as "new today" iff its EARLIEST `review_logs` timestamp
+/// falls on the current UTC date; cards first reviewed on an earlier day do
+/// not count even if reviewed again today. Returns 0 if the query fails.
+pub fn new_cards_today(db: &Database) -> u32 {
+    let now = chrono_now();
+    let today = &now[..10]; // "YYYY-MM-DD"
+    db.conn()
+        .query_row(
+            "SELECT COUNT(*) FROM (
+                 SELECT MIN(timestamp) AS first_ts
+                 FROM review_logs
+                 GROUP BY card_id
+             ) WHERE substr(first_ts, 1, 10) = ?1",
+            [today],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0) as u32
+}
+
+/// Remaining new-card allowance for today: the daily cap minus the number of
+/// cards already introduced today (saturates at 0 if the cap was exceeded).
+pub fn new_cards_remaining_today(db: &Database) -> u32 {
+    DEFAULT_DAILY_NEW_CAP.saturating_sub(new_cards_today(db))
+}
+
+/// Load the stored memory state for `card_id`, or `None` if the card has
+/// never been reviewed (unknown rows are NOT an error here).
+fn load_memory_state(db: &Database, card_id: &str) -> Option<MemoryStateRow> {
+    db.conn()
+        .query_row(
+            "SELECT card_id, stability, difficulty, last_review, due_date, reps, lapses
+             FROM memory_states WHERE card_id = ?1",
+            [card_id],
+            |row| {
+                Ok(MemoryStateRow {
+                    card_id: row.get(0)?,
+                    stability: row.get(1)?,
+                    difficulty: row.get(2)?,
+                    last_review: row.get(3)?,
+                    due_date: row.get(4)?,
+                    reps: row.get(5)?,
+                    lapses: row.get(6)?,
+                })
+            },
+        )
+        .ok()
+}
+
+/// Whole days between the stored `last_review` and `now` (0 for new cards
+/// and for any same-day re-review — see note in `submit_review`).
+fn elapsed_days_since(state: Option<&MemoryStateRow>, now: &str) -> u32 {
+    state
+        .and_then(|s| s.last_review.as_deref())
+        .map(|last_review| days_between(last_review, now))
+        .unwrap_or(0)
+}
+
 /// Returns the current time as an ISO 8601 string (UTC).
 /// Uses a simple approach without external chrono dependency.
 fn chrono_now() -> String {
-    // We format as ISO 8601 using the system clock
-    // Since we don't have chrono, we use a simple approach
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let secs = duration.as_secs();
+    secs_to_iso(system_now_secs())
+}
 
-    // Convert unix timestamp to ISO 8601
+/// Current system time, seconds since the Unix epoch.
+fn system_now_secs() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+/// Convert seconds since the Unix epoch to an ISO 8601 UTC string,
+/// "YYYY-MM-DDTHH:MM:SSZ".
+fn secs_to_iso(secs: u64) -> String {
     let days = secs / 86400;
     let remaining_secs = secs % 86400;
     let hours = remaining_secs / 3600;
@@ -301,6 +384,27 @@ fn iso_to_days(iso: &str) -> Option<u64> {
     Some(ymd_to_days(year, month, day))
 }
 
+/// Parse an ISO 8601 timestamp to seconds since the Unix epoch.
+/// The time component is optional: legacy midnight rows like
+/// "2026-07-19T00:00:00Z" parse naturally, and a missing or truncated time
+/// defaults to 00:00:00 UTC so date-valid input never fails to parse.
+fn iso_to_secs(iso: &str) -> Option<u64> {
+    let days = iso_to_days(iso)?;
+    // Slice with `get` so short/non-ASCII input degrades to 0 instead of panicking.
+    let hours: u64 = iso.get(11..13).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let minutes: u64 = iso.get(14..16).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let seconds: u64 = iso.get(17..19).and_then(|s| s.parse().ok()).unwrap_or(0);
+    Some(days * 86400 + hours * 3600 + minutes * 60 + seconds)
+}
+
+/// Convert an FSRS interval (days, possibly fractional) to whole seconds:
+/// `days * 86400` rounded to the nearest second, negative clamped to 0
+/// (FSRS intervals are never negative; used for preview values which must
+/// fit the `u32` fields of `IntervalPreview` — max stability 36500 d fits).
+fn interval_days_to_secs(days: f32) -> u32 {
+    (days as f64 * 86400.0).round().max(0.0) as u32
+}
+
 /// Convert (year, month, day) to days since Unix epoch
 fn ymd_to_days(year: u64, month: u64, day: u64) -> u64 {
     let y = if month <= 2 { year - 1 } else { year };
@@ -312,12 +416,20 @@ fn ymd_to_days(year: u64, month: u64, day: u64) -> u64 {
     era * 146097 + doe - 719468
 }
 
-/// Add fractional days to an ISO date string, returning a new ISO date string
+/// Add an FSRS interval (days, possibly fractional) to `now` and return a
+/// full "YYYY-MM-DDTHH:MM:SSZ" timestamp. The interval is converted to
+/// seconds (`days * 86400`, rounded) and added to the current instant —
+/// deliberately with NO whole-day rounding, NO one-day minimum, and NO
+/// midnight stamping, so sub-day learning steps (an "Again" card reappearing
+/// minutes or hours later) are preserved. The result stays lexicographically
+/// comparable with legacy midnight-stamped rows like "2026-07-19T00:00:00Z".
 fn add_days_to_now(now: &str, days: f32) -> String {
-    let current_days = iso_to_days(now).unwrap_or(0);
-    let new_days = current_days + days.round().max(1.0) as u64;
-    let (y, m, d) = days_to_ymd(new_days);
-    format!("{:04}-{:02}-{:02}T00:00:00Z", y, m, d)
+    // `now` normally comes from `chrono_now` and always parses; fall back to
+    // the real clock if a caller ever hands us something else.
+    let now_secs = iso_to_secs(now).unwrap_or_else(system_now_secs);
+    let interval_secs = (days as f64 * 86400.0).round() as i64;
+    let new_secs = (now_secs as i64).saturating_add(interval_secs).max(0) as u64;
+    secs_to_iso(new_secs)
 }
 
 #[cfg(test)]
@@ -411,6 +523,203 @@ mod tests {
         // Only the overdue card should be returned
         assert_eq!(due.len(), 1);
         assert_eq!(due[0].card.id, "due-card");
+    }
+
+    /// Insert a memory_states row with the given due timestamp.
+    fn insert_state(db: &Database, card_id: &str, last_review: &str, due_date: &str) {
+        db.conn()
+            .execute(
+                "INSERT INTO memory_states (card_id, stability, difficulty, last_review, due_date, reps, lapses)
+                 VALUES (?1, 5.0, 5.0, ?2, ?3, 1, 0)",
+                rusqlite::params![card_id, last_review, due_date],
+            )
+            .unwrap();
+    }
+
+    fn now_plus_secs(delta: i64) -> String {
+        let now_secs = iso_to_secs(&chrono_now()).unwrap() as i64;
+        secs_to_iso((now_secs + delta).max(0) as u64)
+    }
+
+    #[test]
+    fn test_get_due_cards_returns_subday_due() {
+        let db = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+
+        // Card due 3 minutes ago (sub-day, same calendar day)
+        insert_state(
+            &db,
+            "subday-card",
+            &now_plus_secs(-3900),
+            &now_plus_secs(-180),
+        );
+
+        let due = engine.get_due_cards(&db, 10).unwrap();
+        assert!(
+            due.iter().any(|c| c.card.id == "subday-card"),
+            "sub-day-due learning card must be returned"
+        );
+    }
+
+    #[test]
+    fn test_get_due_cards_excludes_future_card() {
+        let db = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+
+        // Card due in +2 days
+        let future_due = now_plus_secs(2 * 86400);
+        insert_state(&db, "future-card-2d", &chrono_now(), &future_due);
+
+        let due = engine.get_due_cards(&db, 10).unwrap();
+        assert!(
+            !due.iter().any(|c| c.card.id == "future-card-2d"),
+            "card due in 2 days must not be returned"
+        );
+    }
+
+    #[test]
+    fn test_legacy_midnight_row_parses_and_is_due() {
+        let db = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+
+        // Legacy row stamped at midnight UTC by the old add_days_to_now.
+        // It must still parse and compare correctly (lexicographically it is
+        // in the past, so it is due).
+        let legacy = "2026-07-19T00:00:00Z";
+        insert_state(&db, "legacy-card", "2026-07-18T00:00:00Z", legacy);
+
+        // Parse check: midnight row equals its date at 00:00:00.
+        assert_eq!(
+            iso_to_secs(legacy).unwrap(),
+            ymd_to_days(2026, 7, 19) * 86400
+        );
+
+        let due = engine.get_due_cards(&db, 10).unwrap();
+        assert!(
+            due.iter().any(|c| c.card.id == "legacy-card"),
+            "legacy midnight-stamped row must still parse and be due"
+        );
+    }
+
+    #[test]
+    fn test_preview_intervals_new_card_ordering() {
+        let db = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+
+        // Unknown card id is treated as a brand-new card and still returns Some.
+        let preview = engine
+            .preview_intervals(&db, "never-reviewed-card")
+            .expect("unknown card should still yield a preview");
+
+        assert!(
+            preview.again_secs <= preview.hard_secs
+                && preview.hard_secs <= preview.good_secs
+                && preview.good_secs <= preview.easy_secs,
+            "intervals must be ordered again <= hard <= good <= easy: {:?}",
+            preview
+        );
+    }
+
+    #[test]
+    fn test_new_cards_today_and_remaining() {
+        let db = Database::open(":memory:", None).unwrap();
+
+        // Empty DB: nothing introduced yet, full cap remaining.
+        assert_eq!(new_cards_today(&db), 0);
+        assert_eq!(new_cards_remaining_today(&db), DEFAULT_DAILY_NEW_CAP);
+
+        let now = chrono_now();
+        let today = &now[..10];
+        let yesterday = add_days_to_now(&now, -1.0)[..10].to_string();
+
+        let insert_log = |card_id: &str, ts: &str| {
+            db.conn()
+                .execute(
+                    "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days)
+                     VALUES (?1, ?2, 3, 0.0, 0.0)",
+                    rusqlite::params![card_id, ts],
+                )
+                .unwrap();
+        };
+
+        // First reviewed yesterday, again today -> NOT new today
+        insert_log("old-card", &format!("{yesterday}T08:00:00Z"));
+        insert_log("old-card", &format!("{today}T00:00:01Z"));
+        // First reviewed today (multiple logs same day -> counts once)
+        insert_log("new-a", &format!("{today}T00:00:01Z"));
+        insert_log("new-a", &format!("{today}T23:59:59Z"));
+        // Another card first reviewed today
+        insert_log("new-b", &format!("{today}T12:00:00Z"));
+
+        assert_eq!(new_cards_today(&db), 2);
+        assert_eq!(
+            new_cards_remaining_today(&db),
+            DEFAULT_DAILY_NEW_CAP - 2
+        );
+    }
+
+    #[test]
+    fn test_add_days_to_now_preserves_time_and_subday() {
+        // Whole intervals keep the time of day (no midnight stamping)
+        assert_eq!(
+            add_days_to_now("2024-01-01T12:30:00Z", 1.0),
+            "2024-01-02T12:30:00Z"
+        );
+        // Fractional days become sub-day offsets (6 h)
+        assert_eq!(
+            add_days_to_now("2024-01-01T12:00:00Z", 0.25),
+            "2024-01-01T18:00:00Z"
+        );
+        // Sub-day offset crossing midnight
+        assert_eq!(
+            add_days_to_now("2024-01-01T23:00:00Z", 0.125),
+            "2024-01-02T02:00:00Z"
+        );
+        // Month/leap-day rollover still works
+        assert_eq!(
+            add_days_to_now("2024-01-31T12:00:00Z", 1.0),
+            "2024-02-01T12:00:00Z"
+        );
+        assert_eq!(
+            add_days_to_now("2024-02-28T12:00:00Z", 1.0),
+            "2024-02-29T12:00:00Z"
+        );
+        // No one-day minimum: sub-minute intervals stay sub-minute
+        let tiny = add_days_to_now("2024-06-01T00:00:00Z", 30.0 / 86400.0);
+        assert_eq!(tiny, "2024-06-01T00:00:30Z");
+    }
+
+    #[test]
+    fn test_submit_review_again_schedules_subday_due() {
+        let db = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+
+        let before_secs = iso_to_secs(&chrono_now()).unwrap();
+        engine.submit_review(&db, "again-card", 1).unwrap();
+
+        let due_date: String = db
+            .conn()
+            .query_row(
+                "SELECT due_date FROM memory_states WHERE card_id = ?1",
+                ["again-card"],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        let due_secs = iso_to_secs(&due_date).expect("due_date must be a full ISO timestamp");
+        let gap = due_secs as i64 - before_secs as i64;
+
+        // The old implementation rounded up to the next midnight; the fixed
+        // one must place an "Again" review back within today (sub-day gap).
+        assert!(gap > 0, "due date must be in the future, got gap {gap}s");
+        assert!(
+            gap < 86400,
+            "Again-rated card must be due within a day, got gap {gap}s"
+        );
+        assert!(
+            !due_date.ends_with("T00:00:00Z"),
+            "due_date must not be midnight-stamped: {due_date}"
+        );
     }
 
     #[test]

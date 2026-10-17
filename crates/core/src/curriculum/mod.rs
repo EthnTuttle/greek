@@ -2,6 +2,23 @@ use crate::db::Database;
 use crate::srs::Card;
 use serde::{Deserialize, Serialize};
 
+/// A card counts as mastered once its memory-state stability reaches this
+/// many days (i.e. it is well entrenched in long-term memory). A card that
+/// has merely been seen once does NOT count.
+pub const MASTERY_STABILITY_DAYS: f32 = 30.0;
+
+/// Fraction of a chapter's cards that must be mastered before the next
+/// chapter's unlock requirement counts as met.
+pub const UNLOCK_THRESHOLD: f32 = 0.8;
+
+/// Number of mastered cards required in a chapter before the next chapter's
+/// unlock requirement counts as met: `ceil(UNLOCK_THRESHOLD * card_count)`.
+/// A card_count of 0 yields 0, so the requirement is always met — this
+/// prevents deadlocks for chapters past card coverage (e.g. Athenaze ch.17+).
+fn needed_for_unlock(card_count: i32) -> i32 {
+    (UNLOCK_THRESHOLD * card_count as f32).ceil() as i32
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CurriculumInfo {
     pub textbook: String,
@@ -20,6 +37,11 @@ pub struct ChapterInfo {
     /// (card_count == 0) are marked unavailable so the UI can render them
     /// as "Coming Soon".
     pub available: bool,
+    /// Unlock-gating hint shown for locked chapters whose previous chapter
+    /// is not yet mastered enough. Empty when the chapter is already
+    /// unlocked (including default-unlocked chapters) or when the unlock
+    /// requirement is met and the user may simply tap to unlock.
+    pub unlock_hint: String,
 }
 
 /// Returns true if a card belongs to the given curriculum textbook.
@@ -63,9 +85,10 @@ impl Curriculum {
     /// Get chapters for a given textbook with progress info.
     ///
     /// `cards` is the full set of loaded flashcards; per-chapter `card_count`
-    /// and `mastered_count` are computed from it (mastered = has a memory_states
-    /// row with reps >= 1). Chapters with no cards are marked `available == false`
-    /// so the UI can render them as "Coming Soon".
+    /// and `mastered_count` are computed from it (mastered = has a
+    /// memory_states row with stability >= MASTERY_STABILITY_DAYS). Chapters
+    /// with no cards are marked `available == false` so the UI can render
+    /// them as "Coming Soon".
     pub fn get_chapters(db: &Database, textbook: &str, cards: &[Card]) -> Vec<ChapterInfo> {
         let info = Self::get_textbooks();
         let total_chapters = info
@@ -74,15 +97,17 @@ impl Curriculum {
             .map(|t| t.total_chapters)
             .unwrap_or(0);
 
-        // Set of card ids that have been reviewed at least once (reps >= 1).
+        // Set of card ids that count as mastered (stability >= 30 days).
         let mastered_ids: std::collections::HashSet<String> = db
             .conn()
-            .prepare("SELECT card_id FROM memory_states WHERE reps >= 1")
+            .prepare("SELECT card_id FROM memory_states WHERE stability >= ?1")
             .ok()
             .and_then(|mut stmt| {
-                stmt.query_map([], |row| row.get::<_, String>(0))
-                    .ok()
-                    .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                stmt.query_map([MASTERY_STABILITY_DAYS as f64], |row| {
+                    row.get::<_, String>(0)
+                })
+                .ok()
+                .map(|rows| rows.filter_map(|r| r.ok()).collect())
             })
             .unwrap_or_default();
 
@@ -122,6 +147,36 @@ impl Curriculum {
                 .count() as i32;
             let available = card_count > 0;
 
+            // Unlock-gating hint. Empty when the chapter is already unlocked
+            // (including the default-unlocked first chapter: athenaze/jact
+            // ch.1, dcc ch.0). For a locked chapter, the requirement is met
+            // when the previous chapter's mastered count reaches
+            // needed_for_unlock(prev card_count). A previous chapter with no
+            // cards at all (past card coverage, e.g. Athenaze ch.17+) counts
+            // as met so later chapters can never deadlock.
+            let unlock_hint = if unlocked {
+                String::new()
+            } else {
+                let prev = chapter - 1;
+                let prev_count = textbook_cards
+                    .iter()
+                    .filter(|c| c.chapter == prev)
+                    .count() as i32;
+                let prev_mastered = textbook_cards
+                    .iter()
+                    .filter(|c| c.chapter == prev && mastered_ids.contains(&c.id))
+                    .count() as i32;
+                let needed = needed_for_unlock(prev_count);
+                if prev_mastered >= needed {
+                    String::new()
+                } else {
+                    format!(
+                        "Master 80% of Chapter {} to unlock ({}/{})",
+                        prev, prev_mastered, needed
+                    )
+                }
+            };
+
             let title = chapter_title(textbook, chapter);
 
             chapters.push(ChapterInfo {
@@ -131,6 +186,7 @@ impl Curriculum {
                 mastered_count,
                 unlocked,
                 available,
+                unlock_hint,
             });
         }
 
@@ -232,10 +288,13 @@ mod tests {
     #[test]
     fn test_get_chapters_mastered_count() {
         let db = Database::open(":memory:", None).unwrap();
+        // ath1-001 is mastered (stability >= 30); ath1-002 has been reviewed
+        // (reps >= 1) but at low stability, so it must NOT count as mastered.
         db.conn()
             .execute(
                 "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
-                 VALUES ('ath1-001', 5.0, 5.0, '2024-01-01T00:00:00Z', 3, 0)",
+                 VALUES ('ath1-001', 30.0, 5.0, '2024-01-01T00:00:00Z', 3, 0),
+                        ('ath1-002', 5.0, 5.0, '2024-01-01T00:00:00Z', 3, 0)",
                 [],
             )
             .unwrap();
@@ -246,6 +305,129 @@ mod tests {
         let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
         assert_eq!(chapters[0].card_count, 2);
         assert_eq!(chapters[0].mastered_count, 1);
+    }
+
+    #[test]
+    fn test_mastery_stability_threshold() {
+        let db = Database::open(":memory:", None).unwrap();
+        // 29.9 days: below threshold -> not mastered.
+        // 30.0 days: at threshold -> mastered.
+        db.conn()
+            .execute(
+                "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+                 VALUES ('ath1-low', 29.9, 5.0, '2024-01-01T00:00:00Z', 5, 0),
+                        ('ath1-high', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0)",
+                [],
+            )
+            .unwrap();
+        let cards = vec![
+            sample_card("ath1-low", 1, "athenaze-i"),
+            sample_card("ath1-high", 1, "athenaze-i"),
+        ];
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
+        assert_eq!(chapters[0].card_count, 2);
+        assert_eq!(chapters[0].mastered_count, 1);
+    }
+
+    #[test]
+    fn test_needed_for_unlock_ceil() {
+        // 80% of 5 rounds up to 4.
+        assert_eq!(needed_for_unlock(5), 4);
+        assert_eq!(needed_for_unlock(4), 4); // ceil(3.2)
+        assert_eq!(needed_for_unlock(10), 8);
+        assert_eq!(needed_for_unlock(1), 1);
+        // 0 cards -> 0 needed, i.e. requirement always met (no deadlock).
+        assert_eq!(needed_for_unlock(0), 0);
+    }
+
+    #[test]
+    fn test_unlock_hint_locked_chapter() {
+        let db = Database::open(":memory:", None).unwrap();
+        // Chapter 1 has 5 cards, 2 mastered; need ceil(0.8 * 5) = 4.
+        db.conn()
+            .execute(
+                "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+                 VALUES ('ath1-001', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0),
+                        ('ath1-002', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0)",
+                [],
+            )
+            .unwrap();
+        let cards = vec![
+            sample_card("ath1-001", 1, "athenaze-i"),
+            sample_card("ath1-002", 1, "athenaze-i"),
+            sample_card("ath1-003", 1, "athenaze-i"),
+            sample_card("ath1-004", 1, "athenaze-i"),
+            sample_card("ath1-005", 1, "athenaze-i"),
+        ];
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
+        // Chapter 2 is locked and the requirement is not met.
+        assert!(!chapters[1].unlocked);
+        assert_eq!(
+            chapters[1].unlock_hint,
+            "Master 80% of Chapter 1 to unlock (2/4)"
+        );
+
+        // Once unlocked, the hint clears even though mastery is unchanged.
+        Curriculum::unlock_chapter(&db, "athenaze", 2).unwrap();
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
+        assert!(chapters[1].unlocked);
+        assert_eq!(chapters[1].unlock_hint, "");
+    }
+
+    #[test]
+    fn test_unlock_hint_empty_when_requirement_met() {
+        let db = Database::open(":memory:", None).unwrap();
+        // Chapter 1 has 5 cards, 4 mastered = ceil(0.8 * 5): requirement met.
+        db.conn()
+            .execute(
+                "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+                 VALUES ('ath1-001', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0),
+                        ('ath1-002', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0),
+                        ('ath1-003', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0),
+                        ('ath1-004', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0)",
+                [],
+            )
+            .unwrap();
+        let cards = vec![
+            sample_card("ath1-001", 1, "athenaze-i"),
+            sample_card("ath1-002", 1, "athenaze-i"),
+            sample_card("ath1-003", 1, "athenaze-i"),
+            sample_card("ath1-004", 1, "athenaze-i"),
+            sample_card("ath1-005", 1, "athenaze-i"),
+        ];
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
+        // Still locked, but the user may tap to unlock: no hint.
+        assert!(!chapters[1].unlocked);
+        assert_eq!(chapters[1].unlock_hint, "");
+    }
+
+    #[test]
+    fn test_unlock_hint_empty_for_default_chapters() {
+        let db = Database::open(":memory:", None).unwrap();
+        // Athenaze chapter 1 is unlocked by default: hint always empty.
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &[]);
+        assert!(chapters[0].unlocked);
+        assert_eq!(chapters[0].unlock_hint, "");
+        // JACT chapter 1 likewise.
+        let chapters = Curriculum::get_chapters(&db, "jact", &[]);
+        assert!(chapters[0].unlocked);
+        assert_eq!(chapters[0].unlock_hint, "");
+        // DCC chapter 0 is always unlocked: hint always empty.
+        let cards = vec![sample_card("dcc-001", 0, "dcc-core")];
+        let chapters = Curriculum::get_chapters(&db, "dcc", &cards);
+        assert!(chapters[0].unlocked);
+        assert_eq!(chapters[0].unlock_hint, "");
+    }
+
+    #[test]
+    fn test_unlock_hint_empty_when_previous_chapter_has_no_cards() {
+        let db = Database::open(":memory:", None).unwrap();
+        // Athenaze chapter 16 has no cards (past card coverage), so chapter
+        // 17's requirement counts as met and must not deadlock.
+        let cards = vec![sample_card("ath17-001", 17, "athenaze-ii")];
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
+        assert!(!chapters[16].unlocked); // chapter 17
+        assert_eq!(chapters[16].unlock_hint, "");
     }
 
     #[test]
