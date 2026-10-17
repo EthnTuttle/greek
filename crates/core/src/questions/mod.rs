@@ -227,6 +227,224 @@ fn any_card(_: &Card, _: &Card) -> bool {
     true
 }
 
+// --- Alphabet Check (see DESIGN-alphabet-gate.md §4.3) ---
+
+/// Quiz direction for an Alphabet Check question.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlphabetDirection {
+    /// Prompt shows the glyph(s), choices are letter names.
+    GlyphToName,
+    /// Prompt shows the letter name, choices are glyphs.
+    NameToGlyph,
+}
+
+/// One Alphabet Check question: a glyph↔name multiple-choice item with 4
+/// choices, `correct_index` marking the choice belonging to `card_id`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlphabetQuestion {
+    pub card_id: String,
+    pub direction: AlphabetDirection,
+    pub prompt: String,
+    pub choices: Vec<String>,
+    pub correct_index: usize,
+}
+
+/// Extract the short quiz label (letter name / romanization) from a letters
+/// card's English `back`, per chapter format:
+/// - ch.1–3 (`Β β` / "beta — b; ..."): text before the first " — ";
+/// - ch.5 (`αι` / "αι — ai, as in ..."): the romanization token after the
+///   dash, cut at ',' or '/'. Seven ch.5 backs carry no romanization token
+///   ("ει — a long close e, as in 'vein'"); for those the label falls back
+///   to the standard scholarly romanization of the front digraph
+///   ([`diphthong_romanization`]), because a name↔glyph quiz needs one.
+/// - ch.4 diacritics: no usable label — always returns None.
+///
+/// Eligibility invariant (checked here, tested against the real deck):
+/// non-empty, <= 20 chars, <= 2 words, and (for ch.5) label != front.
+pub fn alphabet_check_label(card: &Card) -> Option<String> {
+    if card.chapter == 4 {
+        return None;
+    }
+    let dash = card.back.find(" — ")?;
+    let label = if card.chapter == 5 {
+        let token = card.back[dash + 4..]
+            .split([',', '/'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if is_valid_alphabet_label(&token) && token != card.front.trim() {
+            token
+        } else {
+            diphthong_romanization(card.front.trim())?.to_string()
+        }
+    } else {
+        card.back[..dash].trim().to_string()
+    };
+    if is_valid_alphabet_label(&label) && (card.chapter != 5 || label != card.front.trim()) {
+        Some(label)
+    } else {
+        None
+    }
+}
+
+/// The eligibility invariant for a quiz label: non-empty, at most 20 chars,
+/// at most 2 words.
+fn is_valid_alphabet_label(label: &str) -> bool {
+    !label.is_empty() && label.chars().count() <= 20 && label.split_whitespace().count() <= 2
+}
+
+/// Standard scholarly (LSJ-style) romanizations of the Greek diphthong
+/// digraphs. All 11 outputs are distinct, so they can serve as MCQ choices
+/// without ambiguity. Returns None for anything else.
+fn diphthong_romanization(front: &str) -> Option<&'static str> {
+    Some(match front {
+        "αι" => "ai",
+        "ει" => "ei",
+        "οι" => "oi",
+        "υι" => "ui",
+        "αυ" => "au",
+        "ευ" => "eu",
+        "ηυ" => "ēu",
+        "ου" => "ou",
+        "ᾳ" => "āi",
+        "ῃ" => "ēi",
+        "ῳ" => "ōi",
+        _ => return None,
+    })
+}
+
+/// Cards usable in the Alphabet Check: letters track, well-formed
+/// front/back, and an extractable label. Private to this module.
+fn eligible_alphabet_cards(cards: &[Card]) -> Vec<(&Card, String)> {
+    cards
+        .iter()
+        .filter(|c| {
+            crate::curriculum::card_in_textbook(c, "letters")
+                && !c.front.trim().is_empty()
+                && !c.back.trim().is_empty()
+        })
+        .filter_map(|c| alphabet_check_label(c).map(|label| (c, label)))
+        .collect()
+}
+
+/// Generate an n-question Alphabet Check from the loaded `cards`. Pure: no
+/// DB, no clock — the output depends only on the slice and `seed`.
+///
+/// Stratified by chapter: each represented chapter gets at least 3 questions
+/// while the pool is large enough; the rest is drawn round-robin. Question
+/// order is mixed (seeded shuffle) and directions alternate
+/// GlyphToName/NameToGlyph deterministically (the seeded order's parity
+/// decides who goes first). Distractors reuse `build_mcq`'s widening policy
+/// (same-chapter → same-tag → same-pos → any) over the eligible pools —
+/// names for name-space questions, glyphs for glyph-space questions.
+pub fn generate_alphabet_check(
+    cards: &[Card],
+    n: usize,
+    seed: u64,
+) -> Vec<AlphabetQuestion> {
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut rng = Xorshift64::new(seed);
+
+    let eligible = eligible_alphabet_cards(cards);
+    if eligible.len() < 4 {
+        return Vec::new();
+    }
+
+    // Parallel eligible card slices: one whose fronts are the quiz labels
+    // (with label-vs-label comparability encoded in `pos`, so ch.5
+    // romanizations only confuse other ch.5 romanizations), and one with the
+    // real glyph fronts. Both align index-for-index with `eligible`.
+    let label_cards: Vec<Card> = eligible
+        .iter()
+        .map(|(c, label)| {
+            let mut lc = (*c).clone();
+            lc.front = label.clone();
+            lc.back = c.id.clone();
+            lc.pos = format!("letter-label-{}", c.chapter);
+            lc
+        })
+        .collect();
+    let glyph_cards: Vec<Card> = eligible.iter().map(|(c, _)| (*c).clone()).collect();
+    let all_eligible: Vec<usize> = (0..eligible.len()).collect();
+
+    // Stratified picks: per-chapter shuffled pools, at least 3 per chapter
+    // while possible, then round-robin.
+    let mut by_chapter: std::collections::BTreeMap<i32, Vec<usize>> =
+        std::collections::BTreeMap::new();
+    for (i, (c, _)) in eligible.iter().enumerate() {
+        by_chapter.entry(c.chapter).or_default().push(i);
+    }
+    let mut picks: Vec<usize> = Vec::new();
+    let mut cursor: std::collections::HashMap<i32, usize> = std::collections::HashMap::new();
+    let chapters: Vec<i32> = by_chapter.keys().copied().collect();
+    for &ch in &chapters {
+        let pool = &by_chapter[&ch];
+        for pi in shuffled_indices(pool.len(), &mut rng)
+            .into_iter()
+            .take(3.min(pool.len()))
+        {
+            if picks.len() >= n {
+                break;
+            }
+            picks.push(pool[pi]);
+            *cursor.entry(ch).or_default() += 1;
+        }
+    }
+    while picks.len() < n {
+        let mut progressed = false;
+        for &ch in &chapters {
+            if picks.len() >= n {
+                break;
+            }
+            if by_chapter[&ch].len() > cursor[&ch] {
+                picks.push(by_chapter[&ch][cursor[&ch]]);
+                *cursor.entry(ch).or_default() += 1;
+                progressed = true;
+            }
+        }
+        if !progressed {
+            break; // every eligible card used at most once
+        }
+    }
+
+    // Mixed final order, then directions alternate along it.
+    let order = shuffled_indices(picks.len(), &mut rng);
+    let start_glyph_to_name = rng.below(2) == 0;
+
+    let mut out = Vec::new();
+    for (pos, oi) in order.into_iter().enumerate() {
+        let ti = picks[oi];
+        let direction = if (pos % 2 == 0) == start_glyph_to_name {
+            AlphabetDirection::GlyphToName
+        } else {
+            AlphabetDirection::NameToGlyph
+        };
+        let (card, label) = &eligible[ti];
+        let (prompt, pool): (String, &[Card]) = match direction {
+            AlphabetDirection::GlyphToName => {
+                (card.front.trim().to_string(), &label_cards)
+            }
+            AlphabetDirection::NameToGlyph => (label.clone(), &glyph_cards),
+        };
+        let mcq = build_mcq(pool, &all_eligible, ti, &mut rng);
+        let Some(mcq) = mcq else {
+            continue; // fewer than 3 distinct distractors; skip this pick
+        };
+        debug_assert_eq!(mcq.card_id, card.id);
+        out.push(AlphabetQuestion {
+            card_id: card.id.clone(),
+            direction,
+            prompt,
+            choices: mcq.choices,
+            correct_index: mcq.correct_index,
+        });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,5 +700,192 @@ mod tests {
         assert_eq!(grade_typed(expected, "λόγος"), TypedGrade::Wrong);
         assert_eq!(grade_typed(expected, ""), TypedGrade::Wrong);
         assert_eq!(grade_typed(expected, "ἄνθρωπος κακός"), TypedGrade::Wrong);
+    }
+
+    // --- Alphabet Check tests (DESIGN-alphabet-gate.md §8) ---
+
+    /// The real letters deck, so data drift (fewer than 30 eligible cards,
+    /// shifted back formats) fails this suite in CI.
+    fn real_letters_deck() -> Vec<Card> {
+        serde_json::from_str(include_str!("../../../../data/cards/letters.json"))
+            .expect("letters.json must parse")
+    }
+
+    #[test]
+    fn alphabet_check_labels_and_eligibility() {
+        let cards = real_letters_deck();
+        assert_eq!(cards.len(), 43, "the letters track is 43 cards today");
+
+        // Ch.1-3: label is the text before " — " on the back.
+        let alpha = cards.iter().find(|c| c.id == "letters-001").unwrap();
+        assert_eq!(alphabet_check_label(alpha).as_deref(), Some("alpha"));
+        // Ch.5: romanization after the dash, cut at ',' or '/'.
+        let ai = cards.iter().find(|c| c.id == "letters-033").unwrap();
+        assert_eq!(alphabet_check_label(ai).as_deref(), Some("ai"));
+        // letters-034's back has no romanization token ("ει — a long close
+        // e, ..."): the label falls back to the front's standard
+        // romanization.
+        let ei = cards.iter().find(|c| c.id == "letters-034").unwrap();
+        assert_eq!(alphabet_check_label(ei).as_deref(), Some("ei"));
+        let iota_sub = cards.iter().find(|c| c.id == "letters-041").unwrap();
+        assert_eq!(alphabet_check_label(iota_sub).as_deref(), Some("āi"));
+
+        let eligible = eligible_alphabet_cards(&cards);
+        assert!(
+            eligible.len() >= 30,
+            "data drift: only {} check-eligible letters cards (today 35)",
+            eligible.len()
+        );
+        // Today's exact split: ch.1 7, ch.2 9, ch.3 8, ch.5 11; ch.4 has none.
+        let mut per_chapter = [0usize; 6];
+        for (c, _) in &eligible {
+            per_chapter[c.chapter as usize] += 1;
+        }
+        assert_eq!(per_chapter[4], 0, "ch.4 diacritics are not check-eligible");
+        assert_eq!(
+            (per_chapter[1], per_chapter[2], per_chapter[3], per_chapter[5]),
+            (7, 9, 8, 11),
+            "chapter split of the 35 eligible cards"
+        );
+        // All ch.5 labels are distinct (no ambiguous NameToGlyph prompts).
+        let mut ch5_labels: Vec<&str> = eligible
+            .iter()
+            .filter(|(c, _)| c.chapter == 5)
+            .map(|(_, l)| l.as_str())
+            .collect();
+        ch5_labels.sort_unstable();
+        ch5_labels.dedup();
+        assert_eq!(ch5_labels.len(), per_chapter[5]);
+        // Eligibility invariant on every entry.
+        for (_, label) in &eligible {
+            assert!(!label.is_empty());
+            assert!(label.chars().count() <= 20);
+            assert!(label.split_whitespace().count() <= 2);
+        }
+    }
+
+    #[test]
+    fn alphabet_check_generator() {
+        let cards = real_letters_deck();
+        let eligible = eligible_alphabet_cards(&cards);
+        let glyph_of = |id: &str| -> &str {
+            cards.iter().find(|c| c.id == id).unwrap().front.trim()
+        };
+        let label_of = |id: &str| -> &str {
+            eligible
+                .iter()
+                .find(|(c, _)| c.id == id)
+                .map(|(_, l)| l.as_str())
+                .expect("all prompts must come from the eligible set")
+        };
+
+        // Determinism per seed.
+        let a = generate_alphabet_check(&cards, 24, 42);
+        let b = generate_alphabet_check(&cards, 24, 42);
+        assert_eq!(a, b, "same seed must reproduce the identical check");
+        assert!(a.len() >= 20, "near-full check expected, got {}", a.len());
+
+        // Both directions present, in strict alternation.
+        assert!(a.iter().any(|q| q.direction == AlphabetDirection::GlyphToName));
+        assert!(a.iter().any(|q| q.direction == AlphabetDirection::NameToGlyph));
+        assert!(
+            a.windows(2)
+                .all(|w| w[0].direction != w[1].direction),
+            "directions must alternate"
+        );
+
+        // >= 3 questions per represented chapter (1, 2, 3, 5).
+        for chapter in [1, 2, 3, 5] {
+            let in_chapter = a
+                .iter()
+                .filter(|q| {
+                    cards.iter().find(|c| c.id == q.card_id).unwrap().chapter == chapter
+                })
+                .count();
+            assert!(in_chapter >= 3, "chapter {chapter} only has {in_chapter} questions");
+        }
+
+        for q in &a {
+            // Structural: 4 unique choices, in-range correct index.
+            assert_eq!(q.choices.len(), 4);
+            assert!(q.correct_index < 4);
+            let mut uniq = q.choices.clone();
+            uniq.sort();
+            uniq.dedup();
+            assert_eq!(uniq.len(), 4, "choices unique: {:?}", q.choices);
+            // Prompt/choice polarity matches the direction.
+            match q.direction {
+                AlphabetDirection::GlyphToName => {
+                    assert_eq!(q.prompt, glyph_of(&q.card_id));
+                    assert_eq!(q.choices[q.correct_index], label_of(&q.card_id));
+                }
+                AlphabetDirection::NameToGlyph => {
+                    assert_eq!(q.prompt, label_of(&q.card_id));
+                    assert_eq!(q.choices[q.correct_index], glyph_of(&q.card_id));
+                }
+            }
+        }
+
+        // Different seeds reshuffle.
+        assert!(generate_alphabet_check(&cards, 24, 1337) != a);
+    }
+
+    #[test]
+    fn check_misses_recycle() {
+        // A missed check answer flows through the practice submission path
+        // exactly like a practice-question miss: review_logs gains a row with
+        // source='practice' and rating 1, and the miss creates a memory_state
+        // on the Again (sub-day) learning step — see
+        // srs::tests::test_submit_review_again_schedules_subday_due for the
+        // scheduling guarantee — so the letter resurfaces within the session.
+        let db = crate::db::Database::open(":memory:", None).unwrap();
+        let srs = crate::srs::SrsEngine::new();
+        let cards = real_letters_deck();
+        let check = generate_alphabet_check(&cards, 24, 7);
+        let q = check.first().expect("a generated question");
+
+        srs.submit_review_with_source(&db, &q.card_id, 1, "practice")
+            .unwrap();
+
+        let (rating, source): (i32, String) = db
+            .conn()
+            .query_row(
+                "SELECT rating, source FROM review_logs WHERE card_id = ?1",
+                [&q.card_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(rating, 1);
+        assert_eq!(source, "practice");
+
+        // Again-step memory state: first rep, first lapse, and a sub-day due
+        // date (no midnight stamp), i.e. it is about to be due.
+        let (reps, lapses, due_date): (i32, i32, String) = db
+            .conn()
+            .query_row(
+                "SELECT reps, lapses, due_date FROM memory_states WHERE card_id = ?1",
+                [&q.card_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!((reps, lapses), (1, 1));
+        assert!(
+            !due_date.ends_with("T00:00:00Z"),
+            "Again step must keep the sub-day time component: {due_date}"
+        );
+        // ...and the due-review path picks it up (nudge it just past due).
+        db.conn()
+            .execute(
+                "UPDATE memory_states SET due_date = '2000-01-01T00:00:00Z' WHERE card_id = ?1",
+                [&q.card_id],
+            )
+            .unwrap();
+        let due: Vec<String> = srs
+            .get_due_cards(&db, 10)
+            .unwrap()
+            .iter()
+            .map(|cws| cws.card.id.clone())
+            .collect();
+        assert!(due.contains(&q.card_id));
     }
 }

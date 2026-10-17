@@ -19,6 +19,75 @@ fn needed_for_unlock(card_count: i32) -> i32 {
     (UNLOCK_THRESHOLD * card_count as f32).ceil() as i32
 }
 
+// --- Alphabet gate ---
+
+/// Number of questions in the Alphabet Check.
+pub const ALPHABET_CHECK_N: u32 = 24;
+/// Minimum correct answers needed to pass the Alphabet Check.
+pub const ALPHABET_CHECK_PASS_MIN: u32 = 22;
+
+/// Letters-track lane thresholds for the organic (no-button) unlock: the
+/// learner must have measured letters-practice accuracy of at least 85%
+/// over at least 20 attempts, spread across at least 2 distinct UTC days.
+const ORGANIC_MIN_PRACTICE: u32 = 20;
+const ORGANIC_MIN_ACCURACY: f64 = 0.85;
+const ORGANIC_MIN_DAYS: u32 = 2;
+
+/// A letters-track card counts as "familiar" (toward the intra-letters
+/// unlock progress) once it has been reviewed at least this many times,
+/// regardless of source — vocabulary chapters keep the 30-day stability
+/// rule instead.
+const LETTERS_FAMILIAR_REPS: i32 = 2;
+
+/// How the alphabet gate was satisfied. Persisted in `user_settings` under
+/// its serde snake-case name (e.g. `"check_passed"`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AlphabetGateMethod {
+    CheckPassed,
+    Organic,
+    DeclaredKnown,
+    VocabHistory,
+}
+
+impl AlphabetGateMethod {
+    /// Serde name as stored in the `user_settings.alphabet_gate` value
+    /// (identical to the `rename_all = "snake_case"` serialized form; a unit
+    /// test pins the two together).
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::CheckPassed => "check_passed",
+            Self::Organic => "organic",
+            Self::DeclaredKnown => "declared_known",
+            Self::VocabHistory => "vocab_history",
+        }
+    }
+
+    /// Inverse of [`AlphabetGateMethod::name`]; unknown strings -> None.
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "check_passed" => Some(Self::CheckPassed),
+            "organic" => Some(Self::Organic),
+            "declared_known" => Some(Self::DeclaredKnown),
+            "vocab_history" => Some(Self::VocabHistory),
+            _ => None,
+        }
+    }
+}
+
+/// Snapshot of the alphabet-gate evaluation for progress UIs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AlphabetGateState {
+    pub satisfied: bool,
+    pub method: Option<AlphabetGateMethod>,
+    pub letters_introduced: u32,
+    pub letters_total: u32,
+    pub letters_practice_total: u32,
+    pub letters_practice_correct: u32,
+    pub letters_active_days: u32,
+    pub letters_chapters_met: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CurriculumInfo {
     pub textbook: String,
@@ -56,6 +125,21 @@ pub fn card_in_textbook(card: &Card, textbook: &str) -> bool {
         .any(|t| t == textbook || t.starts_with(&prefix))
 }
 
+/// Card ids from `memory_states` matching a simple `WHERE <sql> < ?1` filter
+/// (e.g. `"stability >= ?1"` for mastery, `"reps >= ?1"` for letters
+/// familiarity). Returns an empty set on any query error.
+fn memory_ids_where(db: &Database, where_sql: &str, threshold: f64) -> std::collections::HashSet<String> {
+    db.conn()
+        .prepare(&format!("SELECT card_id FROM memory_states WHERE {where_sql}"))
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_map([threshold], |row| row.get::<_, String>(0))
+                .ok()
+                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        })
+        .unwrap_or_default()
+}
+
 pub struct Curriculum;
 
 impl Curriculum {
@@ -90,7 +174,187 @@ impl Curriculum {
         ]
     }
 
-    /// Get chapters for a given textbook with progress info.
+    /// Evaluate the alphabet gate: is vocabulary *new-card introduction*
+    /// unlocked? (Due reviews are never gated.)
+    ///
+    /// DEVIATION from DESIGN-alphabet-gate.md §4.1: the signature takes the
+    /// full loaded card slice (`cards`) instead of a bare `letters_total`;
+    /// `letters_total` is computed internally, because the letters-chapter
+    /// exposure counts also come from the cards. Behavior is the design's.
+    ///
+    /// Evaluation order:
+    /// 1. fail-open when the letters track isn't loaded (`letters_total == 0`),
+    ///    so the gate can never brick a build;
+    /// 2. the persisted latch (`user_settings.alphabet_gate`) — once latched,
+    ///    the gate never re-locks;
+    /// 3. Lane C grandfather: any non-letters `memory_states` row exists;
+    /// 4. Lane B organic: full letters coverage AND >=85% measured letters
+    ///    practice accuracy over >=20 attempts AND activity on >=2 distinct
+    ///    UTC days.
+    pub fn alphabet_gate_state(db: &Database, cards: &[Card]) -> AlphabetGateState {
+        let letters_total = cards
+            .iter()
+            .filter(|c| card_in_textbook(c, "letters"))
+            .count() as u32;
+
+        let letters_introduced: u32 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM memory_states WHERE card_id LIKE 'letters-%'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0) as u32;
+
+        let (letters_practice_total, letters_practice_correct): (u32, u32) = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*),
+                        COALESCE(SUM(CASE WHEN rating >= 3 THEN 1 ELSE 0 END), 0)
+                 FROM review_logs
+                 WHERE source = 'practice' AND card_id LIKE 'letters-%'",
+                [],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .map(|(total, correct)| (total as u32, correct as u32))
+            .unwrap_or((0, 0));
+
+        let letters_active_days: u32 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(DISTINCT substr(timestamp, 1, 10))
+                 FROM review_logs WHERE card_id LIKE 'letters-%'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0) as u32;
+
+        // Letters chapters where >=80% of the seeded cards have been seen
+        // twice (reps >= 2, any source): the letters-track exposure bar.
+        let letters_chapters_met = {
+            let reps2_ids = memory_ids_where(db, "reps >= ?1", LETTERS_FAMILIAR_REPS as f64);
+            cards
+                .iter()
+                .filter(|c| card_in_textbook(c, "letters"))
+                .fold(std::collections::BTreeMap::<i32, (u32, u32)>::new(), |mut acc, c| {
+                    let entry = acc.entry(c.chapter).or_default();
+                    entry.0 += 1;
+                    if reps2_ids.contains(&c.id) {
+                        entry.1 += 1;
+                    }
+                    acc
+                })
+                .values()
+                .filter(|&&(total, met)| {
+                    total > 0 && (met as i32) >= needed_for_unlock(total as i32)
+                })
+                .count() as u32
+        };
+
+        // 1. Fail-open when the letters deck isn't loaded.
+        if letters_total == 0 {
+            return AlphabetGateState {
+                satisfied: true,
+                method: None,
+                letters_introduced,
+                letters_total,
+                letters_practice_total,
+                letters_practice_correct,
+                letters_active_days,
+                letters_chapters_met,
+            };
+        }
+
+        // 2. The latch: once written, the gate stays satisfied forever.
+        let latched: Option<AlphabetGateMethod> = db
+            .conn()
+            .query_row(
+                "SELECT value FROM user_settings WHERE key = 'alphabet_gate'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+            .and_then(|v| AlphabetGateMethod::from_name(&v));
+        if let Some(method) = latched {
+            return AlphabetGateState {
+                satisfied: true,
+                method: Some(method),
+                letters_introduced,
+                letters_total,
+                letters_practice_total,
+                letters_practice_correct,
+                letters_active_days,
+                letters_chapters_met,
+            };
+        }
+
+        // 3. Lane C grandfather: any vocabulary/lookup memory state means the
+        //    learner had a pre-gate vocabulary habit; auto-satisfy.
+        let has_vocab_history: bool = db
+            .conn()
+            .query_row(
+                "SELECT 1 FROM memory_states WHERE card_id NOT LIKE 'letters-%' LIMIT 1",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        if has_vocab_history {
+            return AlphabetGateState {
+                satisfied: true,
+                method: Some(AlphabetGateMethod::VocabHistory),
+                letters_introduced,
+                letters_total,
+                letters_practice_total,
+                letters_practice_correct,
+                letters_active_days,
+                letters_chapters_met,
+            };
+        }
+
+        // 4. Lane B organic.
+        let organic = letters_introduced >= letters_total
+            && letters_practice_total >= ORGANIC_MIN_PRACTICE
+            && (letters_practice_correct as f64)
+                >= ORGANIC_MIN_ACCURACY * letters_practice_total as f64
+            && letters_active_days >= ORGANIC_MIN_DAYS;
+        let method = organic.then_some(AlphabetGateMethod::Organic);
+
+        AlphabetGateState {
+            satisfied: organic,
+            method,
+            letters_introduced,
+            letters_total,
+            letters_practice_total,
+            letters_practice_correct,
+            letters_active_days,
+            letters_chapters_met,
+        }
+    }
+
+    /// Persist the alphabet-gate latch: `user_settings.alphabet_gate` = the
+    /// method's serde snake-case name, `alphabet_gate_at` = now (ISO-8601).
+    /// Once written it is never re-locked.
+    pub fn record_alphabet_gate(db: &Database, method: AlphabetGateMethod) -> anyhow::Result<()> {
+        let now = crate::srs::now_iso8601();
+        db.conn().execute(
+            "INSERT INTO user_settings (key, value) VALUES ('alphabet_gate', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [method.name()],
+        )?;
+        db.conn().execute(
+            "INSERT INTO user_settings (key, value) VALUES ('alphabet_gate_at', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [now],
+        )?;
+        Ok(())
+    }
+
+    /// Alphabet Check verdict: pass at >=22 of >=24.
+    pub fn evaluate_alphabet_check(correct: u32, total: u32) -> bool {
+        correct >= ALPHABET_CHECK_PASS_MIN && total >= ALPHABET_CHECK_N
+    }
+
+
     ///
     /// `cards` is the full set of loaded flashcards; per-chapter `card_count`
     /// and `mastered_count` are computed from it (mastered = has a
@@ -105,19 +369,21 @@ impl Curriculum {
             .map(|t| t.total_chapters)
             .unwrap_or(0);
 
-        // Set of card ids that count as mastered (stability >= 30 days).
-        let mastered_ids: std::collections::HashSet<String> = db
-            .conn()
-            .prepare("SELECT card_id FROM memory_states WHERE stability >= ?1")
-            .ok()
-            .and_then(|mut stmt| {
-                stmt.query_map([MASTERY_STABILITY_DAYS as f64], |row| {
-                    row.get::<_, String>(0)
-                })
-                .ok()
-                .map(|rows| rows.filter_map(|r| r.ok()).collect())
-            })
-            .unwrap_or_default();
+        // Set of card ids that count as "mastered". Vocabulary textbooks use
+        // the long-term rule (stability >= 30 days); the letters track counts
+        // a card as soon as it has been seen twice (reps >= 2, any source),
+        // because letter familiarity is an exposure-level skill and the 30d
+        // rule would take weeks to unlock intra-letters chapters.
+        let mastered_ids: std::collections::HashSet<String> = if textbook == "letters" {
+            memory_ids_where(db, "reps >= ?1", LETTERS_FAMILIAR_REPS as f64)
+        } else {
+            memory_ids_where(db, "stability >= ?1", MASTERY_STABILITY_DAYS as f64)
+        };
+
+        // Alphabet gate: while unmet, vocabulary tracks are presented fully
+        // locked regardless of the stored progress rows.
+        let gate_locked =
+            textbook != "letters" && !Self::alphabet_gate_state(db, cards).satisfied;
 
         // Cards belonging to this textbook, so we only scan them once per chapter.
         let textbook_cards: Vec<&Card> =
@@ -132,6 +398,10 @@ impl Curriculum {
             (1..=total_chapters).collect()
         };
 
+        // Default (always-unlocked) chapter of this textbook: ch.1 for
+        // 1-based tracks, ch.0 for DCC — used for the gate hint below.
+        let default_chapter: i32 = if textbook == "dcc" { 0 } else { 1 };
+
         for chapter in chapter_range {
             // Check if chapter is unlocked
             let unlocked: bool = db
@@ -142,6 +412,9 @@ impl Curriculum {
                     |row| row.get::<_, i32>(0).map(|v| v != 0),
                 )
                 .unwrap_or(chapter <= 1); // Chapter 1 (and the DCC chapter 0) unlocked by default
+            // The alphabet gate overrides: vocabulary chapters report locked
+            // until the gate is satisfied.
+            let unlocked = unlocked && !gate_locked;
 
             let chapter_cards: Vec<&&Card> = textbook_cards
                 .iter()
@@ -164,6 +437,9 @@ impl Curriculum {
             // as met so later chapters can never deadlock.
             let unlock_hint = if unlocked {
                 String::new()
+            } else if gate_locked && chapter == default_chapter {
+                "Finish 'The Alphabet & Pronunciation' — or pass the Alphabet Check."
+                    .to_string()
             } else {
                 let prev = chapter - 1;
                 let prev_count = textbook_cards
@@ -571,5 +847,270 @@ mod tests {
         Curriculum::unlock_chapter(&db, "letters", 2).unwrap();
         let chapters = Curriculum::get_chapters(&db, "letters", &cards);
         assert!(chapters[1].unlocked);
+    }
+
+    // --- Alphabet gate tests (DESIGN-alphabet-gate.md §8) ---
+
+    /// The 43 letters cards mirroring `data/cards/letters.json` chapter
+    /// layout (7 vowels, 9 stops, 9 continuants, 7 diacritics, 11 diphthongs).
+    fn letters_deck() -> Vec<Card> {
+        (1..=43)
+            .map(|i| {
+                let chapter = match i {
+                    1..=7 => 1,
+                    8..=16 => 2,
+                    17..=25 => 3,
+                    26..=32 => 4,
+                    _ => 5,
+                };
+                letters_card(&format!("letters-{i:03}"), chapter)
+            })
+            .collect()
+    }
+
+    /// Full letters coverage (43 memory_states rows) plus `correct + wrong`
+    /// letters practice rows spread across `dates`.
+    fn seed_organic_lane(db: &Database, dates: &[&str], correct: usize, wrong: usize) {
+        for i in 1..=43 {
+            db.conn()
+                .execute(
+                    "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+                     VALUES (?1, 30.0, 5.0, '2024-01-01T00:00:00Z', 1, 0)",
+                    [format!("letters-{i:03}")],
+                )
+                .unwrap();
+        }
+        for k in 0..(correct + wrong) {
+            let rating = if k < wrong { 1 } else { 4 };
+            let ts = format!("{}T10:{:02}:00Z", dates[k % dates.len()], k % 60);
+            db.conn()
+                .execute(
+                    "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days, source)
+                     VALUES (?1, ?2, ?3, 0.0, 0.0, 'practice')",
+                    rusqlite::params![format!("letters-{:03}", (k % 43) + 1), ts, rating],
+                )
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn gate_fresh_db_unsatisfied() {
+        let db = Database::open(":memory:", None).unwrap();
+        let state = Curriculum::alphabet_gate_state(&db, &letters_deck());
+        assert!(!state.satisfied);
+        assert_eq!(state.method, None);
+        assert_eq!(state.letters_total, 43);
+        assert_eq!(state.letters_introduced, 0);
+        assert_eq!(state.letters_practice_total, 0);
+        assert_eq!(state.letters_practice_correct, 0);
+        assert_eq!(state.letters_active_days, 0);
+        assert_eq!(state.letters_chapters_met, 0);
+    }
+
+    #[test]
+    fn gate_fail_open_without_letters_deck() {
+        // letters_total == 0 (deck not loaded): the gate must never brick.
+        let db = Database::open(":memory:", None).unwrap();
+        let state = Curriculum::alphabet_gate_state(&db, &[]);
+        assert!(state.satisfied);
+        assert_eq!(state.method, None);
+        assert_eq!(state.letters_total, 0);
+    }
+
+    #[test]
+    fn gate_grandfathered_by_vocab_history() {
+        let db = Database::open(":memory:", None).unwrap();
+        // One non-letters memory state (the owner's old vocab data) suffices.
+        db.conn()
+            .execute(
+                "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+                 VALUES ('ath1-001', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0)",
+                [],
+            )
+            .unwrap();
+        let state = Curriculum::alphabet_gate_state(&db, &letters_deck());
+        assert!(state.satisfied);
+        assert_eq!(state.method, Some(AlphabetGateMethod::VocabHistory));
+        // Letters-only rows must NOT trigger the lane.
+        let db2 = Database::open(":memory:", None).unwrap();
+        db2.conn()
+            .execute(
+                "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+                 VALUES ('letters-001', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0)",
+                [],
+            )
+            .unwrap();
+        assert!(!Curriculum::alphabet_gate_state(&db2, &letters_deck()).satisfied);
+    }
+
+    #[test]
+    fn gate_organic_lane() {
+        // 43 letters states + 20 practice attempts at 90% across 2 UTC days.
+        let db = Database::open(":memory:", None).unwrap();
+        seed_organic_lane(&db, &["2026-10-15", "2026-10-16"], 18, 2);
+        let state = Curriculum::alphabet_gate_state(&db, &letters_deck());
+        assert!(state.satisfied, "organic lane: {:?}", state);
+        assert_eq!(state.method, Some(AlphabetGateMethod::Organic));
+        assert_eq!(state.letters_introduced, 43);
+        assert_eq!(state.letters_practice_total, 20);
+        assert_eq!(state.letters_practice_correct, 18);
+        assert_eq!(state.letters_active_days, 2);
+
+        // Same accuracy on ONE day only: the spacing hedge fails.
+        let one_day = Database::open(":memory:", None).unwrap();
+        seed_organic_lane(&one_day, &["2026-10-15"], 18, 2);
+        assert!(!Curriculum::alphabet_gate_state(&one_day, &letters_deck()).satisfied);
+
+        // 80% accuracy (16/20) over 2 days: below the 85% bar.
+        let sloppy = Database::open(":memory:", None).unwrap();
+        seed_organic_lane(&sloppy, &["2026-10-15", "2026-10-16"], 16, 4);
+        assert!(!Curriculum::alphabet_gate_state(&sloppy, &letters_deck()).satisfied);
+
+        // Under-20 attempts, even at 100%, is not enough.
+        let thin = Database::open(":memory:", None).unwrap();
+        seed_organic_lane(&thin, &["2026-10-15", "2026-10-16"], 19, 0);
+        assert!(!Curriculum::alphabet_gate_state(&thin, &letters_deck()).satisfied);
+    }
+
+    #[test]
+    fn gate_latch_persists() {
+        let db = Database::open(":memory:", None).unwrap();
+        // Some letters activity first, then the check-pass latch.
+        seed_organic_lane(&db, &["2026-10-15"], 3, 1);
+        Curriculum::record_alphabet_gate(&db, AlphabetGateMethod::CheckPassed).unwrap();
+        // Wipe all underlying evidence: the latch still holds.
+        db.conn()
+            .execute_batch("DELETE FROM memory_states; DELETE FROM review_logs;")
+            .unwrap();
+        let state = Curriculum::alphabet_gate_state(&db, &letters_deck());
+        assert!(state.satisfied);
+        assert_eq!(state.method, Some(AlphabetGateMethod::CheckPassed));
+        assert_eq!(state.letters_introduced, 0);
+        let at: String = db
+            .conn()
+            .query_row(
+                "SELECT value FROM user_settings WHERE key = 'alphabet_gate_at'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(at.len() >= 20 && at.contains('T'), "ISO-8601 timestamp: {at}");
+    }
+
+    #[test]
+    fn evaluate_alphabet_check_bounds() {
+        assert!(Curriculum::evaluate_alphabet_check(22, 24));
+        assert!(Curriculum::evaluate_alphabet_check(24, 24));
+        assert!(Curriculum::evaluate_alphabet_check(23, 30));
+        assert!(!Curriculum::evaluate_alphabet_check(21, 24));
+        // A short check can never pass, however accurate.
+        assert!(!Curriculum::evaluate_alphabet_check(23, 23));
+    }
+
+    #[test]
+    fn alphabet_gate_method_names_match_serde() {
+        for (method, name) in [
+            (AlphabetGateMethod::CheckPassed, "check_passed"),
+            (AlphabetGateMethod::Organic, "organic"),
+            (AlphabetGateMethod::DeclaredKnown, "declared_known"),
+            (AlphabetGateMethod::VocabHistory, "vocab_history"),
+        ] {
+            assert_eq!(method.name(), name);
+            // The persisted name is exactly the serde snake-case form.
+            assert_eq!(serde_json::to_string(&method).unwrap(), format!("\"{name}\""));
+            assert_eq!(AlphabetGateMethod::from_name(name), Some(method));
+        }
+        assert_eq!(AlphabetGateMethod::from_name("nonsense"), None);
+    }
+
+    #[test]
+    fn letters_exposure_rule_vs_vocab_30d() {
+        let db = Database::open(":memory:", None).unwrap();
+        // Identical low-stability rows (stability = 2 days, reps = 2) on
+        // letters ch.1 AND athenaze ch.1.
+        for i in 1..=7 {
+            db.conn()
+                .execute(
+                    "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+                     VALUES (?1, 2.0, 5.0, '2024-01-01T00:00:00Z', 2, 0)",
+                    [format!("letters-{i:03}")],
+                )
+                .unwrap();
+        }
+        for i in 1..=5 {
+            db.conn()
+                .execute(
+                    "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+                     VALUES (?1, 2.0, 5.0, '2024-01-01T00:00:00Z', 2, 0)",
+                    [format!("ath1-{i:03}")],
+                )
+                .unwrap();
+        }
+        let mut letters: Vec<Card> = (1..=7)
+            .map(|i| letters_card(&format!("letters-{i:03}"), 1))
+            .collect();
+        letters.push(letters_card("letters-008", 2));
+        let vocab: Vec<Card> = (1..=10)
+            .map(|i| sample_card(&format!("ath1-{i:03}"), if i <= 5 { 1 } else { 2 }, "athenaze-i"))
+            .collect();
+
+        // Letters: reps >= 2 counts — all 7 ch.1 cards "met", requirement
+        // (6 of 7) satisfied, hint clears, and the state reports 1 met chapter.
+        let chapters = Curriculum::get_chapters(&db, "letters", &letters);
+        assert_eq!(chapters[0].mastered_count, 7);
+        assert!(!chapters[1].unlocked);
+        assert_eq!(chapters[1].unlock_hint, "");
+        let mut all_cards = letters.clone();
+        all_cards.extend(vocab.iter().cloned());
+        let state = Curriculum::alphabet_gate_state(&db, &all_cards);
+        assert_eq!(state.letters_chapters_met, 1);
+
+        // Athenaze: the 30-day stability rule still applies, so the identical
+        // rows count for nothing. (The vocab rows also grandfather the gate,
+        // so the normal prev-chapter hint shows rather than the gate hint.)
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &vocab);
+        assert_eq!(chapters[0].mastered_count, 0);
+        assert_eq!(
+            chapters[1].unlock_hint,
+            "Master 80% of Chapter 1 to unlock (0/4)"
+        );
+    }
+
+    #[test]
+    fn gate_locks_vocab_chapters_with_hint() {
+        let db = Database::open(":memory:", None).unwrap();
+        let vocab: Vec<Card> = (1..=10)
+            .map(|i| sample_card(&format!("ath1-{i:03}"), if i <= 5 { 1 } else { 2 }, "athenaze-i"))
+            .collect();
+        // Letters deck loaded (so the gate is live) but no progress at all.
+        let mut cards = letters_deck();
+        cards.extend(vocab.iter().cloned());
+
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
+        // While the gate is unmet, even the default-unlocked ch.1 reports
+        // locked and carries the gate hint; later chapters keep their
+        // existing prev-chapter hints.
+        assert!(chapters.iter().all(|c| !c.unlocked));
+        assert_eq!(
+            chapters[0].unlock_hint,
+            "Finish 'The Alphabet & Pronunciation' — or pass the Alphabet Check."
+        );
+        assert_eq!(
+            chapters[1].unlock_hint,
+            "Master 80% of Chapter 1 to unlock (0/4)"
+        );
+        // After passing the check, ch.1 is back to default-unlocked.
+        Curriculum::record_alphabet_gate(&db, AlphabetGateMethod::CheckPassed).unwrap();
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
+        assert!(chapters[0].unlocked);
+        assert_eq!(chapters[0].unlock_hint, "");
+        assert!(!chapters[1].unlocked);
+        assert_eq!(
+            chapters[1].unlock_hint,
+            "Master 80% of Chapter 1 to unlock (0/4)"
+        );
+        // The letters track itself is never gate-locked.
+        let chapters = Curriculum::get_chapters(&db, "letters", &cards);
+        assert!(chapters[0].unlocked);
     }
 }

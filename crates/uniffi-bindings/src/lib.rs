@@ -1,6 +1,7 @@
 use greek_core::{
     now_iso8601, Analysis, Card, CardWithState, ChapterInfo, Curriculum, CurriculumInfo, Database,
     MorphologyDb, Reader, SearchEngine, SearchResult, SrsEngine, TextSection, Token,
+    AlphabetGateMethod, ALPHABET_CHECK_N,
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -137,6 +138,34 @@ pub struct PracticeStatsView {
     pub correct: u32,
 }
 
+/// One Alphabet Check question. `glyph_to_name` picks the polarity: when
+/// true, `prompt` is the Greek glyph(s) and `choices` are letter names;
+/// when false, `prompt` is the letter name and `choices` are glyphs.
+#[derive(uniffi::Record)]
+pub struct AlphabetQuestionView {
+    pub card_id: String,
+    pub glyph_to_name: bool,
+    pub prompt: String,
+    pub choices: Vec<String>,
+    pub correct_index: u8,
+}
+
+/// Alphabet-gate snapshot for the Home banner/progress card. `method` is
+/// the latched/evaluated serde name ("check_passed" | "organic" |
+/// "declared_known" | "vocab_history"), or "" when there is no method
+/// (unsatisfied, or satisfied fail-open with no letters deck loaded).
+#[derive(uniffi::Record)]
+pub struct AlphabetGateStateView {
+    pub satisfied: bool,
+    pub method: String,
+    pub letters_introduced: u32,
+    pub letters_total: u32,
+    pub letters_practice_total: u32,
+    pub letters_practice_correct: u32,
+    pub letters_active_days: u32,
+    pub letters_chapters_met: u32,
+}
+
 // --- Conversion helpers ---
 
 fn card_to_view(c: &Card) -> CardView {
@@ -212,6 +241,19 @@ fn chapter_to_view(c: &ChapterInfo) -> ChapterView {
         unlocked: c.unlocked,
         available: c.available,
         unlock_hint: c.unlock_hint.clone(),
+    }
+}
+
+fn gate_state_to_view(s: &greek_core::AlphabetGateState) -> AlphabetGateStateView {
+    AlphabetGateStateView {
+        satisfied: s.satisfied,
+        method: s.method.map(|m| m.name().to_string()).unwrap_or_default(),
+        letters_introduced: s.letters_introduced,
+        letters_total: s.letters_total,
+        letters_practice_total: s.letters_practice_total,
+        letters_practice_correct: s.letters_practice_correct,
+        letters_active_days: s.letters_active_days,
+        letters_chapters_met: s.letters_chapters_met,
     }
 }
 
@@ -330,6 +372,16 @@ impl GreekCore {
 
     pub fn get_new_cards(&self, textbook: String, chapter: i32, limit: i32) -> Vec<CardView> {
         let db = self.db.lock().unwrap();
+
+        // Alphabet gate: vocabulary new-card introduction is refused until
+        // the learner proves alphabet fluency. (Due reviews via
+        // get_due_cards are never gated.) The refusal lives here in the core
+        // so every current and future UI path is capped consistently.
+        if textbook != "letters"
+            && !Curriculum::alphabet_gate_state(&db, &self.cards).satisfied
+        {
+            return Vec::new();
+        }
 
         // Enforce the daily new-card cap at the Rust layer so every UI path
         // is capped consistently.
@@ -579,7 +631,67 @@ impl GreekCore {
 
     pub fn unlock_chapter(&self, textbook: String, chapter: i32) -> bool {
         let db = self.db.lock().unwrap();
+        // Alphabet gate: manual unlocks on vocabulary tracks are refused
+        // while the gate is unmet.
+        if textbook != "letters"
+            && !Curriculum::alphabet_gate_state(&db, &self.cards).satisfied
+        {
+            return false;
+        }
         Curriculum::unlock_chapter(&db, &textbook, chapter).is_ok()
+    }
+
+    // --- Alphabet gate (DESIGN-alphabet-gate.md) ---
+
+    /// Generate the Alphabet Check: 24 stratified glyph↔name questions over
+    /// the letters track. The seed is unix-epoch minutes, so each attempt
+    /// shuffles a fresh sample. Each answer should be reported through
+    /// `submit_practice_result` (misses become FSRS-Again items), and the
+    /// verdict through `record_alphabet_check_result`.
+    pub fn generate_alphabet_check(&self) -> Vec<AlphabetQuestionView> {
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() / 60)
+            .unwrap_or(0);
+        greek_core::questions::generate_alphabet_check(
+            &self.cards,
+            ALPHABET_CHECK_N as usize,
+            seed,
+        )
+        .into_iter()
+        .map(|q| AlphabetQuestionView {
+            card_id: q.card_id,
+            glyph_to_name: q.direction
+                == greek_core::questions::AlphabetDirection::GlyphToName,
+            prompt: q.prompt,
+            choices: q.choices,
+            correct_index: q.correct_index as u8,
+        })
+        .collect()
+    }
+
+    /// Record an Alphabet Check verdict: on a pass (>=22 of >=24) the gate
+    /// latches as check_passed. Returns the gate's satisfied flag afterward.
+    pub fn record_alphabet_check_result(&self, correct: u32, total: u32) -> bool {
+        let db = self.db.lock().unwrap();
+        if Curriculum::evaluate_alphabet_check(correct, total) {
+            let _ = Curriculum::record_alphabet_gate(&db, AlphabetGateMethod::CheckPassed);
+        }
+        Curriculum::alphabet_gate_state(&db, &self.cards).satisfied
+    }
+
+    /// Lane C skip affordance ("I already know the Greek alphabet"): latches
+    /// the gate as declared_known. Returns the satisfied flag afterward.
+    pub fn declare_alphabet_known(&self) -> bool {
+        let db = self.db.lock().unwrap();
+        let _ = Curriculum::record_alphabet_gate(&db, AlphabetGateMethod::DeclaredKnown);
+        Curriculum::alphabet_gate_state(&db, &self.cards).satisfied
+    }
+
+    /// Gate snapshot for the Home banner / progress card.
+    pub fn get_alphabet_gate_state(&self) -> AlphabetGateStateView {
+        let db = self.db.lock().unwrap();
+        gate_state_to_view(&Curriculum::alphabet_gate_state(&db, &self.cards))
     }
 
     // --- Reader Operations ---
