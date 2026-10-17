@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib", "staticlib"]
+# "rlib" lets host-side integration tests (tests/) link the crate; the
+# Android build consumes only the cdylib .so as before.
+crate-type = ["cdylib", "staticlib", "rlib"]
 name = "uniffi_bindings"
 
 [dependencies]
@@ -14,6 +16,9 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 rusqlite = { workspace = true }
 anyhow = { workspace = true }
+
+[dev-dependencies]
+uuid = { workspace = true }
 
 [[bin]]
 name = "uniffi-bindgen"

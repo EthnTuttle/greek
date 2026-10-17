@@ -748,6 +748,12 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -797,6 +803,12 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_mark_word_known(`ptr`: Pointer,`word`: RustBuffer.ByValue,`known`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    fun uniffi_uniffi_bindings_fn_method_greekcore_new_cards_remaining_today(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): Int
+    fun uniffi_uniffi_bindings_fn_method_greekcore_new_cards_today(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): Int
+    fun uniffi_uniffi_bindings_fn_method_greekcore_preview_intervals(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_search_dictionary(`ptr`: Pointer,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_submit_review(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`rating`: Byte,uniffi_out_err: UniffiRustCallStatus, 
@@ -941,6 +953,12 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_mark_word_known(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_new_cards_remaining_today(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_new_cards_today(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_preview_intervals(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_search_dictionary(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_submit_review(
@@ -1002,6 +1020,15 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_mark_word_known() != 57534.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_new_cards_remaining_today() != 58993.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_new_cards_today() != 42457.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_preview_intervals() != 57569.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_search_dictionary() != 42616.toShort()) {
@@ -1086,6 +1113,29 @@ public object FfiConverterUByte: FfiConverter<UByte, Byte> {
 
     override fun write(value: UByte, buf: ByteBuffer) {
         buf.put(value.toByte())
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterUInt: FfiConverter<UInt, Int> {
+    override fun lift(value: Int): UInt {
+        return value.toUInt()
+    }
+
+    override fun read(buf: ByteBuffer): UInt {
+        return lift(buf.getInt())
+    }
+
+    override fun lower(value: UInt): Int {
+        return value.toInt()
+    }
+
+    override fun allocationSize(value: UInt) = 4UL
+
+    override fun write(value: UInt, buf: ByteBuffer) {
+        buf.putInt(value.toInt())
     }
 }
 
@@ -1438,6 +1488,22 @@ public interface GreekCoreInterface {
      */
     fun `markWordKnown`(`word`: kotlin.String, `known`: kotlin.Boolean)
     
+    /**
+     * Remaining new-card allowance for today under the daily cap.
+     */
+    fun `newCardsRemainingToday`(): kotlin.UInt
+    
+    /**
+     * Number of cards introduced (first-ever review) on today's date.
+     */
+    fun `newCardsToday`(): kotlin.UInt
+    
+    /**
+     * Preview the next-review interval (seconds from now) for each rating
+     * of the given card. Returns None when the card has no scheduling state.
+     */
+    fun `previewIntervals`(`cardId`: kotlin.String): IntervalPreviewView?
+    
     fun `searchDictionary`(`query`: kotlin.String, `limit`: kotlin.Int): List<SearchResultView>
     
     fun `submitReview`(`cardId`: kotlin.String, `rating`: kotlin.UByte): kotlin.Boolean
@@ -1681,6 +1747,52 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
 }
     }
     
+    
+
+    
+    /**
+     * Remaining new-card allowance for today under the daily cap.
+     */override fun `newCardsRemainingToday`(): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_new_cards_remaining_today(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Number of cards introduced (first-ever review) on today's date.
+     */override fun `newCardsToday`(): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_new_cards_today(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Preview the next-review interval (seconds from now) for each rating
+     * of the given card. Returns None when the card has no scheduling state.
+     */override fun `previewIntervals`(`cardId`: kotlin.String): IntervalPreviewView? {
+            return FfiConverterOptionalTypeIntervalPreviewView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_preview_intervals(
+        it, FfiConverterString.lower(`cardId`),_status)
+}
+    }
+    )
+    }
     
 
     override fun `searchDictionary`(`query`: kotlin.String, `limit`: kotlin.Int): List<SearchResultView> {
@@ -1927,7 +2039,8 @@ data class ChapterView (
     var `cardCount`: kotlin.Int, 
     var `masteredCount`: kotlin.Int, 
     var `unlocked`: kotlin.Boolean, 
-    var `available`: kotlin.Boolean
+    var `available`: kotlin.Boolean, 
+    var `unlockHint`: kotlin.String
 ) {
     
     companion object
@@ -1945,6 +2058,7 @@ public object FfiConverterTypeChapterView: FfiConverterRustBuffer<ChapterView> {
             FfiConverterInt.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
         )
     }
 
@@ -1954,7 +2068,8 @@ public object FfiConverterTypeChapterView: FfiConverterRustBuffer<ChapterView> {
             FfiConverterInt.allocationSize(value.`cardCount`) +
             FfiConverterInt.allocationSize(value.`masteredCount`) +
             FfiConverterBoolean.allocationSize(value.`unlocked`) +
-            FfiConverterBoolean.allocationSize(value.`available`)
+            FfiConverterBoolean.allocationSize(value.`available`) +
+            FfiConverterString.allocationSize(value.`unlockHint`)
     )
 
     override fun write(value: ChapterView, buf: ByteBuffer) {
@@ -1964,6 +2079,7 @@ public object FfiConverterTypeChapterView: FfiConverterRustBuffer<ChapterView> {
             FfiConverterInt.write(value.`masteredCount`, buf)
             FfiConverterBoolean.write(value.`unlocked`, buf)
             FfiConverterBoolean.write(value.`available`, buf)
+            FfiConverterString.write(value.`unlockHint`, buf)
     }
 }
 
@@ -2000,6 +2116,46 @@ public object FfiConverterTypeCurriculumView: FfiConverterRustBuffer<CurriculumV
             FfiConverterString.write(value.`textbook`, buf)
             FfiConverterString.write(value.`displayName`, buf)
             FfiConverterInt.write(value.`totalChapters`, buf)
+    }
+}
+
+
+
+data class IntervalPreviewView (
+    var `againSecs`: kotlin.UInt, 
+    var `hardSecs`: kotlin.UInt, 
+    var `goodSecs`: kotlin.UInt, 
+    var `easySecs`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeIntervalPreviewView: FfiConverterRustBuffer<IntervalPreviewView> {
+    override fun read(buf: ByteBuffer): IntervalPreviewView {
+        return IntervalPreviewView(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: IntervalPreviewView) = (
+            FfiConverterUInt.allocationSize(value.`againSecs`) +
+            FfiConverterUInt.allocationSize(value.`hardSecs`) +
+            FfiConverterUInt.allocationSize(value.`goodSecs`) +
+            FfiConverterUInt.allocationSize(value.`easySecs`)
+    )
+
+    override fun write(value: IntervalPreviewView, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`againSecs`, buf)
+            FfiConverterUInt.write(value.`hardSecs`, buf)
+            FfiConverterUInt.write(value.`goodSecs`, buf)
+            FfiConverterUInt.write(value.`easySecs`, buf)
     }
 }
 
@@ -2254,6 +2410,38 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
         } else {
             buf.put(1)
             FfiConverterString.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeIntervalPreviewView: FfiConverterRustBuffer<IntervalPreviewView?> {
+    override fun read(buf: ByteBuffer): IntervalPreviewView? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeIntervalPreviewView.read(buf)
+    }
+
+    override fun allocationSize(value: IntervalPreviewView?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeIntervalPreviewView.allocationSize(value)
+        }
+    }
+
+    override fun write(value: IntervalPreviewView?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeIntervalPreviewView.write(value, buf)
         }
     }
 }

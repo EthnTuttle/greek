@@ -88,6 +88,7 @@ pub struct ChapterView {
     pub mastered_count: i32,
     pub unlocked: bool,
     pub available: bool,
+    pub unlock_hint: String,
 }
 
 #[derive(uniffi::Record)]
@@ -112,6 +113,14 @@ pub struct ReviewStats {
     pub reviewed_today: i32,
     pub streak_days: i32,
     pub total_cards: i32,
+}
+
+#[derive(uniffi::Record)]
+pub struct IntervalPreviewView {
+    pub again_secs: u32,
+    pub hard_secs: u32,
+    pub good_secs: u32,
+    pub easy_secs: u32,
 }
 
 // --- Conversion helpers ---
@@ -188,6 +197,7 @@ fn chapter_to_view(c: &ChapterInfo) -> ChapterView {
         mastered_count: c.mastered_count,
         unlocked: c.unlocked,
         available: c.available,
+        unlock_hint: c.unlock_hint.clone(),
     }
 }
 
@@ -307,6 +317,14 @@ impl GreekCore {
     pub fn get_new_cards(&self, textbook: String, chapter: i32, limit: i32) -> Vec<CardView> {
         let db = self.db.lock().unwrap();
 
+        // Enforce the daily new-card cap at the Rust layer so every UI path
+        // is capped consistently.
+        let remaining = greek_core::srs::new_cards_remaining_today(&db);
+        if remaining == 0 {
+            return Vec::new();
+        }
+        let effective_limit = (limit.max(0) as u32).min(remaining) as usize;
+
         let chapter_cards: Vec<&Card> = self
             .cards
             .iter()
@@ -330,7 +348,7 @@ impl GreekCore {
         chapter_cards
             .into_iter()
             .filter(|c| !has_state.contains(&c.id))
-            .take(limit as usize)
+            .take(effective_limit)
             .map(|c| card_to_view(c))
             .collect()
     }
@@ -377,6 +395,32 @@ impl GreekCore {
             streak_days,
             total_cards,
         }
+    }
+
+    /// Preview the next-review interval (seconds from now) for each rating
+    /// of the given card. Returns None when the card has no scheduling state.
+    pub fn preview_intervals(&self, card_id: String) -> Option<IntervalPreviewView> {
+        let db = self.db.lock().unwrap();
+        let srs = self.srs.lock().unwrap();
+        srs.preview_intervals(&db, &card_id)
+            .map(|p| IntervalPreviewView {
+                again_secs: p.again_secs,
+                hard_secs: p.hard_secs,
+                good_secs: p.good_secs,
+                easy_secs: p.easy_secs,
+            })
+    }
+
+    /// Number of cards introduced (first-ever review) on today's date.
+    pub fn new_cards_today(&self) -> u32 {
+        let db = self.db.lock().unwrap();
+        greek_core::srs::new_cards_today(&db)
+    }
+
+    /// Remaining new-card allowance for today under the daily cap.
+    pub fn new_cards_remaining_today(&self) -> u32 {
+        let db = self.db.lock().unwrap();
+        greek_core::srs::new_cards_remaining_today(&db)
     }
 
     // --- Morphology Operations ---
