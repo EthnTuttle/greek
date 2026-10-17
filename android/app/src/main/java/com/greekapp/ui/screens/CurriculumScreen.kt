@@ -16,19 +16,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.greekapp.R
 import com.greekapp.viewmodel.Chapter
 import com.greekapp.viewmodel.CurriculumViewModel
 import com.greekapp.viewmodel.Section
 
 @Composable
 fun CurriculumScreen(
+    /** Wave-5: navigate to the Alphabet Check destination. */
+    onTakeAlphabetCheck: () -> Unit = {},
     viewModel: CurriculumViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Re-pull on every resume: a passed Alphabet Check (or a Settings skip)
+    // must hide the gate card immediately even when this tab was restored
+    // from the bottom-nav back stack.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refresh()
+    }
 
     // Surface unlock-hint messages (tapped a locked chapter with a known
     // requirement) as a transient snackbar.
@@ -58,6 +71,13 @@ fun CurriculumScreen(
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Wave-5: compact alphabet-gate row above the textbook list
+                // while the gate is unmet (same card as Home, reduced form).
+                if (state.alphabetGateUnmet) {
+                    item(key = "alphabet-gate") {
+                        AlphabetGateRow(onTakeAlphabetCheck = onTakeAlphabetCheck)
+                    }
+                }
                 state.sections.forEach { section ->
                     item(key = section.name) {
                         SectionCard(
@@ -74,6 +94,42 @@ fun CurriculumScreen(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+    }
+}
+
+/** Compact wave-5 gate card (Curriculum tab): title + a single check CTA. */
+@Composable
+private fun AlphabetGateRow(
+    onTakeAlphabetCheck: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.home_gate_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onTakeAlphabetCheck) {
+                Text(
+                    text = stringResource(R.string.gate_take_check_short),
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    maxLines = 2
+                )
+            }
+        }
     }
 }
 

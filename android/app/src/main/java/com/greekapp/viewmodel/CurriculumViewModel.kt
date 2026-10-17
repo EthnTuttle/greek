@@ -35,7 +35,12 @@ data class CurriculumState(
     val sections: List<Section> = emptyList(),
     val isLoading: Boolean = true,
     /** Transient unlock hint to surface in a snackbar; cleared via [hintShown]. */
-    val unlockHint: String? = null
+    val unlockHint: String? = null,
+    /**
+     * Wave-5 alphabet gate unmet → the screen shows a compact gate card above
+     * the textbook list with a check CTA. False while unknown (load failure).
+     */
+    val alphabetGateUnmet: Boolean = false
 )
 
 class CurriculumViewModel : ViewModel() {
@@ -46,12 +51,26 @@ class CurriculumViewModel : ViewModel() {
     // the exact ChapterView back to the core adapter.
     private var chapterViews: Map<Pair<String, Int>, ChapterView> = emptyMap()
 
-    init { loadCurriculum() }
+    init { refresh() }
 
-    private fun loadCurriculum() {
+    /**
+     * Public so the screen can re-pull on ON_RESUME: the gate card must
+     * disappear the moment a check passed elsewhere (or a skip lane ran)
+     * even when this ViewModel instance was restored from the tab's
+     * saved-state back stack.
+     */
+    fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
             val core = CoreProvider.current() ?: return@launch
             try {
+                // Alphabet gate (wave 5): one shared evaluation, kept local to
+                // this ViewModel; any failure fails open (card hidden).
+                val gateUnmet = try {
+                    val gate = core.getAlphabetGateState()
+                    !gate.satisfied && gate.lettersTotal > 0u
+                } catch (e: Exception) {
+                    false
+                }
                 val curricula = core.getCurricula()
                 val viewMap = mutableMapOf<Pair<String, Int>, ChapterView>()
                 val sections = curricula.mapIndexed { index, cv ->
@@ -76,7 +95,11 @@ class CurriculumViewModel : ViewModel() {
                     )
                 }
                 chapterViews = viewMap
-                _state.value = CurriculumState(sections = sections, isLoading = false)
+                _state.value = CurriculumState(
+                    sections = sections,
+                    isLoading = false,
+                    alphabetGateUnmet = gateUnmet
+                )
             } catch (e: Exception) {
                 _state.value = _state.value.copy(isLoading = false)
             }

@@ -13,9 +13,11 @@ import uniffi.uniffi_bindings.TextSectionView
 
 /**
  * [GreekCoreApi] implementation that delegates to the UniFFI-generated
- * [GreekCore]. Wave-2 exports ([previewIntervals], [newCardsToday],
- * [unlockHintFor]) call the real bindings, falling back to [ContractStubs]
- * permanently if the loaded native library predates them.
+ * [GreekCore]. Wave-2/3 exports call the real bindings, falling back to
+ * safe defaults permanently if the loaded native library predates them.
+ * Wave-5 (alphabet gate) exports do not exist in the checked-in bindings
+ * yet, so those overrides are pure stubs marked `WAVE5-WIRE` — integration
+ * rewires them using the same runCatching + [newApiAvailable] pattern.
  */
 class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
 
@@ -123,15 +125,65 @@ class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
             .getOrElse { markApiUnavailable("getPracticeStats", it); PracticeStats(0u, 0u) }
     }
 
+    // ---- Wave-5 (Alphabet Gate) ----
+    // Real exports, same runCatching/newApiAvailable fallback as wave-2/3.
+    // Fallback default is fail-closed-but-renderable: unmet gate over the
+    // standard 43-card deck so the gate surfaces stay visible if an older
+    // on-device .so lacks these symbols.
+
+    override fun generateAlphabetCheck(): List<AlphabetQuestionData> {
+        if (!newApiAvailable) return emptyList()
+        return runCatching {
+            core.generateAlphabetCheck().map {
+                AlphabetQuestionData(it.cardId, it.glyphToName, it.prompt, it.choices, it.correctIndex.toInt())
+            }
+        }.getOrElse { markApiUnavailable("generateAlphabetCheck", it); emptyList() }
+    }
+
+    override fun recordAlphabetCheckResult(correct: UInt, total: UInt): Boolean {
+        if (!newApiAvailable) return false
+        return runCatching { core.recordAlphabetCheckResult(correct, total) }
+            .getOrElse { markApiUnavailable("recordAlphabetCheckResult", it); false }
+    }
+
+    override fun declareAlphabetKnown(): Boolean {
+        if (!newApiAvailable) return false
+        return runCatching { core.declareAlphabetKnown() }
+            .getOrElse { markApiUnavailable("declareAlphabetKnown", it); false }
+    }
+
+    override fun getAlphabetGateState(): AlphabetGateState {
+        if (!newApiAvailable) return gateStubFallback
+        return runCatching {
+            core.getAlphabetGateState().let {
+                AlphabetGateState(it.satisfied, it.method, it.lettersIntroduced,
+                    it.lettersTotal, it.lettersPracticeTotal, it.lettersPracticeCorrect,
+                    it.lettersActiveDays, it.lettersChaptersMet)
+            }
+        }.getOrElse { markApiUnavailable("getAlphabetGateState", it); gateStubFallback }
+    }
+
     private companion object {
         /**
-         * Set to false permanently the first time a wave-2 export throws
+         * Set to false permanently the first time a wave-2+ export throws
          * (e.g. an older on-device libuniffi_bindings.so lacks the symbol and
          * raising UnsatisfiedLinkError at call time). Subsequent calls serve
          * the stub values, never attempting the native call again.
          */
         @Volatile
         var newApiAvailable: Boolean = true
+
+        /** Fail-closed-but-renderable wave-5 fallback (see getAlphabetGateState). */
+        val gateStubFallback = AlphabetGateState(
+            satisfied = false,
+            method = "",
+            lettersIntroduced = 0u,
+            lettersTotal = 43u,
+            lettersPracticeTotal = 0u,
+            lettersPracticeCorrect = 0u,
+            lettersActiveDays = 0u,
+            lettersChaptersMet = 0u
+        )
 
         fun markApiUnavailable(api: String, t: Throwable) {
             newApiAvailable = false

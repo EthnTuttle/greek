@@ -23,6 +23,7 @@ fun HomeScreen(
     onStartReview: () -> Unit,
     onContinueReading: () -> Unit,
     onOpenLetters: () -> Unit,
+    onTakeAlphabetCheck: () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -47,46 +48,82 @@ fun HomeScreen(
             fontWeight = FontWeight.Bold
         )
 
-        // Wave-4: steer brand-new users to the alphabet deck until the first
-        // letters chapter is mostly mastered (see HomeViewModel.showLettersBanner).
-        if (state.showLettersBanner) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+        // Wave-5 alphabet gate: while the gate is unmet (and a letters deck is
+        // loaded), a prominent card replaces everything else as the primary CTA.
+        // Satisfied / error (null) / empty deck → no card.
+        state.alphabetGate
+            ?.takeIf { !it.satisfied && it.lettersTotal > 0u }
+            ?.let { gate ->
+                // Practice accuracy 0–100, guarded against total == 0 ("—").
+                // UInt multiply-bound: correct * 100 can't overflow UInt at any
+                // plausible practice volume.
+                val accuracy = if (gate.lettersPracticeTotal == 0u) {
+                    "—"
+                } else {
+                    "${(gate.lettersPracticeCorrect * 100u / gate.lettersPracticeTotal).toInt()}%"
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    )
                 ) {
-                    Text(
-                        text = stringResource(R.string.home_letters_banner_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                    Text(
-                        text = stringResource(R.string.home_letters_banner_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                    Button(
-                        onClick = onOpenLetters,
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.home_letters_banner_button),
-                            style = MaterialTheme.typography.titleMedium
+                            text = stringResource(R.string.home_gate_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Text(
+                            text = stringResource(R.string.home_gate_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.home_gate_progress,
+                                gate.lettersChaptersMet.toInt(),
+                                accuracy
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Button(
+                            onClick = onOpenLetters,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.home_gate_continue),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = onTakeAlphabetCheck,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.home_gate_take_check),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.home_gate_skip_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                     }
                 }
             }
-        }
 
         // Due cards card
         Card(

@@ -30,11 +30,14 @@ import androidx.navigation.NavController
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.navArgument
 import androidx.navigation.compose.rememberNavController
 import com.greekapp.ui.screens.*
+import com.greekapp.viewmodel.PracticeViewModel
 
 sealed class Screen(
     val route: String,
@@ -46,6 +49,8 @@ sealed class Screen(
     object Review : Screen("review", "Review", Icons.Filled.MenuBook, Icons.Outlined.MenuBook)
     // Quiz comes from material-icons-extended (declared in app/build.gradle.kts).
     object Practice : Screen("practice", "Practice", Icons.Filled.Quiz, Icons.Outlined.Quiz)
+    // Wave-5 Alphabet Check: pushed destination, NOT a bottom-nav tab (like Review).
+    object AlphabetCheck : Screen("alphabet-check", "Alphabet Check", Icons.Filled.Quiz, Icons.Outlined.Quiz)
     object Reader : Screen("reader", "Read", Icons.Filled.Book, Icons.Outlined.Book)
     object Curriculum : Screen("curriculum", "Progress", Icons.Filled.MenuBook, Icons.Outlined.MenuBook)
     object Dictionary : Screen("dictionary", "Dictionary", Icons.Filled.Search, Icons.Outlined.Search)
@@ -157,6 +162,10 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
                     // Curriculum is a bottom-nav tab: reuse the tab-navigation
                     // helper so state save/restore matches the nav bar behavior.
                     navController.navigateToTab(Screen.Curriculum.route)
+                },
+                onTakeAlphabetCheck = {
+                    // Stacked on top of Home like Review; nav-pop returns here.
+                    navController.navigate(Screen.AlphabetCheck.route)
                 }
             )
         }
@@ -173,6 +182,32 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
             PracticeScreen(
                 onBack = {
                     navController.popBackStack()
+                },
+                onStudyLetters = {
+                    navController.navigateToTab(Screen.Curriculum.route)
+                }
+            )
+        }
+
+        // Wave-5 Alphabet Check destination. Separate route (no query-arg
+        // support exists in this NavHost); the constant-default nav argument
+        // is what flags check mode to the shared PracticeViewModel through
+        // its SavedStateHandle — the screen itself needs no mode parameter.
+        composable(
+            route = Screen.AlphabetCheck.route,
+            arguments = listOf(
+                navArgument(PracticeViewModel.ARG_ALPHABET_CHECK) {
+                    type = NavType.BoolType
+                    defaultValue = true
+                }
+            )
+        ) {
+            PracticeScreen(
+                onBack = {
+                    navController.popBackStack()
+                },
+                onStudyLetters = {
+                    navController.navigateToTab(Screen.Curriculum.route)
                 }
             )
         }
@@ -182,7 +217,11 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
         }
 
         composable(Screen.Curriculum.route) {
-            CurriculumScreen()
+            CurriculumScreen(
+                onTakeAlphabetCheck = {
+                    navController.navigate(Screen.AlphabetCheck.route)
+                }
+            )
         }
 
         composable(Screen.Dictionary.route) {
@@ -190,7 +229,11 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
         }
 
         composable(Screen.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(
+                onTakeAlphabetCheck = {
+                    navController.navigate(Screen.AlphabetCheck.route)
+                }
+            )
         }
     }
 }

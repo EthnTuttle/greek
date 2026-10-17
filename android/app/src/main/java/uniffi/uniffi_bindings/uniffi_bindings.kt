@@ -764,6 +764,14 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -795,7 +803,13 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_check_typed_answer(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`answer`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
+    fun uniffi_uniffi_bindings_fn_method_greekcore_declare_alphabet_known(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    fun uniffi_uniffi_bindings_fn_method_greekcore_generate_alphabet_check(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_generate_practice_mcq(`ptr`: Pointer,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_get_alphabet_gate_state(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_chapters(`ptr`: Pointer,`textbook`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -825,6 +839,8 @@ internal interface UniffiLib : Library {
     ): Int
     fun uniffi_uniffi_bindings_fn_method_greekcore_preview_intervals(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_record_alphabet_check_result(`ptr`: Pointer,`correct`: Int,`total`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     fun uniffi_uniffi_bindings_fn_method_greekcore_search_dictionary(`ptr`: Pointer,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_submit_practice_result(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`correct`: Byte,`exact`: Byte,uniffi_out_err: UniffiRustCallStatus, 
@@ -955,7 +971,13 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_check_typed_answer(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_declare_alphabet_known(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_generate_alphabet_check(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_generate_practice_mcq(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_get_alphabet_gate_state(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_chapters(
     ): Short
@@ -984,6 +1006,8 @@ internal interface UniffiLib : Library {
     fun uniffi_uniffi_bindings_checksum_method_greekcore_new_cards_today(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_preview_intervals(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_record_alphabet_check_result(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_search_dictionary(
     ): Short
@@ -1025,7 +1049,16 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_check_typed_answer() != 4024.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_declare_alphabet_known() != 29939.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_generate_alphabet_check() != 10168.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_generate_practice_mcq() != 9130.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_alphabet_gate_state() != 55465.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_chapters() != 19677.toShort()) {
@@ -1068,6 +1101,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_preview_intervals() != 57569.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_record_alphabet_check_result() != 16443.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_search_dictionary() != 42616.toShort()) {
@@ -1511,6 +1547,21 @@ public interface GreekCoreInterface {
     fun `checkTypedAnswer`(`cardId`: kotlin.String, `answer`: kotlin.String): kotlin.Boolean
     
     /**
+     * Lane C skip affordance ("I already know the Greek alphabet"): latches
+     * the gate as declared_known. Returns the satisfied flag afterward.
+     */
+    fun `declareAlphabetKnown`(): kotlin.Boolean
+    
+    /**
+     * Generate the Alphabet Check: 24 stratified glyph↔name questions over
+     * the letters track. The seed is unix-epoch minutes, so each attempt
+     * shuffles a fresh sample. Each answer should be reported through
+     * `submit_practice_result` (misses become FSRS-Again items), and the
+     * verdict through `record_alphabet_check_result`.
+     */
+    fun `generateAlphabetCheck`(): List<AlphabetQuestionView>
+    
+    /**
      * Generate up to `limit` EN→GR multiple-choice questions from the
      * in-memory deck. Cards that already have a memory state are offered
      * first (the memory-state ids are queried once and the slice is ordered
@@ -1518,6 +1569,11 @@ public interface GreekCoreInterface {
      * The seed is unix-epoch minutes, so question sets vary per session.
      */
     fun `generatePracticeMcq`(`limit`: kotlin.UInt): List<McqView>
+    
+    /**
+     * Gate snapshot for the Home banner / progress card.
+     */
+    fun `getAlphabetGateState`(): AlphabetGateStateView
     
     fun `getChapters`(`textbook`: kotlin.String): List<ChapterView>
     
@@ -1568,6 +1624,12 @@ public interface GreekCoreInterface {
      * of the given card. Returns None when the card has no scheduling state.
      */
     fun `previewIntervals`(`cardId`: kotlin.String): IntervalPreviewView?
+    
+    /**
+     * Record an Alphabet Check verdict: on a pass (>=22 of >=24) the gate
+     * latches as check_passed. Returns the gate's satisfied flag afterward.
+     */
+    fun `recordAlphabetCheckResult`(`correct`: kotlin.UInt, `total`: kotlin.UInt): kotlin.Boolean
     
     fun `searchDictionary`(`query`: kotlin.String, `limit`: kotlin.Int): List<SearchResultView>
     
@@ -1715,6 +1777,41 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
 
     
     /**
+     * Lane C skip affordance ("I already know the Greek alphabet"): latches
+     * the gate as declared_known. Returns the satisfied flag afterward.
+     */override fun `declareAlphabetKnown`(): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_declare_alphabet_known(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Generate the Alphabet Check: 24 stratified glyph↔name questions over
+     * the letters track. The seed is unix-epoch minutes, so each attempt
+     * shuffles a fresh sample. Each answer should be reported through
+     * `submit_practice_result` (misses become FSRS-Again items), and the
+     * verdict through `record_alphabet_check_result`.
+     */override fun `generateAlphabetCheck`(): List<AlphabetQuestionView> {
+            return FfiConverterSequenceTypeAlphabetQuestionView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_generate_alphabet_check(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Generate up to `limit` EN→GR multiple-choice questions from the
      * in-memory deck. Cards that already have a memory state are offered
      * first (the memory-state ids are queried once and the slice is ordered
@@ -1726,6 +1823,21 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_generate_practice_mcq(
         it, FfiConverterUInt.lower(`limit`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Gate snapshot for the Home banner / progress card.
+     */override fun `getAlphabetGateState`(): AlphabetGateStateView {
+            return FfiConverterTypeAlphabetGateStateView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_get_alphabet_gate_state(
+        it, _status)
 }
     }
     )
@@ -1923,6 +2035,22 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     
 
+    
+    /**
+     * Record an Alphabet Check verdict: on a pass (>=22 of >=24) the gate
+     * latches as check_passed. Returns the gate's satisfied flag afterward.
+     */override fun `recordAlphabetCheckResult`(`correct`: kotlin.UInt, `total`: kotlin.UInt): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_record_alphabet_check_result(
+        it, FfiConverterUInt.lower(`correct`),FfiConverterUInt.lower(`total`),_status)
+}
+    }
+    )
+    }
+    
+
     override fun `searchDictionary`(`query`: kotlin.String, `limit`: kotlin.Int): List<SearchResultView> {
             return FfiConverterSequenceTypeSearchResultView.lift(
     callWithPointer {
@@ -2037,6 +2165,117 @@ public object FfiConverterTypeGreekCore: FfiConverter<GreekCore, Pointer> {
         // The Rust code always expects pointers written as 8 bytes,
         // and will fail to compile if they don't fit.
         buf.putLong(Pointer.nativeValue(lower(value)))
+    }
+}
+
+
+
+/**
+ * Alphabet-gate snapshot for the Home banner/progress card. `method` is
+ * the latched/evaluated serde name ("check_passed" | "organic" |
+ * "declared_known" | "vocab_history"), or "" when there is no method
+ * (unsatisfied, or satisfied fail-open with no letters deck loaded).
+ */
+data class AlphabetGateStateView (
+    var `satisfied`: kotlin.Boolean, 
+    var `method`: kotlin.String, 
+    var `lettersIntroduced`: kotlin.UInt, 
+    var `lettersTotal`: kotlin.UInt, 
+    var `lettersPracticeTotal`: kotlin.UInt, 
+    var `lettersPracticeCorrect`: kotlin.UInt, 
+    var `lettersActiveDays`: kotlin.UInt, 
+    var `lettersChaptersMet`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAlphabetGateStateView: FfiConverterRustBuffer<AlphabetGateStateView> {
+    override fun read(buf: ByteBuffer): AlphabetGateStateView {
+        return AlphabetGateStateView(
+            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: AlphabetGateStateView) = (
+            FfiConverterBoolean.allocationSize(value.`satisfied`) +
+            FfiConverterString.allocationSize(value.`method`) +
+            FfiConverterUInt.allocationSize(value.`lettersIntroduced`) +
+            FfiConverterUInt.allocationSize(value.`lettersTotal`) +
+            FfiConverterUInt.allocationSize(value.`lettersPracticeTotal`) +
+            FfiConverterUInt.allocationSize(value.`lettersPracticeCorrect`) +
+            FfiConverterUInt.allocationSize(value.`lettersActiveDays`) +
+            FfiConverterUInt.allocationSize(value.`lettersChaptersMet`)
+    )
+
+    override fun write(value: AlphabetGateStateView, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`satisfied`, buf)
+            FfiConverterString.write(value.`method`, buf)
+            FfiConverterUInt.write(value.`lettersIntroduced`, buf)
+            FfiConverterUInt.write(value.`lettersTotal`, buf)
+            FfiConverterUInt.write(value.`lettersPracticeTotal`, buf)
+            FfiConverterUInt.write(value.`lettersPracticeCorrect`, buf)
+            FfiConverterUInt.write(value.`lettersActiveDays`, buf)
+            FfiConverterUInt.write(value.`lettersChaptersMet`, buf)
+    }
+}
+
+
+
+/**
+ * One Alphabet Check question. `glyph_to_name` picks the polarity: when
+ * true, `prompt` is the Greek glyph(s) and `choices` are letter names;
+ * when false, `prompt` is the letter name and `choices` are glyphs.
+ */
+data class AlphabetQuestionView (
+    var `cardId`: kotlin.String, 
+    var `glyphToName`: kotlin.Boolean, 
+    var `prompt`: kotlin.String, 
+    var `choices`: List<kotlin.String>, 
+    var `correctIndex`: kotlin.UByte
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAlphabetQuestionView: FfiConverterRustBuffer<AlphabetQuestionView> {
+    override fun read(buf: ByteBuffer): AlphabetQuestionView {
+        return AlphabetQuestionView(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterUByte.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: AlphabetQuestionView) = (
+            FfiConverterString.allocationSize(value.`cardId`) +
+            FfiConverterBoolean.allocationSize(value.`glyphToName`) +
+            FfiConverterString.allocationSize(value.`prompt`) +
+            FfiConverterSequenceString.allocationSize(value.`choices`) +
+            FfiConverterUByte.allocationSize(value.`correctIndex`)
+    )
+
+    override fun write(value: AlphabetQuestionView, buf: ByteBuffer) {
+            FfiConverterString.write(value.`cardId`, buf)
+            FfiConverterBoolean.write(value.`glyphToName`, buf)
+            FfiConverterString.write(value.`prompt`, buf)
+            FfiConverterSequenceString.write(value.`choices`, buf)
+            FfiConverterUByte.write(value.`correctIndex`, buf)
     }
 }
 
@@ -2703,6 +2942,34 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterString.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeAlphabetQuestionView: FfiConverterRustBuffer<List<AlphabetQuestionView>> {
+    override fun read(buf: ByteBuffer): List<AlphabetQuestionView> {
+        val len = buf.getInt()
+        return List<AlphabetQuestionView>(len) {
+            FfiConverterTypeAlphabetQuestionView.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<AlphabetQuestionView>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeAlphabetQuestionView.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<AlphabetQuestionView>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeAlphabetQuestionView.write(it, buf)
         }
     }
 }

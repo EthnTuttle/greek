@@ -28,6 +28,11 @@ import com.greekapp.viewmodel.isMcqQuestion
 @Composable
 fun PracticeScreen(
     onBack: () -> Unit,
+    /**
+     * Alphabet Check (wave-5) fail verdict only: navigate to the letters
+     * curriculum tab. Unused during normal practice sessions.
+     */
+    onStudyLetters: () -> Unit = {},
     viewModel: PracticeViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -36,7 +41,10 @@ fun PracticeScreen(
     if (state.isLoading) {
         PracticeMessageScreen(
             title = null,
-            message = stringResource(R.string.practice_loading),
+            message = stringResource(
+                if (state.isAlphabetCheck) R.string.alphabet_check_loading
+                else R.string.practice_loading
+            ),
             buttonText = null,
             onButton = {}
         )
@@ -44,11 +52,33 @@ fun PracticeScreen(
     }
 
     if (state.isComplete) {
-        PracticeSummaryScreen(
-            state = state,
-            onPracticeAgain = { viewModel.startNewSession() },
-            onBack = onBack
-        )
+        if (state.isAlphabetCheck) {
+            // Verdict replaces the normal summary. Null verdict = recording is
+            // still in flight (fast path) → show the loading surface briefly.
+            val verdict = state.checkVerdict
+            if (verdict == null) {
+                PracticeMessageScreen(
+                    title = null,
+                    message = stringResource(R.string.alphabet_check_loading),
+                    buttonText = null,
+                    onButton = {}
+                )
+            } else {
+                AlphabetCheckVerdictScreen(
+                    state = state,
+                    passed = verdict,
+                    onStudyLetters = onStudyLetters,
+                    onTryAgain = { viewModel.startNewSession() },
+                    onDone = onBack
+                )
+            }
+        } else {
+            PracticeSummaryScreen(
+                state = state,
+                onPracticeAgain = { viewModel.startNewSession() },
+                onBack = onBack
+            )
+        }
         return
     }
 
@@ -60,6 +90,15 @@ fun PracticeScreen(
                 message = state.errorMessage!!,
                 buttonText = stringResource(R.string.practice_try_again),
                 onButton = { viewModel.retryLoad() }
+            )
+        } else if (state.isAlphabetCheck) {
+            // Check generator returned nothing (letters deck not loaded, or a
+            // pre-integration stub core).
+            PracticeMessageScreen(
+                title = stringResource(R.string.alphabet_check_unavailable_title),
+                message = stringResource(R.string.alphabet_check_unavailable_message),
+                buttonText = stringResource(R.string.practice_back),
+                onButton = onBack
             )
         } else {
             // Empty question pool: rated-card pool too small (or wave-3 stub core).
@@ -118,26 +157,55 @@ fun PracticeScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Gloss prompt on top (shared by both question types).
-            Text(
-                text = question.promptGloss,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                overflow = TextOverflow.Ellipsis,
-                maxLines = 3
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-
-            if (isMcqQuestion(state.currentIndex)) {
+            if (state.isAlphabetCheck) {
+                // Check mode: every question is a 4-choice MCQ. A subtitle
+                // names the direction; the prompt is the glyph pair or the
+                // letter name (glyph prompts get the Greek serif).
+                val glyphToName = state.checkDirections
+                    .getOrElse(state.currentIndex) { true }
+                Text(
+                    text = stringResource(
+                        if (glyphToName) R.string.alphabet_check_direction_glyph_to_name
+                        else R.string.alphabet_check_direction_name_to_glyph
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = question.promptGloss,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = if (glyphToName) GreekFontFamily else null,
+                    textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 3
+                )
+                Spacer(modifier = Modifier.height(32.dp))
                 McqChoices(state = state, question = question, onSelect = viewModel::selectChoice)
             } else {
-                TypedAnswer(
-                    state = state,
-                    question = question,
-                    onInputChange = viewModel::onTypedInputChange,
-                    onSubmit = viewModel::submitTypedAnswer
+                // Gloss prompt on top (shared by both question types).
+                Text(
+                    text = question.promptGloss,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 3
                 )
+                Spacer(modifier = Modifier.height(32.dp))
+
+                if (isMcqQuestion(state.currentIndex)) {
+                    McqChoices(state = state, question = question, onSelect = viewModel::selectChoice)
+                } else {
+                    TypedAnswer(
+                        state = state,
+                        question = question,
+                        onInputChange = viewModel::onTypedInputChange,
+                        onSubmit = viewModel::submitTypedAnswer
+                    )
+                }
             }
         }
 
@@ -272,6 +340,85 @@ private fun ColumnScope.TypedAnswer(
                 overflow = TextOverflow.Ellipsis,
                 maxLines = 2
             )
+        }
+    }
+}
+
+/**
+ * Alphabet Check verdict (wave 5): replaces the normal practice summary.
+ * Copy per DESIGN-alphabet-gate.md §6 — pass unlocks vocabulary and exits;
+ * fail points back at the letters track or a fresh attempt (a new stratified
+ * sample is generated each time).
+ */
+@Composable
+private fun AlphabetCheckVerdictScreen(
+    state: PracticeState,
+    passed: Boolean,
+    onStudyLetters: () -> Unit,
+    onTryAgain: () -> Unit,
+    onDone: () -> Unit
+) {
+    val score = state.results.count { it.correct }
+    val total = state.questions.size
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = if (passed) {
+                stringResource(R.string.alphabet_check_pass, score, total)
+            } else {
+                stringResource(
+                    R.string.alphabet_check_fail,
+                    score,
+                    total,
+                    PracticeViewModel.ALPHABET_CHECK_PASS_SCORE
+                )
+            },
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        if (passed) {
+            Button(
+                onClick = onDone,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.alphabet_check_done),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        } else {
+            Button(
+                onClick = onStudyLetters,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.alphabet_check_study_letters),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onTryAgain,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.alphabet_check_try_again),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
         }
     }
 }

@@ -70,8 +70,34 @@
     <!-- Home Screen (practice) -->
     <string name="home_practice_accuracy">Practice accuracy: %1$d%%</string>
 
-    <!-- Home Screen (letters onboarding banner) -->
-    <string name="home_letters_banner_title">New to Greek? Start with the alphabet</string>
-    <string name="home_letters_banner_subtitle">Letters &amp; pronunciation — 5 short stages</string>
-    <string name="home_letters_banner_button">Open Letters</string>
+    <!-- Alphabet Gate (wave 5) -->
+    <!-- Home gate card (replaces the wave-4 letters banner); copy per design §6 -->
+    <string name="home_gate_title">Read Greek first.</string>
+    <string name="home_gate_body">Vocabulary unlocks when you can recognize the alphabet.</string>
+    <string name="home_gate_progress">Letters %1$d/5 stages · Practice accuracy: %2$s (goal 85%)</string>
+    <string name="home_gate_continue">Continue letters</string>
+    <string name="home_gate_take_check">Take the Alphabet Check (~3 min)</string>
+    <string name="home_gate_skip_hint">Already know it? Skip with the check — passing counts instantly.</string>
+    <!-- Short CTA label for the Curriculum tab compact gate row -->
+    <string name="gate_take_check_short">Take the Alphabet Check</string>
+
+    <!-- Alphabet Check mode in Practice -->
+    <string name="alphabet_check_loading">Preparing the Alphabet Check…</string>
+    <string name="alphabet_check_unavailable_title">Alphabet Check unavailable</string>
+    <string name="alphabet_check_unavailable_message">No check questions could be generated yet. Study a few letters first, then try again.</string>
+    <string name="alphabet_check_direction_glyph_to_name">Name this letter</string>
+    <string name="alphabet_check_direction_name_to_glyph">Pick the matching letter</string>
+    <string name="alphabet_check_pass">✅ %1$d/%2$d — the alphabet is yours. Vocabulary is unlocked.</string>
+    <string name="alphabet_check_fail">Not yet — %1$d/%2$d (need %3$d). The ones you missed are already scheduled for review.</string>
+    <string name="alphabet_check_study_letters">Study letters</string>
+    <string name="alphabet_check_try_again">Try again</string>
+    <string name="alphabet_check_done">Done</string>
+
+    <!-- Settings: "I already know the alphabet" skip lane -->
+    <string name="settings_alphabet_row_title">I already know the Greek alphabet</string>
+    <string name="settings_alphabet_row_description">Skip the alphabet requirement</string>
+    <string name="settings_alphabet_dialog_text">Skip the alphabet requirement? We\'ll only ask once. (Logged as self-reported.)</string>
+    <string name="settings_alphabet_dialog_check">Take the 3-minute check</string>
+    <string name="settings_alphabet_dialog_skip">Skip anyway</string>
+    <string name="settings_alphabet_skipped">Alphabet requirement skipped</string>
 </resources>

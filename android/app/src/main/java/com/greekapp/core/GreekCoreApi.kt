@@ -100,6 +100,38 @@ interface GreekCoreApi {
 
     /** Lifetime practice totals driving the Home accuracy line. */
     fun getPracticeStats(): PracticeStats
+
+    // ---- Wave-5 contract additions (Alphabet Gate) ----
+    // These UniFFI exports do NOT exist in the generated bindings yet.
+    // RustCoreAdapter serves safe stubs until regen; see WAVE5-NOTES.md at
+    // the repo root for the expected export/view names.
+
+    /**
+     * Build the 24-question Alphabet Check (stratified MCQ over the letters
+     * track, mixed glyph→name / name→glyph). May return empty when the
+     * letters deck isn't loaded — callers show an "unavailable" state.
+     */
+    fun generateAlphabetCheck(): List<AlphabetQuestionData>
+
+    /**
+     * Record the outcome of one completed Alphabet Check attempt.
+     * Returns the gate-satisfied state after recording (true on pass, or when
+     * the gate was already latched satisfied). Misses are expected to have
+     * been recycled into FSRS via [submitPracticeResult] per question.
+     */
+    fun recordAlphabetCheckResult(correct: UInt, total: UInt): Boolean
+
+    /**
+     * "I already know the alphabet" lane: explicitly satisfy the gate.
+     * Logged core-side as self-reported. Returns the resulting gate state.
+     */
+    fun declareAlphabetKnown(): Boolean
+
+    /**
+     * Current gate evaluation: satisfied flag, satisfying [AlphabetGateState.method]
+     * ("" when none), and live letters-track counters for the progress UI.
+     */
+    fun getAlphabetGateState(): AlphabetGateState
 }
 
 /**
@@ -141,4 +173,44 @@ data class McqData(
 data class PracticeStats(
     val total: UInt,
     val correct: UInt
+)
+
+/**
+ * Kotlin-side mirror of the wave-5 `AlphabetQuestionView` UniFFI record.
+ * Field names match the frozen contract (generated records expose camelCase);
+ * `correctIndex` arrives as UByte in the generated view and is mapped to Int
+ * here (see WAVE5-NOTES.md).
+ *
+ * [prompt] holds the presented side (glyph pair or letter name) and
+ * [glyphToName] says which direction this question runs, so the UI can label
+ * it ("Name this letter" / "Pick the matching letter"). `choices[correctIndex]`
+ * is always the correct answer.
+ */
+data class AlphabetQuestionData(
+    val cardId: String,
+    val glyphToName: Boolean,
+    val prompt: String,
+    val choices: List<String>,
+    val correctIndex: Int
+) {
+    /** The correct choice text (always present at [correctIndex]). */
+    val correctChoice: String
+        get() = choices.getOrElse(correctIndex) { "" }
+}
+
+/**
+ * Kotlin-side mirror of the wave-5 `AlphabetGateStateView` UniFFI record
+ * (counters arrive as u32 → UInt). [method] is "" while the gate is unsatisfied
+ * by any lane; otherwise one of `passed-check` / `passed-organic` /
+ * `declared-known` / `vocab-history`.
+ */
+data class AlphabetGateState(
+    val satisfied: Boolean,
+    val method: String,
+    val lettersIntroduced: UInt,
+    val lettersTotal: UInt,
+    val lettersPracticeTotal: UInt,
+    val lettersPracticeCorrect: UInt,
+    val lettersActiveDays: UInt,
+    val lettersChaptersMet: UInt
 )
