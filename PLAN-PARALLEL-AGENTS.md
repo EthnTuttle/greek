@@ -1,7 +1,7 @@
 # Execution Plan — Parallel-Agent Pedagogy & Completeness Fixes
 
 **Date:** 2026-10-16 · **Input:** `ANALYSIS.md` §5 · **Execution model:** git worktrees + parallel subagents + single integration gate
-**Status (2026-10-17): Waves 1–3 COMPLETE.** All merged & committed; 61 core + 3 integration tests green; APK rebuilt with practice mode + real launcher icon. Remaining: §6 follow-ups (LLM tutor, reader corpus, real LSJ) + on-device smoke checks.
+**Status (2026-10-17, final): Waves 1–4 + Alphabet Gate (research×design×2 impl agents) COMPLETE. 76 core + 6 integration tests green; APK rebuilt. Remaining: on-device verification pass pending, then §6 epics (LLM tutor, corpus, LSJ).**
 
 ## Design rules
 
