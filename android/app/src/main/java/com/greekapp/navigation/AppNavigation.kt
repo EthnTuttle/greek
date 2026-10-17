@@ -152,6 +152,11 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
                 },
                 onContinueReading = {
                     navController.navigate(Screen.Reader.route)
+                },
+                onOpenLetters = {
+                    // Curriculum is a bottom-nav tab: reuse the tab-navigation
+                    // helper so state save/restore matches the nav bar behavior.
+                    navController.navigateToTab(Screen.Curriculum.route)
                 }
             )
         }

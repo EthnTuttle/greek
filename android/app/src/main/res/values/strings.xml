@@ -69,4 +69,9 @@
 
     <!-- Home Screen (practice) -->
     <string name="home_practice_accuracy">Practice accuracy: %1$d%%</string>
+
+    <!-- Home Screen (letters onboarding banner) -->
+    <string name="home_letters_banner_title">New to Greek? Start with the alphabet</string>
+    <string name="home_letters_banner_subtitle">Letters &amp; pronunciation — 5 short stages</string>
+    <string name="home_letters_banner_button">Open Letters</string>
 </resources>

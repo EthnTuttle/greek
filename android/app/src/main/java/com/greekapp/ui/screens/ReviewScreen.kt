@@ -121,14 +121,21 @@ fun ReviewScreen(
                     )
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    // Back (English)
+                    // Back (English) — the letters deck has longer backs (~140
+                    // chars), so step the style down as length grows and allow
+                    // enough lines that the text wraps instead of clipping.
+                    val backStyle = when {
+                        card.back.length > 100 -> MaterialTheme.typography.titleMedium
+                        card.back.length > 60 -> MaterialTheme.typography.titleLarge
+                        else -> MaterialTheme.typography.headlineMedium
+                    }
                     Text(
                         text = card.back,
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = backStyle,
                         fontWeight = FontWeight.Normal,
                         textAlign = TextAlign.Center,
                         overflow = TextOverflow.Ellipsis,
-                        maxLines = 6,
+                        maxLines = 12,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

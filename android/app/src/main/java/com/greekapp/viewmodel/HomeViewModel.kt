@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/** Wave-4 letters track identity: textbook key + expected chapter count. */
+private const val LETTERS_TEXTBOOK = "letters"
+private const val LETTERS_CHAPTER_COUNT = 5
+
 data class HomeState(
     val dueCardsCount: Int = 0,
     val streak: Int = 0,
@@ -19,6 +23,8 @@ data class HomeState(
     val newCardsToday: Int = 0,
     /** Practice accuracy 0–100, or null when no practice is recorded (row hidden). */
     val practiceAccuracy: Int? = null,
+    /** Show the "start with the alphabet" banner while letters ch.1 is unmastered. */
+    val showLettersBanner: Boolean = false,
     val isLoading: Boolean = true
 )
 
@@ -61,6 +67,20 @@ class HomeViewModel : ViewModel() {
                 } catch (e: Exception) {
                     null
                 }
+                // Letters onboarding banner (wave 4): shown while the letters
+                // track is present (5 chapters, all with cards) but chapter 1 is
+                // not yet ~80% mastered. Mirrors the core UNLOCK_THRESHOLD rule
+                // in integer math: mastered < ceil(0.8 * cards) ⇔ mastered*5 < cards*4.
+                val showLettersBanner = try {
+                    val chapters = core.getChapters(LETTERS_TEXTBOOK)
+                    val first = chapters.firstOrNull { it.chapter == 1 }
+                    chapters.size == LETTERS_CHAPTER_COUNT &&
+                        chapters.all { it.cardCount > 0 } &&
+                        first != null &&
+                        first.masteredCount * 5 < first.cardCount * 4
+                } catch (e: Exception) {
+                    false
+                }
                 _state.value = HomeState(
                     dueCardsCount = stats.dueCount,
                     streak = stats.streakDays,
@@ -70,6 +90,7 @@ class HomeViewModel : ViewModel() {
                     chaptersUnlocked = chaptersUnlocked,
                     newCardsToday = newCardsToday,
                     practiceAccuracy = practiceAccuracy,
+                    showLettersBanner = showLettersBanner,
                     isLoading = false
                 )
             } catch (e: Exception) {

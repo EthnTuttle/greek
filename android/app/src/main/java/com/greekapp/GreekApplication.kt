@@ -155,7 +155,12 @@ class GreekApplication : Application() {
 
                 // Merge the card JSON arrays without a parse/re-serialize round trip:
                 // strip each file's surrounding brackets and concatenate the raw contents.
-                val cardFiles = listOf("athenaze-i.json", "athenaze-ii.json", "jact.json", "dcc-core.json")
+                // Decks are discovered from assets rather than hardcoded so a new
+                // deck JSON (e.g. letters.json) ships with no code change; sorted
+                // for a deterministic merge order.
+                val cardFiles = (assets.list("cards") ?: emptyArray())
+                    .filter { it.endsWith(".json") }
+                    .sorted()
                 val merged = StringBuilder(256 * 1024)
                 merged.append('[')
                 var first = true

@@ -22,6 +22,7 @@ import com.greekapp.viewmodel.HomeViewModel
 fun HomeScreen(
     onStartReview: () -> Unit,
     onContinueReading: () -> Unit,
+    onOpenLetters: () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -45,6 +46,47 @@ fun HomeScreen(
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
+
+        // Wave-4: steer brand-new users to the alphabet deck until the first
+        // letters chapter is mostly mastered (see HomeViewModel.showLettersBanner).
+        if (state.showLettersBanner) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.home_letters_banner_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Text(
+                        text = stringResource(R.string.home_letters_banner_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Button(
+                        onClick = onOpenLetters,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.home_letters_banner_button),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                }
+            }
+        }
 
         // Due cards card
         Card(
