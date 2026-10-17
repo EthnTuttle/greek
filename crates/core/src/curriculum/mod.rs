@@ -62,6 +62,14 @@ impl Curriculum {
     /// Get available textbooks
     pub fn get_textbooks() -> Vec<CurriculumInfo> {
         vec![
+            // Stage 0: alphabet + Erasmian pronunciation. Ordered FIRST so
+            // that onboarding/new-card fill starts with letters before any
+            // vocabulary textbook.
+            CurriculumInfo {
+                textbook: "letters".to_string(),
+                display_name: "The Alphabet & Pronunciation".to_string(),
+                total_chapters: 5,
+            },
             CurriculumInfo {
                 textbook: "athenaze".to_string(),
                 display_name: "Athenaze: An Introduction to Ancient Greek".to_string(),
@@ -208,6 +216,14 @@ impl Curriculum {
 /// Get the title for a given chapter. Returns placeholder titles for now.
 fn chapter_title(textbook: &str, chapter: i32) -> String {
     match textbook {
+        "letters" => match chapter {
+            1 => "The Vowels".to_string(),
+            2 => "The Stops".to_string(),
+            3 => "The Continuants".to_string(),
+            4 => "Breathings & Accents".to_string(),
+            5 => "Diphthongs".to_string(),
+            _ => format!("Chapter {}", chapter),
+        },
         "athenaze" => match chapter {
             1 => "Ο ΔΙΚΑΙΟΠΟΛΙΣ (Dicaeopolis)".to_string(),
             2 => "Ο ΞΑΝΘΙΑΣ (Xanthias)".to_string(),
@@ -251,10 +267,13 @@ mod tests {
     #[test]
     fn test_get_textbooks() {
         let textbooks = Curriculum::get_textbooks();
-        assert_eq!(textbooks.len(), 3);
-        assert_eq!(textbooks[0].textbook, "athenaze");
-        assert_eq!(textbooks[1].textbook, "jact");
-        assert_eq!(textbooks[2].textbook, "dcc");
+        assert_eq!(textbooks.len(), 4);
+        // Stage 0 letters track comes first (onboarding priority).
+        assert_eq!(textbooks[0].textbook, "letters");
+        assert_eq!(textbooks[0].total_chapters, 5);
+        assert_eq!(textbooks[1].textbook, "athenaze");
+        assert_eq!(textbooks[2].textbook, "jact");
+        assert_eq!(textbooks[3].textbook, "dcc");
     }
 
     #[test]
@@ -455,6 +474,102 @@ mod tests {
 
         // Now it should be unlocked
         let chapters = Curriculum::get_chapters(&db, "athenaze", &[]);
+        assert!(chapters[1].unlocked);
+    }
+
+    /// A Stage-0 letters card: real cards are tagged ["letters", "chapter-N"].
+    fn letters_card(id: &str, chapter: i32) -> Card {
+        Card {
+            id: id.to_string(),
+            front: String::new(),
+            back: String::new(),
+            chapter,
+            card_type: "Letter".to_string(),
+            pos: "letter".to_string(),
+            tags: vec!["letters".to_string(), format!("chapter-{}", chapter)],
+        }
+    }
+
+    #[test]
+    fn test_card_in_textbook_letters() {
+        let card = letters_card("letters-010", 2);
+        assert!(card_in_textbook(&card, "letters"));
+        // ...and it does not leak into the vocabulary textbooks.
+        assert!(!card_in_textbook(&card, "athenaze"));
+        assert!(!card_in_textbook(&card, "jact"));
+        assert!(!card_in_textbook(&card, "dcc"));
+        // Vocabulary cards do not leak into the letters track either.
+        assert!(!card_in_textbook(&sample_card("ath1-001", 1, "athenaze-i"), "letters"));
+    }
+
+    #[test]
+    fn test_get_chapters_letters() {
+        let db = Database::open(":memory:", None).unwrap();
+        // Mirror data/cards/letters.json shape: 7 ch.1 cards + 1 per later
+        // chapter so every chapter is available.
+        let mut cards: Vec<Card> = (1..=7)
+            .map(|i| letters_card(&format!("letters-{i:03}"), 1))
+            .collect();
+        cards.push(letters_card("letters-020", 2));
+        cards.push(letters_card("letters-026", 3));
+        cards.push(letters_card("letters-030", 4));
+        cards.push(letters_card("letters-040", 5));
+
+        let chapters = Curriculum::get_chapters(&db, "letters", &cards);
+        assert_eq!(chapters.len(), 5);
+        assert!(chapters.iter().all(|c| c.available));
+        let titles: Vec<&str> = chapters.iter().map(|c| c.title.as_str()).collect();
+        assert_eq!(
+            titles,
+            [
+                "The Vowels",
+                "The Stops",
+                "The Continuants",
+                "Breathings & Accents",
+                "Diphthongs"
+            ]
+        );
+        // Chapter 1 is unlocked by default, with no hint.
+        assert!(chapters[0].unlocked);
+        assert_eq!(chapters[0].unlock_hint, "");
+        // Chapter 2 is locked; none of the 7 ch.1 cards is mastered, and
+        // ceil(0.8 * 7) = 6 are needed.
+        assert!(!chapters[1].unlocked);
+        assert!(chapters[1].unlock_hint.contains("Chapter 1"));
+        assert_eq!(
+            chapters[1].unlock_hint,
+            "Master 80% of Chapter 1 to unlock (0/6)"
+        );
+    }
+
+    #[test]
+    fn test_letters_unlock_chain_with_mastered_chapter_1() {
+        let db = Database::open(":memory:", None).unwrap();
+        // Master all 7 chapter-1 letters (stability >= MASTERY_STABILITY_DAYS).
+        for i in 1..=7 {
+            db.conn()
+                .execute(
+                    "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+                     VALUES (?1, 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0)",
+                    [format!("letters-{i:03}")],
+                )
+                .unwrap();
+        }
+        let mut cards: Vec<Card> = (1..=7)
+            .map(|i| letters_card(&format!("letters-{i:03}"), 1))
+            .collect();
+        cards.push(letters_card("letters-008", 2));
+
+        let chapters = Curriculum::get_chapters(&db, "letters", &cards);
+        assert_eq!(chapters[0].card_count, 7);
+        assert_eq!(chapters[0].mastered_count, 7);
+        // The unlock requirement is now met (7 >= 6): the hint clears and
+        // the user may simply tap to unlock chapter 2.
+        assert!(!chapters[1].unlocked);
+        assert_eq!(chapters[1].unlock_hint, "");
+
+        Curriculum::unlock_chapter(&db, "letters", 2).unwrap();
+        let chapters = Curriculum::get_chapters(&db, "letters", &cards);
         assert!(chapters[1].unlocked);
     }
 }

@@ -1,0 +1,581 @@
+[
+  {
+    "id": "letters-001",
+    "front": "Α α",
+    "back": "alpha — a; short as in 'aha', long as in 'father' (/a/, /aː/). First letter of ἀγρός 'field'.",
+    "chapter": 1,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-1",
+      "vowel",
+      "short-or-long"
+    ]
+  },
+  {
+    "id": "letters-002",
+    "front": "Ε ε",
+    "back": "epsilon — e; always short, as in 'pet' (/e/). First letter of ἔργον 'work, deed'.",
+    "chapter": 1,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-1",
+      "vowel"
+    ]
+  },
+  {
+    "id": "letters-003",
+    "front": "Η η",
+    "back": "eta — ē; always long, an open e as in 'air' or French fête (/ɛː/). First letter of ἥλιος 'sun'.",
+    "chapter": 1,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-1",
+      "vowel"
+    ]
+  },
+  {
+    "id": "letters-004",
+    "front": "Ι ι",
+    "back": "iota — i; short as in French 'lit', long as in 'machine' (/i/, /iː/). As in ἵππος 'horse'.",
+    "chapter": 1,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-1",
+      "vowel",
+      "short-or-long"
+    ]
+  },
+  {
+    "id": "letters-005",
+    "front": "Ο ο",
+    "back": "omicron — o; always short, as in British 'pot' (/o/). As in ὁδός 'road'.",
+    "chapter": 1,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-1",
+      "vowel"
+    ]
+  },
+  {
+    "id": "letters-006",
+    "front": "Υ υ",
+    "back": "upsilon — y; lips rounded for 'oo', tongue said as 'ee': French 'tu', German 'ü' (/y/, /yː/). ὕδωρ 'water'. Modern: /i/.",
+    "chapter": 1,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-1",
+      "vowel",
+      "short-or-long"
+    ]
+  },
+  {
+    "id": "letters-007",
+    "front": "Ω ω",
+    "back": "omega — ō; always long, an open o as in 'saw' (/ɔː/). As in δῶρον 'gift'.",
+    "chapter": 1,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-1",
+      "vowel"
+    ]
+  },
+  {
+    "id": "letters-008",
+    "front": "Π π",
+    "back": "pi — p; unaspirated, as in 'spot' (/p/). First letter of πόνος 'toil'.",
+    "chapter": 2,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-2",
+      "stop"
+    ]
+  },
+  {
+    "id": "letters-009",
+    "front": "Β β",
+    "back": "beta — b; as in 'book' (/b/). First letter of βίος 'life'. Modern: /v/.",
+    "chapter": 2,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-2",
+      "stop",
+      "voiced"
+    ]
+  },
+  {
+    "id": "letters-010",
+    "front": "Φ φ",
+    "back": "phi — ph; ASPIRATED p, as in 'pot' said emphatically (/pʰ/), not modern /f/. As in φέρω 'carry, bear'.",
+    "chapter": 2,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-2",
+      "stop",
+      "aspirate"
+    ]
+  },
+  {
+    "id": "letters-011",
+    "front": "Τ τ",
+    "back": "tau — t; unaspirated, as in 'stay' (/t/). As in τέχνη 'art, skill'.",
+    "chapter": 2,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-2",
+      "stop"
+    ]
+  },
+  {
+    "id": "letters-012",
+    "front": "Δ δ",
+    "back": "delta — d; as in 'dog' (/d/). First letter of δοῦλος 'slave'. Modern: /ð/ as in 'this'.",
+    "chapter": 2,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-2",
+      "stop",
+      "voiced"
+    ]
+  },
+  {
+    "id": "letters-013",
+    "front": "Θ θ",
+    "back": "theta — th; ASPIRATED t, as in 'top' said emphatically (/tʰ/), not the modern 'th' of 'thin'. As in θάνατος 'death'.",
+    "chapter": 2,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-2",
+      "stop",
+      "aspirate"
+    ]
+  },
+  {
+    "id": "letters-014",
+    "front": "Κ κ",
+    "back": "kappa — k; unaspirated, as in 'skip' (/k/). As in κακός 'bad'.",
+    "chapter": 2,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-2",
+      "stop"
+    ]
+  },
+  {
+    "id": "letters-015",
+    "front": "Γ γ",
+    "back": "gamma — g; as in 'go' (/ɡ/). Before γ κ χ ξ it is nasal 'ng' (/ŋ/): ἄγγελος 'messenger' = an-gelos.",
+    "chapter": 2,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-2",
+      "stop",
+      "voiced",
+      "nasal-rule"
+    ]
+  },
+  {
+    "id": "letters-016",
+    "front": "Χ χ",
+    "back": "chi — kh; ASPIRATED k, as in 'kin' said emphatically (/kʰ/), not modern /x/ of 'loch'. As in χρόνος 'time'.",
+    "chapter": 2,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-2",
+      "stop",
+      "aspirate"
+    ]
+  },
+  {
+    "id": "letters-017",
+    "front": "Λ λ",
+    "back": "lambda — l; as in 'lamb' (/l/). First letter of λίθος 'stone'.",
+    "chapter": 3,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-3",
+      "continuant"
+    ]
+  },
+  {
+    "id": "letters-018",
+    "front": "Μ μ",
+    "back": "mu — m; as in 'mother' (/m/). First letter of μήτηρ 'mother'.",
+    "chapter": 3,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-3",
+      "continuant"
+    ]
+  },
+  {
+    "id": "letters-019",
+    "front": "Ν ν",
+    "back": "nu — n; as in 'net' (/n/). As in ναῦς 'ship'.",
+    "chapter": 3,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-3",
+      "continuant"
+    ]
+  },
+  {
+    "id": "letters-020",
+    "front": "Ρ ρ",
+    "back": "rho — r; rolled tongue-tip trill (/r/). At word start written ῥ (voiceless /r̥/): ῥήτωρ 'orator'.",
+    "chapter": 3,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-3",
+      "continuant",
+      "trill"
+    ]
+  },
+  {
+    "id": "letters-021",
+    "front": "Σ σ/ς",
+    "back": "sigma — s; as in 'sing' (/s/, voiced /z/ before voiced consonants). Written ς ONLY at word end: λόγος 'word'.",
+    "chapter": 3,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-3",
+      "continuant",
+      "final-form"
+    ]
+  },
+  {
+    "id": "letters-022",
+    "front": "Ζ ζ",
+    "back": "zeta — zd; Erasmian /zd/, as in 'wisdom'; Modern: /z/. As in ζάω 'live', ζητέω 'seek'.",
+    "chapter": 3,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-3",
+      "continuant",
+      "double-consonant"
+    ]
+  },
+  {
+    "id": "letters-023",
+    "front": "Ξ ξ",
+    "back": "xi — x; double consonant k + s (/ks/), as in 'axe'. First letter of ὁ Ξανθίας 'Xanthias'.",
+    "chapter": 3,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-3",
+      "continuant",
+      "double-consonant"
+    ]
+  },
+  {
+    "id": "letters-024",
+    "front": "Ψ ψ",
+    "back": "psi — ps; double consonant p + s (/ps/), as in 'lapse'. First letter of ψυχή 'soul, life'.",
+    "chapter": 3,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-3",
+      "continuant",
+      "double-consonant"
+    ]
+  },
+  {
+    "id": "letters-025",
+    "front": "ζ ξ ψ",
+    "back": "The double consonants: ζ /zd/, ξ /ks/, ψ /ps/. Each counts as two consonants, making the previous syllable heavy.",
+    "chapter": 3,
+    "card_type": "Letter",
+    "pos": "letter",
+    "tags": [
+      "letters",
+      "chapter-3",
+      "continuant",
+      "double-consonant",
+      "review"
+    ]
+  },
+  {
+    "id": "letters-026",
+    "front": "ἁ",
+    "back": "Rough breathing over an initial vowel = /h/: ἁ- = 'ha-'. ὁ ἥλιος 'sun', ὁ ἵππος 'horse'.",
+    "chapter": 4,
+    "card_type": "Diacritic",
+    "pos": "diacritic",
+    "tags": [
+      "letters",
+      "chapter-4",
+      "breathing"
+    ]
+  },
+  {
+    "id": "letters-027",
+    "front": "ἀ",
+    "back": "Smooth breathing = no /h/; the vowel is read plain: ἀ- = 'a-'. Every initial vowel takes a breathing: ἀγρός 'field'.",
+    "chapter": 4,
+    "card_type": "Diacritic",
+    "pos": "diacritic",
+    "tags": [
+      "letters",
+      "chapter-4",
+      "breathing"
+    ]
+  },
+  {
+    "id": "letters-028",
+    "front": "ά",
+    "back": "Acute accent: pitch rose on this syllable (a pitch accent; read as stress today): ἀγρός 'field'.",
+    "chapter": 4,
+    "card_type": "Diacritic",
+    "pos": "diacritic",
+    "tags": [
+      "letters",
+      "chapter-4",
+      "accent"
+    ]
+  },
+  {
+    "id": "letters-029",
+    "front": "ὰ",
+    "back": "Grave accent: a final acute drops to grave when another word follows: καλὸν καὶ ἀγαθόν 'good and beautiful'.",
+    "chapter": 4,
+    "card_type": "Diacritic",
+    "pos": "diacritic",
+    "tags": [
+      "letters",
+      "chapter-4",
+      "accent"
+    ]
+  },
+  {
+    "id": "letters-030",
+    "front": "ᾶ",
+    "back": "Circumflex: high pitch falling on a long vowel or diphthong; read as stress: δοῦλος 'slave'.",
+    "chapter": 4,
+    "card_type": "Diacritic",
+    "pos": "diacritic",
+    "tags": [
+      "letters",
+      "chapter-4",
+      "accent"
+    ]
+  },
+  {
+    "id": "letters-031",
+    "front": "ϊ",
+    "back": "Diaeresis (two dots): vowels read separately, not as a diphthong — cf. 'naïve'. E.g. Homeric ὄϊς 'sheep'.",
+    "chapter": 4,
+    "card_type": "Diacritic",
+    "pos": "diacritic",
+    "tags": [
+      "letters",
+      "chapter-4",
+      "diaeresis"
+    ]
+  },
+  {
+    "id": "letters-032",
+    "front": "ᾳ",
+    "back": "Iota subscript: small ι under long α η ω — once an i-glide, now usually silent: λόγῳ (dat. of λόγος).",
+    "chapter": 4,
+    "card_type": "Diacritic",
+    "pos": "diacritic",
+    "tags": [
+      "letters",
+      "chapter-4",
+      "iota-subscript"
+    ]
+  },
+  {
+    "id": "letters-033",
+    "front": "αι",
+    "back": "αι — ai, as in 'aisle' (/ai̯/): καί 'and', παῖς 'child'. Modern: /e/.",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong"
+    ]
+  },
+  {
+    "id": "letters-034",
+    "front": "ει",
+    "back": "ει — a long close e, as in 'vein' (/eː/): εἰμί 'I am'. Modern: /i/.",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong"
+    ]
+  },
+  {
+    "id": "letters-035",
+    "front": "οι",
+    "back": "οι — oi, as in 'coin' (/oi̯/): οἶκος 'house'. Modern: /i/.",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong"
+    ]
+  },
+  {
+    "id": "letters-036",
+    "front": "υι",
+    "back": "υι — say 'oo' gliding into 'ee' with lips rounded (/yi̯/): υἱός 'son'.",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong"
+    ]
+  },
+  {
+    "id": "letters-037",
+    "front": "αυ",
+    "back": "αυ — au, as in 'cow' (/au̯/): αὐτός 'self', αὐτουργός 'farmer'.",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong"
+    ]
+  },
+  {
+    "id": "letters-038",
+    "front": "ευ",
+    "back": "ευ — e + u blended quickly (/eu̯/), no exact English match: εὖ 'well', εὑρίσκω 'find'.",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong"
+    ]
+  },
+  {
+    "id": "letters-039",
+    "front": "ηυ",
+    "back": "ηυ — long open e + u blended (/ɛːu̯/): ηὗρον 'found', the aorist of εὑρίσκω.",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong"
+    ]
+  },
+  {
+    "id": "letters-040",
+    "front": "ου",
+    "back": "ου — ou, as in 'food' (/uː/): οὐ 'not'; δοῦλος 'slave' (long ου under the circumflex).",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong"
+    ]
+  },
+  {
+    "id": "letters-041",
+    "front": "ᾳ",
+    "back": "ᾳ — long a with iota glide (/aːi̯/), written with subscript: χώρᾳ (dat. of χώρα 'country').",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong",
+      "iota-subscript"
+    ]
+  },
+  {
+    "id": "letters-042",
+    "front": "ῃ",
+    "back": "ῃ — long open e with iota glide (/ɛːi̯/), written with subscript: μάχῃ (dat. of ἡ μάχη 'battle').",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong",
+      "iota-subscript"
+    ]
+  },
+  {
+    "id": "letters-043",
+    "front": "ῳ",
+    "back": "ῳ — long open o with iota glide (/ɔːi̯/), written with subscript: τραγῳδία 'tragedy', κωμῳδία 'comedy'.",
+    "chapter": 5,
+    "card_type": "Diphthong",
+    "pos": "diphthong",
+    "tags": [
+      "letters",
+      "chapter-5",
+      "diphthong",
+      "iota-subscript"
+    ]
+  }
+]
