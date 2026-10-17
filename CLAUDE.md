@@ -1,5 +1,11 @@
 # Greek Learning App
 
+## Current Status (2026-10)
+- **MVP Android app is functional**: Rust core + UniFFI + Compose; SRS review (FSRS), tap-to-parse reader, curriculum tracking, dictionary, settings — all on real data (1,140 cards; Morpheus morphology DB).
+- Known pedagogy fixes are in flight — see `ANALYSIS.md` and `PLAN-PARALLEL-AGENTS.md`.
+- Dictionary glosses are **Morpheus-derived, not LSJ** (LSJ pending).
+- LLM tutor and web/desktop apps remain unimplemented (see Phases below).
+
 ## Project Goal
 Ship a complete Ancient Greek learning application (mobile + desktop) that combines:
 - Textbook-chapter-aligned SRS (Athenaze vocabulary, FSRS algorithm)
