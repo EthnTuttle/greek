@@ -754,6 +754,16 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
+
+
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -783,6 +793,10 @@ internal interface UniffiLib : Library {
     ): Pointer
     fun uniffi_uniffi_bindings_fn_method_greekcore_add_card_from_lookup(`ptr`: Pointer,`lemma`: RustBuffer.ByValue,`form`: RustBuffer.ByValue,`definition`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_check_typed_answer(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`answer`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    fun uniffi_uniffi_bindings_fn_method_greekcore_generate_practice_mcq(`ptr`: Pointer,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_chapters(`ptr`: Pointer,`textbook`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_curricula(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -792,6 +806,8 @@ internal interface UniffiLib : Library {
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_known_words(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_new_cards(`ptr`: Pointer,`textbook`: RustBuffer.ByValue,`chapter`: Int,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_get_practice_stats(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_get_review_stats(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -811,7 +827,11 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_search_dictionary(`ptr`: Pointer,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_submit_practice_result(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`correct`: Byte,`exact`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     fun uniffi_uniffi_bindings_fn_method_greekcore_submit_review(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`rating`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    fun uniffi_uniffi_bindings_fn_method_greekcore_typed_answer_exact(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`answer`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     fun uniffi_uniffi_bindings_fn_method_greekcore_unlock_chapter(`ptr`: Pointer,`textbook`: RustBuffer.ByValue,`chapter`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
@@ -933,6 +953,10 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_check_typed_answer(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_generate_practice_mcq(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_chapters(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_curricula(
@@ -942,6 +966,8 @@ internal interface UniffiLib : Library {
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_known_words(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_new_cards(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_get_practice_stats(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_get_review_stats(
     ): Short
@@ -961,7 +987,11 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_search_dictionary(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_submit_practice_result(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_submit_review(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_typed_answer_exact(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_unlock_chapter(
     ): Short
@@ -992,6 +1022,12 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup() != 26712.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_check_typed_answer() != 4024.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_generate_practice_mcq() != 9130.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_chapters() != 19677.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1005,6 +1041,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_new_cards() != 38920.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_practice_stats() != 4958.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_review_stats() != 3374.toShort()) {
@@ -1034,7 +1073,13 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_search_dictionary() != 42616.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_submit_practice_result() != 35896.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_submit_review() != 47365.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_typed_answer_exact() != 28089.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_unlock_chapter() != 18997.toShort()) {
@@ -1459,6 +1504,21 @@ public interface GreekCoreInterface {
      */
     fun `addCardFromLookup`(`lemma`: kotlin.String, `form`: kotlin.String, `definition`: kotlin.String): kotlin.String
     
+    /**
+     * Accent-tolerant typed-answer check: true when the answer grades Exact
+     * or Lenient against the card's Greek front. Unknown card -> false.
+     */
+    fun `checkTypedAnswer`(`cardId`: kotlin.String, `answer`: kotlin.String): kotlin.Boolean
+    
+    /**
+     * Generate up to `limit` EN→GR multiple-choice questions from the
+     * in-memory deck. Cards that already have a memory state are offered
+     * first (the memory-state ids are queried once and the slice is ordered
+     * reviewed-then-unseen); within those tiers the seeded shuffle decides.
+     * The seed is unix-epoch minutes, so question sets vary per session.
+     */
+    fun `generatePracticeMcq`(`limit`: kotlin.UInt): List<McqView>
+    
     fun `getChapters`(`textbook`: kotlin.String): List<ChapterView>
     
     fun `getCurricula`(): List<CurriculumView>
@@ -1471,6 +1531,11 @@ public interface GreekCoreInterface {
     fun `getKnownWords`(): List<kotlin.String>
     
     fun `getNewCards`(`textbook`: kotlin.String, `chapter`: kotlin.Int, `limit`: kotlin.Int): List<CardView>
+    
+    /**
+     * Lifetime measured-assessment totals: (total attempts, correct ones).
+     */
+    fun `getPracticeStats`(): PracticeStatsView
     
     fun `getReviewStats`(): ReviewStats
     
@@ -1506,7 +1571,20 @@ public interface GreekCoreInterface {
     
     fun `searchDictionary`(`query`: kotlin.String, `limit`: kotlin.Int): List<SearchResultView>
     
+    /**
+     * Record a practice outcome as an SRS review tagged source="practice":
+     * wrong -> 1 (Again), correct -> 3 (Good), correct + exact -> 4 (Easy).
+     * Returns false on error.
+     */
+    fun `submitPracticeResult`(`cardId`: kotlin.String, `correct`: kotlin.Boolean, `exact`: kotlin.Boolean): kotlin.Boolean
+    
     fun `submitReview`(`cardId`: kotlin.String, `rating`: kotlin.UByte): kotlin.Boolean
+    
+    /**
+     * Strict typed-answer check: true only on an Exact grade (accents must
+     * match). Unknown card -> false.
+     */
+    fun `typedAnswerExact`(`cardId`: kotlin.String, `answer`: kotlin.String): kotlin.Boolean
     
     fun `unlockChapter`(`textbook`: kotlin.String, `chapter`: kotlin.Int): kotlin.Boolean
     
@@ -1619,6 +1697,41 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     
 
+    
+    /**
+     * Accent-tolerant typed-answer check: true when the answer grades Exact
+     * or Lenient against the card's Greek front. Unknown card -> false.
+     */override fun `checkTypedAnswer`(`cardId`: kotlin.String, `answer`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_check_typed_answer(
+        it, FfiConverterString.lower(`cardId`),FfiConverterString.lower(`answer`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Generate up to `limit` EN→GR multiple-choice questions from the
+     * in-memory deck. Cards that already have a memory state are offered
+     * first (the memory-state ids are queried once and the slice is ordered
+     * reviewed-then-unseen); within those tiers the seeded shuffle decides.
+     * The seed is unix-epoch minutes, so question sets vary per session.
+     */override fun `generatePracticeMcq`(`limit`: kotlin.UInt): List<McqView> {
+            return FfiConverterSequenceTypeMcqView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_generate_practice_mcq(
+        it, FfiConverterUInt.lower(`limit`),_status)
+}
+    }
+    )
+    }
+    
+
     override fun `getChapters`(`textbook`: kotlin.String): List<ChapterView> {
             return FfiConverterSequenceTypeChapterView.lift(
     callWithPointer {
@@ -1677,6 +1790,21 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_get_new_cards(
         it, FfiConverterString.lower(`textbook`),FfiConverterInt.lower(`chapter`),FfiConverterInt.lower(`limit`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Lifetime measured-assessment totals: (total attempts, correct ones).
+     */override fun `getPracticeStats`(): PracticeStatsView {
+            return FfiConverterTypePracticeStatsView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_get_practice_stats(
+        it, _status)
 }
     }
     )
@@ -1807,12 +1935,45 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     
 
+    
+    /**
+     * Record a practice outcome as an SRS review tagged source="practice":
+     * wrong -> 1 (Again), correct -> 3 (Good), correct + exact -> 4 (Easy).
+     * Returns false on error.
+     */override fun `submitPracticeResult`(`cardId`: kotlin.String, `correct`: kotlin.Boolean, `exact`: kotlin.Boolean): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_submit_practice_result(
+        it, FfiConverterString.lower(`cardId`),FfiConverterBoolean.lower(`correct`),FfiConverterBoolean.lower(`exact`),_status)
+}
+    }
+    )
+    }
+    
+
     override fun `submitReview`(`cardId`: kotlin.String, `rating`: kotlin.UByte): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_submit_review(
         it, FfiConverterString.lower(`cardId`),FfiConverterUByte.lower(`rating`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Strict typed-answer check: true only on an Exact grade (accents must
+     * match). Unknown card -> false.
+     */override fun `typedAnswerExact`(`cardId`: kotlin.String, `answer`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_typed_answer_exact(
+        it, FfiConverterString.lower(`cardId`),FfiConverterString.lower(`answer`),_status)
 }
     }
     )
@@ -2156,6 +2317,78 @@ public object FfiConverterTypeIntervalPreviewView: FfiConverterRustBuffer<Interv
             FfiConverterUInt.write(value.`hardSecs`, buf)
             FfiConverterUInt.write(value.`goodSecs`, buf)
             FfiConverterUInt.write(value.`easySecs`, buf)
+    }
+}
+
+
+
+data class McqView (
+    var `cardId`: kotlin.String, 
+    var `promptGloss`: kotlin.String, 
+    var `choices`: List<kotlin.String>, 
+    var `correctIndex`: kotlin.UByte
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMcqView: FfiConverterRustBuffer<McqView> {
+    override fun read(buf: ByteBuffer): McqView {
+        return McqView(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterUByte.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: McqView) = (
+            FfiConverterString.allocationSize(value.`cardId`) +
+            FfiConverterString.allocationSize(value.`promptGloss`) +
+            FfiConverterSequenceString.allocationSize(value.`choices`) +
+            FfiConverterUByte.allocationSize(value.`correctIndex`)
+    )
+
+    override fun write(value: McqView, buf: ByteBuffer) {
+            FfiConverterString.write(value.`cardId`, buf)
+            FfiConverterString.write(value.`promptGloss`, buf)
+            FfiConverterSequenceString.write(value.`choices`, buf)
+            FfiConverterUByte.write(value.`correctIndex`, buf)
+    }
+}
+
+
+
+data class PracticeStatsView (
+    var `total`: kotlin.UInt, 
+    var `correct`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePracticeStatsView: FfiConverterRustBuffer<PracticeStatsView> {
+    override fun read(buf: ByteBuffer): PracticeStatsView {
+        return PracticeStatsView(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PracticeStatsView) = (
+            FfiConverterUInt.allocationSize(value.`total`) +
+            FfiConverterUInt.allocationSize(value.`correct`)
+    )
+
+    override fun write(value: PracticeStatsView, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`total`, buf)
+            FfiConverterUInt.write(value.`correct`, buf)
     }
 }
 
@@ -2610,6 +2843,34 @@ public object FfiConverterSequenceTypeCurriculumView: FfiConverterRustBuffer<Lis
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeCurriculumView.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMcqView: FfiConverterRustBuffer<List<McqView>> {
+    override fun read(buf: ByteBuffer): List<McqView> {
+        val len = buf.getInt()
+        return List<McqView>(len) {
+            FfiConverterTypeMcqView.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<McqView>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMcqView.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<McqView>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMcqView.write(it, buf)
         }
     }
 }

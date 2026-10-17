@@ -8,11 +8,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Quiz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
@@ -42,6 +44,8 @@ sealed class Screen(
 ) {
     object Home : Screen("home", "Home", Icons.Filled.Home, Icons.Outlined.Home)
     object Review : Screen("review", "Review", Icons.Filled.MenuBook, Icons.Outlined.MenuBook)
+    // Quiz comes from material-icons-extended (declared in app/build.gradle.kts).
+    object Practice : Screen("practice", "Practice", Icons.Filled.Quiz, Icons.Outlined.Quiz)
     object Reader : Screen("reader", "Read", Icons.Filled.Book, Icons.Outlined.Book)
     object Curriculum : Screen("curriculum", "Progress", Icons.Filled.MenuBook, Icons.Outlined.MenuBook)
     object Dictionary : Screen("dictionary", "Dictionary", Icons.Filled.Search, Icons.Outlined.Search)
@@ -50,6 +54,7 @@ sealed class Screen(
 
 val bottomNavItems = listOf(
     Screen.Home,
+    Screen.Practice,
     Screen.Reader,
     Screen.Dictionary,
     Screen.Curriculum,
@@ -154,6 +159,14 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
         composable(Screen.Review.route) {
             ReviewScreen(
                 onComplete = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.Practice.route) {
+            PracticeScreen(
+                onBack = {
                     navController.popBackStack()
                 }
             )

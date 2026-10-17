@@ -85,6 +85,44 @@ class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
             .getOrElse { markApiUnavailable("unlockHintFor", it); "" }
     }
 
+    // ---- Wave-3 (Practice mode) ----
+    // Real UniFFI exports with the same newApiAvailable fallback as wave-2:
+    // an older on-device .so lacking these symbols throws at call time once,
+    // then we permanently serve safe defaults.
+
+    override fun generatePracticeMcq(limit: UInt): List<McqData> {
+        if (!newApiAvailable) return emptyList()
+        return runCatching {
+            core.generatePracticeMcq(limit).map {
+                McqData(it.cardId, it.promptGloss, it.choices, it.correctIndex.toInt())
+            }
+        }.getOrElse { markApiUnavailable("generatePracticeMcq", it); emptyList() }
+    }
+
+    override fun checkTypedAnswer(cardId: String, answer: String): Boolean {
+        if (!newApiAvailable) return false
+        return runCatching { core.checkTypedAnswer(cardId, answer) }
+            .getOrElse { markApiUnavailable("checkTypedAnswer", it); false }
+    }
+
+    override fun typedAnswerExact(cardId: String, answer: String): Boolean {
+        if (!newApiAvailable) return false
+        return runCatching { core.typedAnswerExact(cardId, answer) }
+            .getOrElse { markApiUnavailable("typedAnswerExact", it); false }
+    }
+
+    override fun submitPracticeResult(cardId: String, correct: Boolean, exact: Boolean): Boolean {
+        if (!newApiAvailable) return false
+        return runCatching { core.submitPracticeResult(cardId, correct, exact) }
+            .getOrElse { markApiUnavailable("submitPracticeResult", it); false }
+    }
+
+    override fun getPracticeStats(): PracticeStats {
+        if (!newApiAvailable) return PracticeStats(0u, 0u)
+        return runCatching { core.getPracticeStats().let { PracticeStats(it.total, it.correct) } }
+            .getOrElse { markApiUnavailable("getPracticeStats", it); PracticeStats(0u, 0u) }
+    }
+
     private companion object {
         /**
          * Set to false permanently the first time a wave-2 export throws

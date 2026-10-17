@@ -17,6 +17,8 @@ data class HomeState(
     val wordsLearned: Int = 0,
     val chaptersUnlocked: Int = 0,
     val newCardsToday: Int = 0,
+    /** Practice accuracy 0–100, or null when no practice is recorded (row hidden). */
+    val practiceAccuracy: Int? = null,
     val isLoading: Boolean = true
 )
 
@@ -51,6 +53,14 @@ class HomeViewModel : ViewModel() {
                 } catch (e: Exception) {
                     0
                 }
+                // Practice accuracy; null → Home hides the row (total == 0, or
+                // the wave-3 stub is still in place, or the call failed).
+                val practiceAccuracy = try {
+                    val ps = core.getPracticeStats()
+                    if (ps.total == 0u) null else (ps.correct * 100u / ps.total).toInt()
+                } catch (e: Exception) {
+                    null
+                }
                 _state.value = HomeState(
                     dueCardsCount = stats.dueCount,
                     streak = stats.streakDays,
@@ -59,6 +69,7 @@ class HomeViewModel : ViewModel() {
                     wordsLearned = wordsLearned,
                     chaptersUnlocked = chaptersUnlocked,
                     newCardsToday = newCardsToday,
+                    practiceAccuracy = practiceAccuracy,
                     isLoading = false
                 )
             } catch (e: Exception) {

@@ -45,4 +45,28 @@
     <string name="settings_notifications">Daily reminder</string>
     <string name="settings_dark_mode">Dark mode</string>
     <string name="settings_auto_play_audio">Auto-play audio</string>
+
+    <!-- Practice Screen -->
+    <string name="practice_progress">Question %1$d of %2$d</string>
+    <string name="practice_loading">Loading practice questions…</string>
+    <string name="practice_empty_title">Nothing to practice yet</string>
+    <string name="practice_empty_message">Practice unlocks after some review — your rated cards feed the question pool.</string>
+    <string name="practice_back">Back</string>
+    <string name="practice_typed_label">Type the Greek</string>
+    <string name="practice_typed_supporting">Accents optional — bonus for exact Greek</string>
+    <string name="practice_check">Check</string>
+    <string name="practice_continue">Continue</string>
+    <string name="practice_feedback_wrong">Not quite. Correct form:</string>
+    <string name="practice_feedback_correct">Correct! Exact form:</string>
+    <string name="practice_feedback_exact">Exact!</string>
+    <string name="practice_score">You scored %1$d/%2$d</string>
+    <string name="practice_again">Practice again</string>
+    <string name="practice_error_title">Something went wrong</string>
+    <string name="practice_try_again">Try Again</string>
+    <string name="practice_mark_correct">✓</string>
+    <string name="practice_mark_wrong">✗</string>
+    <string name="practice_star_exact">★</string>
+
+    <!-- Home Screen (practice) -->
+    <string name="home_practice_accuracy">Practice accuracy: %1$d%%</string>
 </resources>
