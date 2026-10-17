@@ -123,6 +123,20 @@ pub struct IntervalPreviewView {
     pub easy_secs: u32,
 }
 
+#[derive(uniffi::Record)]
+pub struct McqView {
+    pub card_id: String,
+    pub prompt_gloss: String,
+    pub choices: Vec<String>,
+    pub correct_index: u8,
+}
+
+#[derive(uniffi::Record)]
+pub struct PracticeStatsView {
+    pub total: u32,
+    pub correct: u32,
+}
+
 // --- Conversion helpers ---
 
 fn card_to_view(c: &Card) -> CardView {
@@ -421,6 +435,107 @@ impl GreekCore {
     pub fn new_cards_remaining_today(&self) -> u32 {
         let db = self.db.lock().unwrap();
         greek_core::srs::new_cards_remaining_today(&db)
+    }
+
+    // --- Practice questions (measured assessment) ---
+
+    /// Generate up to `limit` EN→GR multiple-choice questions from the
+    /// in-memory deck. Cards that already have a memory state are offered
+    /// first (the memory-state ids are queried once and the slice is ordered
+    /// reviewed-then-unseen); within those tiers the seeded shuffle decides.
+    /// The seed is unix-epoch minutes, so question sets vary per session.
+    pub fn generate_practice_mcq(&self, limit: u32) -> Vec<McqView> {
+        let db = self.db.lock().unwrap();
+
+        let have_state: std::collections::HashSet<String> = db
+            .conn()
+            .prepare("SELECT card_id FROM memory_states")
+            .ok()
+            .map(|mut stmt| {
+                stmt.query_map([], |row| row.get::<_, String>(0))
+                    .ok()
+                    .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+
+        // Reviewed cards first (deck order preserved within each tier).
+        let mut ordered: Vec<Card> = Vec::with_capacity(self.cards.len());
+        ordered.extend(
+            self.cards
+                .iter()
+                .filter(|c| have_state.contains(&c.id))
+                .cloned(),
+        );
+        ordered.extend(
+            self.cards
+                .iter()
+                .filter(|c| !have_state.contains(&c.id))
+                .cloned(),
+        );
+
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() / 60)
+            .unwrap_or(0);
+
+        greek_core::questions::generate_mcq_set(&ordered, limit as usize, seed)
+            .into_iter()
+            .map(|m| McqView {
+                card_id: m.card_id,
+                prompt_gloss: m.prompt_gloss,
+                choices: m.choices,
+                correct_index: m.correct_index as u8,
+            })
+            .collect()
+    }
+
+    /// Accent-tolerant typed-answer check: true when the answer grades Exact
+    /// or Lenient against the card's Greek front. Unknown card -> false.
+    pub fn check_typed_answer(&self, card_id: String, answer: String) -> bool {
+        match self.card_index.get(&card_id) {
+            Some(&i) => {
+                greek_core::questions::grade_typed(&self.cards[i].front, &answer)
+                    != greek_core::questions::TypedGrade::Wrong
+            }
+            None => false,
+        }
+    }
+
+    /// Strict typed-answer check: true only on an Exact grade (accents must
+    /// match). Unknown card -> false.
+    pub fn typed_answer_exact(&self, card_id: String, answer: String) -> bool {
+        match self.card_index.get(&card_id) {
+            Some(&i) => {
+                greek_core::questions::grade_typed(&self.cards[i].front, &answer)
+                    == greek_core::questions::TypedGrade::Exact
+            }
+            None => false,
+        }
+    }
+
+    /// Record a practice outcome as an SRS review tagged source="practice":
+    /// wrong -> 1 (Again), correct -> 3 (Good), correct + exact -> 4 (Easy).
+    /// Returns false on error.
+    pub fn submit_practice_result(&self, card_id: String, correct: bool, exact: bool) -> bool {
+        let rating: u8 = if !correct {
+            1
+        } else if exact {
+            4
+        } else {
+            3
+        };
+        let db = self.db.lock().unwrap();
+        let srs = self.srs.lock().unwrap();
+        srs.submit_review_with_source(&db, &card_id, rating, "practice")
+            .is_ok()
+    }
+
+    /// Lifetime measured-assessment totals: (total attempts, correct ones).
+    pub fn get_practice_stats(&self) -> PracticeStatsView {
+        let db = self.db.lock().unwrap();
+        let (total, correct) = greek_core::srs::practice_stats(&db);
+        PracticeStatsView { total, correct }
     }
 
     // --- Morphology Operations ---

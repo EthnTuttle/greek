@@ -154,6 +154,20 @@ impl SrsEngine {
 
     /// Submit a review and update the memory state
     pub fn submit_review(&self, db: &Database, card_id: &str, rating: u8) -> anyhow::Result<()> {
+        self.submit_review_with_source(db, card_id, rating, "flashcard")
+    }
+
+    /// Submit a review tagged with its origin (`source`), e.g. "flashcard"
+    /// for the self-rated review flow or "practice" for measured-assessment
+    /// questions. The tag lands in `review_logs.source` so accuracy metrics
+    /// can be computed per activity type; scheduling itself is identical.
+    pub fn submit_review_with_source(
+        &self,
+        db: &Database,
+        card_id: &str,
+        rating: u8,
+        source: &str,
+    ) -> anyhow::Result<()> {
         let now = chrono_now();
 
         // Load current memory state
@@ -230,12 +244,12 @@ impl SrsEngine {
             ],
         )?;
 
-        // Log the review
+        // Log the review, tagged with its source activity.
         let scheduled_days = interval_days as f64;
         db.conn().execute(
-            "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![card_id, now, rating as i32, elapsed_days as f64, scheduled_days],
+            "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days, source)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![card_id, now, rating as i32, elapsed_days as f64, scheduled_days, source],
         )?;
 
         Ok(())
@@ -280,6 +294,23 @@ pub fn new_cards_today(db: &Database) -> u32 {
 /// cards already introduced today (saturates at 0 if the cap was exceeded).
 pub fn new_cards_remaining_today(db: &Database) -> u32 {
     DEFAULT_DAILY_NEW_CAP.saturating_sub(new_cards_today(db))
+}
+
+/// Measured-assessment totals over `review_logs` rows written by the
+/// practice flow (`source = 'practice'`): returns (total, correct) where a
+/// result counts as correct iff its rating is >= 3. Returns (0, 0) on error.
+pub fn practice_stats(db: &Database) -> (u32, u32) {
+    db.conn()
+        .query_row(
+            "SELECT COUNT(*),
+                    COALESCE(SUM(CASE WHEN rating >= 3 THEN 1 ELSE 0 END), 0)
+             FROM review_logs
+             WHERE source = 'practice'",
+            [],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .map(|(total, correct)| (total as u32, correct as u32))
+        .unwrap_or((0, 0))
 }
 
 /// Load the stored memory state for `card_id`, or `None` if the card has
@@ -719,6 +750,68 @@ mod tests {
         assert!(
             !due_date.ends_with("T00:00:00Z"),
             "due_date must not be midnight-stamped: {due_date}"
+        );
+    }
+
+    #[test]
+    fn test_submit_review_with_source_writes_source_column() {
+        let db = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+
+        // The legacy entry point tags rows 'flashcard'...
+        engine.submit_review(&db, "card-flash", 3).unwrap();
+        // ...and the explicit-source variant records what it is given.
+        engine
+            .submit_review_with_source(&db, "card-practice", 3, "practice")
+            .unwrap();
+
+        let source_of = |card_id: &str| -> String {
+            db.conn()
+                .query_row(
+                    "SELECT source FROM review_logs WHERE card_id = ?1",
+                    [card_id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        assert_eq!(source_of("card-flash"), "flashcard");
+        assert_eq!(source_of("card-practice"), "practice");
+
+        // Practice submissions still drive the same scheduling machinery.
+        let reps: i32 = db
+            .conn()
+            .query_row(
+                "SELECT reps FROM memory_states WHERE card_id = 'card-practice'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(reps, 1);
+    }
+
+    #[test]
+    fn test_practice_stats_counts_only_practice_rows() {
+        let db = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+
+        assert_eq!(practice_stats(&db), (0, 0));
+
+        engine
+            .submit_review_with_source(&db, "p-wrong", 1, "practice")
+            .unwrap();
+        engine
+            .submit_review_with_source(&db, "p-good", 3, "practice")
+            .unwrap();
+        engine
+            .submit_review_with_source(&db, "p-easy", 4, "practice")
+            .unwrap();
+        // Flashcard reviews, even Good/Easy ones, must not be counted.
+        engine.submit_review(&db, "f-good", 4).unwrap();
+
+        assert_eq!(
+            practice_stats(&db),
+            (3, 2),
+            "correct := rating >= 3 over source='practice' rows only"
         );
     }
 

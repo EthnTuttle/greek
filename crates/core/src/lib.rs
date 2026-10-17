@@ -3,6 +3,7 @@ pub mod curriculum;
 pub mod db;
 pub mod llm;
 pub mod morphology;
+pub mod questions;
 pub mod reader;
 pub mod search;
 pub mod srs;

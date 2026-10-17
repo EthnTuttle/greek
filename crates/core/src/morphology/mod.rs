@@ -6,7 +6,9 @@ use unicode_normalization::UnicodeNormalization;
 /// Normalize a Greek surface form to match the DB's accent-stripped,
 /// lowercased `form_normalized` column: NFD-decompose, drop combining
 /// diacritical marks (Unicode category Mn), then lowercase and recompose.
-fn normalize_form(form: &str) -> String {
+/// Public so other layers (e.g. typed-answer grading) reuse the SAME
+/// normalization instead of duplicating it.
+pub fn normalize_form(form: &str) -> String {
     form.nfd()
         .filter(|c| !is_combining_mark(*c))
         .collect::<String>()
