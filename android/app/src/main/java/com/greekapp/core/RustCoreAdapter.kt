@@ -7,8 +7,11 @@ import uniffi.uniffi_bindings.CardWithStateView
 import uniffi.uniffi_bindings.ChapterView
 import uniffi.uniffi_bindings.CurriculumView
 import uniffi.uniffi_bindings.GreekCore
+import uniffi.uniffi_bindings.NostrConfigView
+import uniffi.uniffi_bindings.PairedDeviceView
 import uniffi.uniffi_bindings.ReviewStats
 import uniffi.uniffi_bindings.SearchResultView
+import uniffi.uniffi_bindings.SyncStatsView
 import uniffi.uniffi_bindings.TextSectionView
 
 /**
@@ -161,6 +164,92 @@ class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
                     it.lettersActiveDays, it.lettersChaptersMet)
             }
         }.getOrElse { markApiUnavailable("getAlphabetGateState", it); gateStubFallback }
+    }
+
+    // ---- Wave-6 (Device Sync) ----
+    // Real exports. Fail-soft getters use runCatching + newApiAvailable;
+    // actions (import/push/pull/join/nsec/ticket) let exceptions propagate
+    // so the UI can surface real sync errors, catching only the
+    // missing-.so-symbol case to mark the library stale first.
+
+    override fun syncDeviceId(): String {
+        if (!newApiAvailable) return "unknown"
+        return runCatching { core.syncDeviceId() }
+            .getOrElse { markApiUnavailable("syncDeviceId", it); "unknown" }
+    }
+
+    override fun syncPairedDevices(): List<PairedDevice> {
+        if (!newApiAvailable) return emptyList()
+        return runCatching {
+            core.syncPairedDevices().map {
+                PairedDevice(it.deviceId, it.label, it.pairedAt, it.lastSyncHlc)
+            }
+        }.getOrElse { markApiUnavailable("syncPairedDevices", it); emptyList() }
+    }
+
+    override fun syncExportBackupJson(): String =
+        syncAction("syncExportBackupJson") { core.syncExportBackupJson() }
+
+    /** Sync actions delegate to real exports; only a missing native symbol degrades. */
+    private fun <T> syncAction(name: String, block: () -> T): T {
+        return try {
+            block()
+        } catch (e: UnsatisfiedLinkError) {
+            markApiUnavailable(name, e)
+            throw UnsupportedOperationException("Sync unavailable: stale native library", e)
+        }
+    }
+
+    /** Suspend variant of [syncAction] for UniFFI async exports. */
+    private suspend fun <T> syncCall(name: String, block: suspend () -> T): T {
+        return try {
+            block()
+        } catch (e: UnsatisfiedLinkError) {
+            markApiUnavailable(name, e)
+            throw UnsupportedOperationException("Sync unavailable: stale native library", e)
+        }
+    }
+
+    private fun SyncStatsView.toSyncStats() =
+        SyncStats(sent = reviewsSent.toInt(), received = reviewsReceived.toInt(), settings = settingsApplied.toInt())
+
+    override fun syncImportBackupJson(json: String): SyncStats =
+        syncAction("syncImportBackupJson") { core.syncImportBackupJson(json).toSyncStats() }
+
+    override suspend fun syncNostrPush(): SyncStats =
+        syncCall("syncNostrPush") { core.syncNostrPush().toSyncStats() }
+
+    override suspend fun syncNostrPull(): SyncStats =
+        syncCall("syncNostrPull") { core.syncNostrPull().toSyncStats() }
+
+    override fun syncNostrConfig(): NostrConfig {
+        if (!newApiAvailable) return NostrConfig(relaysCsv = "", hasIdentity = false)
+        return runCatching { core.syncNostrConfig().let { NostrConfig(it.relaysCsv, it.hasIdentity) } }
+            .getOrElse { markApiUnavailable("syncNostrConfig", it); NostrConfig(relaysCsv = "", hasIdentity = false) }
+    }
+
+    override fun syncSetNostrRelays(relaysCsv: String) {
+        syncAction("syncSetNostrRelays") { core.syncSetNostrRelays(relaysCsv) }
+    }
+
+    override fun syncGenerateNostrIdentity(): String {
+        return syncAction("syncGenerateNostrIdentity") { core.syncGenerateNostrIdentity() }
+    }
+
+    override fun syncSetNostrNsec(nsec: String) {
+        syncAction("syncSetNostrNsec") { core.syncSetNostrNsec(nsec) }
+    }
+
+    override suspend fun syncIrohTicket(): String {
+        return syncCall("syncIrohTicket") { core.syncIrohTicket() }
+    }
+
+    override suspend fun syncIrohJoin(ticket: String) {
+        syncCall("syncIrohJoin") { core.syncIrohJoin(ticket) }
+    }
+
+    override suspend fun syncIrohNow(): SyncStats {
+        return syncCall("syncIrohNow") { core.syncIrohNow().toSyncStats() }
     }
 
     private companion object {

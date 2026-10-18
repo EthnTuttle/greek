@@ -55,6 +55,8 @@ sealed class Screen(
     object Curriculum : Screen("curriculum", "Progress", Icons.Filled.MenuBook, Icons.Outlined.MenuBook)
     object Dictionary : Screen("dictionary", "Dictionary", Icons.Filled.Search, Icons.Outlined.Search)
     object Settings : Screen("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+    // Wave-6 Device Sync: pushed destination, NOT a bottom-nav tab (like Review).
+    object Sync : Screen("sync", "Sync", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
 val bottomNavItems = listOf(
@@ -232,6 +234,18 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
             SettingsScreen(
                 onTakeAlphabetCheck = {
                     navController.navigate(Screen.AlphabetCheck.route)
+                },
+                onOpenSync = {
+                    navController.navigate(Screen.Sync.route)
+                }
+            )
+        }
+
+        // Wave-6 Device Sync destination (pushed from Settings).
+        composable(Screen.Sync.route) {
+            SyncScreen(
+                onBack = {
+                    navController.popBackStack()
                 }
             )
         }

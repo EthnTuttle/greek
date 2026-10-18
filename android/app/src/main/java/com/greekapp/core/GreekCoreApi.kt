@@ -132,6 +132,55 @@ interface GreekCoreApi {
      * ("" when none), and live letters-track counters for the progress UI.
      */
     fun getAlphabetGateState(): AlphabetGateState
+
+    // ---- Wave-6 contract additions (Device Sync) ----
+    // These UniFFI exports do NOT exist in the generated bindings yet.
+    // RustCoreAdapter serves safe stubs until regen; see WAVE6-NOTES.md at
+    // the repo root for the expected export/view names. Async exports
+    // (nostr push/pull, iroh ticket/join/now) arrive as Kotlin `suspend fun`
+    // in the generated bindings under UniFFI 0.28.
+
+    /** Stable sync identity of this device ("unknown" while stubbed). */
+    fun syncDeviceId(): String
+
+    /** Devices this one has completed an iroh pairing with, newest pairing last. */
+    fun syncPairedDevices(): List<PairedDevice>
+
+    /** Full review-history + settings backup document (wire format v1). */
+    fun syncExportBackupJson(): String
+
+    /**
+     * Merge a backup document produced by [syncExportBackupJson] on another
+     * device. CRDT merge — never throws on conflicts.
+     */
+    fun syncImportBackupJson(json: String): SyncStats
+
+    /** Push encrypted review batches to the configured nostr relays. Throws on transport/identity errors. */
+    suspend fun syncNostrPush(): SyncStats
+
+    /** Pull and merge encrypted review batches from the configured nostr relays. Throws on transport/identity errors. */
+    suspend fun syncNostrPull(): SyncStats
+
+    /** Current nostr transport configuration (relays CSV + identity flag). */
+    fun syncNostrConfig(): NostrConfig
+
+    /** Persist the relay list (comma/whitespace-separated wss:// URLs). */
+    fun syncSetNostrRelays(relaysCsv: String)
+
+    /** Generate a fresh nostr identity; returns the npub for display. */
+    fun syncGenerateNostrIdentity(): String
+
+    /** Import an existing nostr secret key (nsec/bech32). Throws when invalid. */
+    fun syncSetNostrNsec(nsec: String)
+
+    /** Build this device's iroh pairing ticket ("greeksync://ticket/<...>"). */
+    suspend fun syncIrohTicket(): String
+
+    /** Join a pairing session with a ticket from another device. Throws on bad ticket/transport failure. */
+    suspend fun syncIrohJoin(ticket: String)
+
+    /** Run a one-shot iroh sync against currently reachable paired devices. */
+    suspend fun syncIrohNow(): SyncStats
 }
 
 /**
@@ -213,4 +262,36 @@ data class AlphabetGateState(
     val lettersPracticeCorrect: UInt,
     val lettersActiveDays: UInt,
     val lettersChaptersMet: UInt
+)
+
+/**
+ * Kotlin-side mirror of the wave-6 `SyncStatsView` UniFFI record. The
+ * generated view carries counts as u32 → UInt (`reviewsSent`,
+ * `reviewsReceived`, `settingsApplied`); the seam converts to plain Int
+ * because the UI only renders them and never feeds them back to the core.
+ */
+data class SyncStats(
+    val sent: Int,
+    val received: Int,
+    val settings: Int
+)
+
+/**
+ * Kotlin-side mirror of the wave-6 `PairedDeviceView` UniFFI record
+ * (all fields arrive as String). [label] is blank when the peer never
+ * advertised a display name; UI should fall back to a shortened [deviceId].
+ */
+data class PairedDevice(
+    val deviceId: String,
+    val label: String,
+    val pairedAt: String,
+    val lastSyncHlc: String
+)
+
+/**
+ * Kotlin-side mirror of the wave-6 `NostrConfigView` UniFFI record.
+ */
+data class NostrConfig(
+    val relaysCsv: String,
+    val hasIdentity: Boolean
 )

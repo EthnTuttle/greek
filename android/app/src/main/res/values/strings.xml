@@ -100,4 +100,65 @@
     <string name="settings_alphabet_dialog_check">Take the 3-minute check</string>
     <string name="settings_alphabet_dialog_skip">Skip anyway</string>
     <string name="settings_alphabet_skipped">Alphabet requirement skipped</string>
+
+    <!-- Device Sync (wave 6, beta) -->
+    <string name="sync_title">Device sync</string>
+    <string name="sync_beta_disclaimer">Sync is in beta. Your review history merges; nothing is ever deleted.</string>
+    <string name="sync_back">Back</string>
+    <string name="sync_close">Close</string>
+    <string name="sync_copy">Copy</string>
+    <string name="sync_copied">Copied</string>
+    <string name="sync_save">Save</string>
+    <string name="sync_saved">Saved</string>
+    <string name="sync_error">Sync failed: %1$s</string>
+
+    <!-- Settings row opening the sync screen -->
+    <string name="settings_sync_row_title">Device sync (beta)</string>
+    <string name="settings_sync_row_description">Back up, pair, and merge your history across devices</string>
+
+    <!-- This device / backup -->
+    <string name="sync_this_device">This device</string>
+    <string name="sync_device_id">ID: %1$s</string>
+    <string name="sync_export_backup">Export backup (JSON)</string>
+    <string name="sync_import_backup">Import backup</string>
+    <string name="sync_backup_written">Backup written</string>
+    <string name="sync_backup_merged">Merged %1$d reviews, %2$d settings</string>
+
+    <!-- Direct pairing (iroh) -->
+    <string name="sync_iroh_title">Direct pairing (iroh)</string>
+    <string name="sync_show_qr">Show my pairing QR</string>
+    <string name="sync_join_label">Paste pairing code</string>
+    <string name="sync_join">Join</string>
+    <string name="sync_joined">Pairing complete</string>
+    <string name="sync_sync_now">Sync now</string>
+    <string name="sync_sync_result">+%1$d received / %2$d sent</string>
+
+    <!-- Relay sync (nostr) -->
+    <string name="sync_nostr_title">Relay sync (nostr)</string>
+    <string name="sync_relays_label">Relays (comma-separated)</string>
+    <string name="sync_relays_placeholder">wss://chat.virginiafreedom.tech</string>
+    <string name="sync_identity_none">Identity: none</string>
+    <string name="sync_identity_configured">Identity: configured</string>
+    <string name="sync_identity_npub">Identity: %1$s…</string>
+    <string name="sync_generate_identity">Generate identity</string>
+    <string name="sync_identity_generated">Identity ready</string>
+    <string name="sync_import_nsec">Import nsec</string>
+    <string name="sync_nsec_label">Paste nsec secret</string>
+    <string name="sync_push_now">Push now</string>
+    <string name="sync_pull_now">Pull now</string>
+    <string name="sync_nostr_info">Ciphertext only: the relay never sees your data. Sends batches of encrypted review history.</string>
+
+    <!-- Paired devices -->
+    <string name="sync_paired_title">Paired devices</string>
+    <string name="sync_paired_empty">No devices paired yet</string>
+    <string name="sync_last_sync_never">Never synced</string>
+    <string name="sync_last_sync_at">Last sync: %1$s</string>
+    <string name="sync_just_now">Synced just now</string>
+    <string name="sync_minutes_ago">Synced %1$d min ago</string>
+    <string name="sync_hours_ago">Synced %1$d hr ago</string>
+    <string name="sync_days_ago">Synced %1$d d ago</string>
+
+    <!-- Auto-sync -->
+    <string name="sync_autolaunch_title">Sync on app launch</string>
+    <string name="sync_autolaunch_desc">Runs one pull/push cycle once a transport is configured</string>
 </resources>

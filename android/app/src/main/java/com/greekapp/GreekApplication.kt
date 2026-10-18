@@ -45,6 +45,12 @@ val Context.reviewSessionDataStore: DataStore<Preferences> by preferencesDataSto
 object SettingsKeys {
     val DARK_MODE = booleanPreferencesKey("dark_mode")
     val DAILY_REMINDER = booleanPreferencesKey("daily_reminder")
+    // Wave-6 device sync: launch-time auto-sync toggle.
+    val SYNC_AUTOLAUNCH = booleanPreferencesKey("sync_autolaunch")
+    // UI-side "iroh transport is configured" marker, set when a pairing join
+    // succeeds. There is no core getter for iroh configuredness (unlike nostr's
+    // NostrConfig.hasIdentity), so the launch-time auto-sync gate reads this.
+    val SYNC_IROH_JOINED = booleanPreferencesKey("sync_iroh_joined")
 }
 
 object ReviewSessionKeys {
@@ -112,6 +118,23 @@ object SettingsRepository {
 
     suspend fun setDailyReminder(context: Context, value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.DAILY_REMINDER] = value }
+    }
+
+    /** Wave-6: "Sync on app launch" toggle. Default true, but HomeViewModel
+     *  only runs the sync when a transport is also configured. */
+    fun syncAutolaunchFlow(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { it[SettingsKeys.SYNC_AUTOLAUNCH] ?: true }
+
+    suspend fun setSyncAutolaunch(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.SYNC_AUTOLAUNCH] = value }
+    }
+
+    /** Wave-6: set once an iroh join succeeds (see [SettingsKeys.SYNC_IROH_JOINED]). */
+    fun irohJoinedFlow(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { it[SettingsKeys.SYNC_IROH_JOINED] ?: false }
+
+    suspend fun setIrohJoined(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.SYNC_IROH_JOINED] = value }
     }
 }
 

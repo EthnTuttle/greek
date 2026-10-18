@@ -83,6 +83,9 @@ dependencies {
     // JNA for UniFFI bindings
     implementation("net.java.dev.jna:jna:5.14.0@aar")
 
+    // Wave-6 device sync: QR rendering for iroh pairing tickets
+    implementation("com.google.zxing:core:3.5.3")
+
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

@@ -1,13 +1,17 @@
 package com.greekapp.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.greekapp.GreekApplication
+import com.greekapp.SettingsRepository
 import com.greekapp.core.AlphabetGateState
 import com.greekapp.core.CoreProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class HomeState(
@@ -33,7 +37,36 @@ class HomeViewModel : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
-    init { refreshStats() }
+    init {
+        refreshStats()
+        syncOnLaunch()
+    }
+
+    /**
+     * Wave-6 launch-time auto-sync: silent pull → iroh sync → push, gated on
+     * the user's toggle AND at least one configured transport (nostr identity,
+     * or an iroh join recorded via [SettingsKeys.SYNC_IROH_JOINED]). Failures
+     * are log-only; a successful round refreshes the home stats so merged
+     * history shows up immediately.
+     */
+    private fun syncOnLaunch() {
+        viewModelScope.launch(Dispatchers.IO) {
+            var ran = false
+            runCatching {
+                val context = GreekApplication.appContext
+                if (!SettingsRepository.syncAutolaunchFlow(context).first()) return@runCatching
+                val core = CoreProvider.current() ?: return@runCatching
+                val nostrReady = core.syncNostrConfig().hasIdentity
+                val irohReady = SettingsRepository.irohJoinedFlow(context).first()
+                if (!nostrReady && !irohReady) return@runCatching
+                if (nostrReady) core.syncNostrPull()
+                if (irohReady) core.syncIrohNow()
+                if (nostrReady) core.syncNostrPush()
+                ran = true
+            }.onFailure { Log.w(TAG, "launch auto-sync failed", it) }
+            if (ran) refreshStats()
+        }
+    }
 
     fun refreshStats() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -92,5 +125,9 @@ class HomeViewModel : ViewModel() {
                 _state.value = _state.value.copy(isLoading = false)
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "HomeViewModel"
     }
 }

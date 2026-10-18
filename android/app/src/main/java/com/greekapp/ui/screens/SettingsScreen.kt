@@ -27,6 +27,8 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     /** Wave-5: navigate to the Alphabet Check destination. */
     onTakeAlphabetCheck: () -> Unit = {},
+    /** Wave-6: navigate to the Device Sync destination. */
+    onOpenSync: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -114,6 +116,28 @@ fun SettingsScreen(
                             onClick = { showSkipDialog = true }
                         )
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Wave-6: entry point to the dedicated Device Sync screen.
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    SettingActionItem(
+                        title = stringResource(R.string.settings_sync_row_title),
+                        description = stringResource(R.string.settings_sync_row_description),
+                        onClick = onOpenSync
+                    )
                 }
             }
 
