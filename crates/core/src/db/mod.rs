@@ -12,7 +12,11 @@ pub struct Database {
 /// - 1: baseline schema — the CREATE TABLE IF NOT EXISTS set in [`Database::open`]
 /// - 2: `review_logs.source` column (NOT NULL DEFAULT 'flashcard') —
 ///   distinguishes self-rated flashcard reviews from practice-question results
-const SCHEMA_VERSION: i64 = 2;
+/// - 3: sync-ready merge layer — `review_logs.uuid/device_id/hlc` columns
+///   (existing rows backfilled with random v4 uuids, the local device id, and
+///   an HLC derived from the row timestamp), plus `settings_sync` and
+///   `sync_devices` tables and a unique index on `review_logs.uuid`
+const SCHEMA_VERSION: i64 = 3;
 
 impl Database {
     /// Open or create the main app database. Creates tables if they don't exist.
@@ -115,6 +119,66 @@ fn migrate(conn: &Connection) -> Result<()> {
             )?;
         }
 
+        if version < 3 {
+            // Sync merge layer (see crate::sync): every review row becomes a
+            // globally-addressable CRDT event (uuid + device_id + HLC), and
+            // settings/devices get their own sync tables. Same convergence
+            // pattern as v2: fresh databases reach this shape through the
+            // ALTERs, so the CREATE TABLE set above stays at the baseline.
+            conn.execute_batch(
+                "ALTER TABLE review_logs ADD COLUMN uuid TEXT;
+                 ALTER TABLE review_logs ADD COLUMN device_id TEXT;
+                 ALTER TABLE review_logs ADD COLUMN hlc TEXT;
+                 CREATE TABLE IF NOT EXISTS settings_sync(
+                     key TEXT PRIMARY KEY,
+                     value TEXT NOT NULL,
+                     hlc TEXT NOT NULL
+                 );
+                 CREATE TABLE IF NOT EXISTS sync_devices(
+                     device_id TEXT PRIMARY KEY,
+                     label TEXT NOT NULL DEFAULT '',
+                     paired_at TEXT NOT NULL,
+                     last_sync_hlc TEXT
+                 );",
+            )?;
+
+            // Bootstrap this device's id BEFORE stamping rows with it.
+            conn.execute(
+                "INSERT INTO user_settings (key, value) VALUES ('device_id', ?1)
+                 ON CONFLICT(key) DO NOTHING",
+                [uuid::Uuid::new_v4().to_string()],
+            )?;
+            let dev_id: String = conn.query_row(
+                "SELECT value FROM user_settings WHERE key = 'device_id'",
+                [],
+                |row| row.get(0),
+            )?;
+            let node = crate::sync::hlc_node_of(&dev_id);
+
+            // Backfill pre-sync rows: uuid = random v4, device = this device,
+            // hlc derived from the row's own timestamp (counter 0).
+            let legacy: Vec<(i64, String)> = {
+                let mut stmt =
+                    conn.prepare("SELECT id, timestamp FROM review_logs WHERE uuid IS NULL")?;
+                let rows = stmt
+                    .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+                rows
+            };
+            for (row_id, ts) in legacy {
+                let ms = crate::srs::iso_to_secs(&ts).map(|s| (s * 1000) as i64).unwrap_or(0);
+                let hlc = format!("{ms:013}-{0:04}-{node}", 0u16);
+                conn.execute(
+                    "UPDATE review_logs SET uuid = ?1, device_id = ?2, hlc = ?3 WHERE id = ?4",
+                    rusqlite::params![uuid::Uuid::new_v4().to_string(), dev_id, hlc, row_id],
+                )?;
+            }
+
+            conn.execute_batch(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_review_logs_uuid ON review_logs(uuid);",
+            )?;
+        }
+
         conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
     }
 
@@ -194,7 +258,10 @@ mod tests {
             .conn()
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 2, "user_version must advance to 2");
+        assert_eq!(
+            version, SCHEMA_VERSION,
+            "user_version must advance to the current schema"
+        );
         let (rating, source): (i32, String) = db
             .conn()
             .query_row(

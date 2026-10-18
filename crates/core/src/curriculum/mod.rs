@@ -336,16 +336,11 @@ impl Curriculum {
     /// Once written it is never re-locked.
     pub fn record_alphabet_gate(db: &Database, method: AlphabetGateMethod) -> anyhow::Result<()> {
         let now = crate::srs::now_iso8601();
-        db.conn().execute(
-            "INSERT INTO user_settings (key, value) VALUES ('alphabet_gate', ?1)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            [method.name()],
-        )?;
-        db.conn().execute(
-            "INSERT INTO user_settings (key, value) VALUES ('alphabet_gate_at', ?1)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            [now],
-        )?;
+        // Routed through setting_put so the latch is HLC-stamped and dual-
+        // written to settings_sync + user_settings (participates in sync;
+        // local readers of user_settings are unaffected).
+        crate::sync::setting_put(db, "alphabet_gate", method.name())?;
+        crate::sync::setting_put(db, "alphabet_gate_at", &now)?;
         Ok(())
     }
 
@@ -885,9 +880,16 @@ mod tests {
             let ts = format!("{}T10:{:02}:00Z", dates[k % dates.len()], k % 60);
             db.conn()
                 .execute(
-                    "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days, source)
-                     VALUES (?1, ?2, ?3, 0.0, 0.0, 'practice')",
-                    rusqlite::params![format!("letters-{:03}", (k % 43) + 1), ts, rating],
+                    "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days, source, uuid, device_id, hlc)
+                     VALUES (?1, ?2, ?3, 0.0, 0.0, 'practice', ?4, ?5, ?6)",
+                    rusqlite::params![
+                        format!("letters-{:03}", (k % 43) + 1),
+                        ts,
+                        rating,
+                        uuid::Uuid::new_v4().to_string(),
+                        crate::sync::device_id(db),
+                        crate::sync::hlc_now(db).to_string(),
+                    ],
                 )
                 .unwrap();
         }

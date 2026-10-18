@@ -244,12 +244,24 @@ impl SrsEngine {
             ],
         )?;
 
-        // Log the review, tagged with its source activity.
+        // Log the review, tagged with its source activity and stamped for
+        // sync (globally-unique uuid, originating device, hybrid logical
+        // clock) so it can merge into other devices' databases by uuid-dedup.
         let scheduled_days = interval_days as f64;
         db.conn().execute(
-            "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days, source)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![card_id, now, rating as i32, elapsed_days as f64, scheduled_days, source],
+            "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days, source, uuid, device_id, hlc)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![
+                card_id,
+                now,
+                rating as i32,
+                elapsed_days as f64,
+                scheduled_days,
+                source,
+                uuid::Uuid::new_v4().to_string(),
+                crate::sync::device_id(db),
+                crate::sync::hlc_now(db).to_string(),
+            ],
         )?;
 
         Ok(())
@@ -395,7 +407,7 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
 }
 
 /// Parse an ISO 8601 date string and compute days between two dates.
-fn days_between(from: &str, to: &str) -> u32 {
+pub(crate) fn days_between(from: &str, to: &str) -> u32 {
     let from_days = iso_to_days(from).unwrap_or(0);
     let to_days = iso_to_days(to).unwrap_or(0);
     to_days.saturating_sub(from_days) as u32
@@ -419,7 +431,7 @@ fn iso_to_days(iso: &str) -> Option<u64> {
 /// The time component is optional: legacy midnight rows like
 /// "2026-07-19T00:00:00Z" parse naturally, and a missing or truncated time
 /// defaults to 00:00:00 UTC so date-valid input never fails to parse.
-fn iso_to_secs(iso: &str) -> Option<u64> {
+pub(crate) fn iso_to_secs(iso: &str) -> Option<u64> {
     let days = iso_to_days(iso)?;
     // Slice with `get` so short/non-ASCII input degrades to 0 instead of panicking.
     let hours: u64 = iso.get(11..13).and_then(|s| s.parse().ok()).unwrap_or(0);
@@ -454,7 +466,7 @@ fn ymd_to_days(year: u64, month: u64, day: u64) -> u64 {
 /// midnight stamping, so sub-day learning steps (an "Again" card reappearing
 /// minutes or hours later) are preserved. The result stays lexicographically
 /// comparable with legacy midnight-stamped rows like "2026-07-19T00:00:00Z".
-fn add_days_to_now(now: &str, days: f32) -> String {
+pub(crate) fn add_days_to_now(now: &str, days: f32) -> String {
     // `now` normally comes from `chrono_now` and always parses; fall back to
     // the real clock if a caller ever hands us something else.
     let now_secs = iso_to_secs(now).unwrap_or_else(system_now_secs);
