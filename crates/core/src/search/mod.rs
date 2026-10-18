@@ -28,15 +28,28 @@ impl SearchEngine {
 
         let mut results = Vec::new();
 
+        // Relevance boost: bm25 buries core vocabulary when a common English
+        // term appears inside many compound-word glosses (query "man" ranked
+        // ἄνθρωπος "man, human being" below 25 "man-slaying"-style entries).
+        // Exact and first-gloss matches sort before everything bm25 finds.
+        let needle = query.trim().to_lowercase();
+        let first_gloss = format!("{},*", needle);
+
         if let Ok(mut stmt) = conn.prepare(
             "SELECT l.id, l.headword, l.definition, l.pos, rank
              FROM morph.lemmas_fts
              JOIN morph.lemmas l ON l.id = lemmas_fts.rowid
              WHERE lemmas_fts MATCH ?1
-             ORDER BY rank
+             ORDER BY CASE
+                 WHEN lower(l.definition) = ?3 THEN 0
+                 WHEN lower(l.definition) GLOB ?4 THEN 1
+                 ELSE 2
+             END, rank
              LIMIT ?2",
         ) {
-            if let Ok(rows) = stmt.query_map(rusqlite::params![sanitized, limit as i64], |row| {
+            if let Ok(rows) = stmt.query_map(
+                rusqlite::params![sanitized, limit as i64, needle, first_gloss],
+                |row| {
                 Ok(SearchResult {
                     lemma_id: row.get(0)?,
                     headword: row.get(1)?,
