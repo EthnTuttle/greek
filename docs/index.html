@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Greek — Learn Ancient Greek with honest spaced repetition</title>
+<meta name="description" content="An offline-first Android app for Ancient Greek: FSRS-paced review, an alphabet-first curriculum with a measured check, and optional end-to-end-encrypted sync.">
+<link rel="icon" href="assets/owl.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/owl.png" alt="Owl of Athena icon">Greek</a>
+    <nav class="site-nav" aria-label="Site">
+      <a href="index.html" aria-current="page">Home</a>
+      <a href="guide.html">Learner's guide</a>
+      <a href="sync.html">Sync</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="dev.html">For developers</a>
+    </nav>
+  </div>
+</header>
+
+<main class="main">
+
+  <section class="hero">
+    <img class="owl" src="assets/owl.png" alt="Owl of Athena — app icon">
+    <h1>Greek</h1>
+    <p class="tagline">Read Ancient Greek, not flashcard gimmicks.</p>
+    <p class="pitch">
+      An offline-first Android app for learning Ancient Greek — a Rust core, a real
+      FSRS scheduler, an alphabet-first curriculum that proves you can read the
+      script before feeding you vocabulary, and optional encrypted sync you control.
+    </p>
+    <p>
+      <a class="btn" href="https://github.com/EthnTuttle/greek/releases">Get the APK</a>
+      <a class="btn secondary" href="guide.html">How it teaches</a>
+    </p>
+  </section>
+
+  <section class="pillars" aria-label="Key features">
+    <div class="pillar">
+      <h3>FSRS-paced review</h3>
+      <p>
+        Real FSRS (not a spaced-repetition cosplay): full per-rating next-state
+        computation at 90% desired retention, interval previews on every rating
+        button, sub-day learning steps so a missed card comes back the same
+        session — and a cap of 10 new cards a day so you never drown.
+      </p>
+    </div>
+    <div class="pillar">
+      <h3>Alphabet-first</h3>
+      <p>
+        Vocabulary stays locked until you can actually read the letters: a
+        43-card letters track across 5 chapters, then the <strong>Alphabet Check</strong> —
+        24 questions, pass with 22 or more. Already know the script? The check
+        is your 3-minute placement test.
+      </p>
+    </div>
+    <div class="pillar">
+      <h3>100% local-first</h3>
+      <p>
+        No accounts, no analytics, no crash reporting. Everything lives in an
+        on-device SQLite database. Optional sync between your own devices is
+        end-to-end encrypted — the relay never sees your data.
+      </p>
+    </div>
+  </section>
+
+  <h2>See it working</h2>
+  <p>Real screenshots from a Pixel 6 (Android 17), October 2026.</p>
+
+  <div class="shots">
+    <figure>
+      <img src="assets/shot-home.png" alt="Home screen: Due today 0 cards, New today 3 of 10, practice accuracy 50%, 2-day streak" loading="lazy">
+      <figcaption>Home: due queue, daily new-card cap (3/10), measured practice accuracy.</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/shot-curriculum.png" alt="Curriculum screen: The Alphabet &amp; Pronunciation track with five chapters — vowels, stops, continuants, breathings &amp; accents, diphthongs" loading="lazy">
+      <figcaption>Curriculum: the letters track comes first — five chapters, 43 cards.</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/shot-review.png" alt="Review screen: card ὁ αὐτουργός — the farmer — with rating buttons Again 10h, Hard 28h, Good 3d, Easy 16d" loading="lazy">
+      <figcaption>Review: every rating button previews its next interval.</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/shot-practice.png" alt="Practice question: 'the slave' with four Greek choices, correct answer ὁ δοῦλος highlighted" loading="lazy">
+      <figcaption>Practice: measured multiple-choice questions, not self-rating.</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/shot-dictionary.png" alt="Dictionary search for 'man': ἄνθρωπος — man, human being, listed first" loading="lazy">
+      <figcaption>Dictionary: ἄνθρωπος sorted first for "man" — Morpheus glosses with curated fixes.</figcaption>
+    </figure>
+  </div>
+
+  <h2>Install</h2>
+  <p>
+    Pre-built debug APKs are attached to
+    <a href="https://github.com/EthnTuttle/greek/releases">GitHub releases</a>
+    — download on your phone and open to install (Android will ask you to allow
+    installing from your browser). Minimum Android 8.0 (SDK 26); arm64 and x86-64
+    builds available.
+  </p>
+
+  <h3>Build from source</h3>
+  <details>
+    <summary>Rust core + Android APK (click to expand)</summary>
+    <p>Requirements: Rust toolchain, JDK 17+, Android SDK (compileSdk 35). The Gradle wrapper (8.14.3) downloads itself.</p>
+    <pre><code># 1. Core library and tests
+cargo build
+cargo test --workspace
+
+# 2. Android APK (preBuild syncs data/cards/*.json and data/morphology.sqlite into assets)
+cd android
+./gradlew assembleDebug
+
+# debug APK lands in android/app/build/outputs/apk/debug/</code></pre>
+    <p>
+      If you want to rebuild the native <code>libuniffi_bindings.so</code> libraries
+      (arm64-v8a, x86_64) yourself you need the Rust Android NDK targets; see
+      <code>android/README.md</code> in the repository for details.
+    </p>
+  </details>
+
+  <div class="note">
+    <strong>October 2026 status.</strong> The Android app is functional and in
+    active development: 1,183 cards (Athenaze I/II, JACT, DCC Core, plus the
+    letters track), tap-to-parse reader with Morpheus morphology, measured
+    practice mode, the alphabet gate, and a tested sync core with encrypted
+    nostr and direct P2P transports. The app is free, open, and carries no
+    advertising, tracking, or paywall.
+  </div>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>
+      Greek — an open Ancient Greek learning app.
+      <a href="https://github.com/EthnTuttle/greek">Source on GitHub</a> ·
+      Icon: the owl of Athena (ἡ γλαῦξ τῆς Ἀθηνᾶς, <span class="greek">Ἀθηναίων</span> on ancient coins).
+      Last updated October 2026.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>For developers — Greek</title>
+<meta name="description" content="Architecture of the Greek learning app: a Rust workspace (FSRS, CRDT sync layer, UniFFI to Kotlin) driving Jetpack Compose, plus design documents and test counts.">
+<link rel="icon" href="assets/owl.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/owl.png" alt="Owl of Athena icon">Greek</a>
+    <nav class="site-nav" aria-label="Site">
+      <a href="index.html">Home</a>
+      <a href="guide.html">Learner's guide</a>
+      <a href="sync.html">Sync</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="dev.html" aria-current="page">For developers</a>
+    </nav>
+  </div>
+</header>
+
+<main class="main">
+
+<h1>Architecture</h1>
+<p>
+  One Rust workspace, one Android shell. All the interesting logic — the FSRS
+  scheduler, the alphabet gate, question generation, dictionary search, the sync
+  merge layer — lives in Rust and is unit-tested there; Kotlin is UI and glue.
+</p>
+
+<h2>Workspace layout</h2>
+<pre><code>crates/
+├── core             greek-core — the brain, on-device SQLite
+│   ├── srs/         FSRS scheduling, review log, daily new-card cap (10/day),
+│   │                interval previews, sub-day learning steps
+│   ├── curriculum/  chapter gating (80% of prev at 30d stability),
+│   │                the alphabet gate (24-q check ≥22, organic lane)
+│   ├── questions/   measured assessment: MCQ + accent-tolerant typed answers
+│   ├── morphology/  Morpheus DB access, accent-stripping normalizer
+│   ├── search/      FTS5 + BM25 dictionary search w/ exact-match boost
+│   ├── reader/      tokenization + tap-to-parse
+│   ├── sync/        CRDT merge: HLC, G-set apply, FSRS fold-replay, LWW settings
+│   └── db/          schema + migrations (user_version → 3)
+├── uniffi-bindings/ UniFFI surface; cdylib consumed by Kotlin via JNA
+├── sync-nostr/      NIP-44 self-encrypted nostr spool transport
+└── cli/             TODO stub
+android/             Jetpack Compose app (6 screens over UniFFI)
+spikes/iroh/         validated iroh-docs Android spike (aarch64 + x86_64)
+tools/data-pipeline/ morphology DB builder + gloss-override applier
+data/                cards (5 decks, 1,183 total), curated gloss overrides</code></pre>
+
+<h2>Technology picks</h2>
+<table>
+  <thead><tr><th>Choice</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><a href="https://github.com/open-spaced-repetition/fsrs-rs">fsrs 2.x</a> (Rust)</td><td>The real FSRS algorithm — full per-rating <code>next_states</code>, 90% desired retention — not an SM-2 tweak.</td></tr>
+    <tr><td><a href="https://mozilla.github.io/uniffi-rs/">UniFFI</a></td><td>Kotlin bindings generated from Rust, so pedagogy bugs get fixed once, in Rust, for all future front-ends (Tauri desktop is next).</td></tr>
+    <tr><td>SQLite (rusqlite) + FTS5</td><td>State + morphology in plain files, WAL mode, queryable, exportable, owned by the user.</td></tr>
+    <tr><td><a href="https://github.com/n0-computer/iroh">iroh 1.x / iroh-docs</a></td><td>Direct device-to-device sync; share-ticket QR pairing with the write capability in the ticket.</td></tr>
+    <tr><td><a href="https://github.com/rust-nostr/nostr">nostr-sdk 0.43</a> (NIP-44)</td><td>Store-and-forward sync through relays as untrusted storage; ciphertext-only events, chunked at 48&nbsp;KiB.</td></tr>
+    <tr><td>Hybrid Logical Clock</td><td>Total order over a merged review history even under device clock skew, so FSRS replay is deterministic everywhere.</td></tr>
+    <tr><td>Jetpack Compose + Material 3</td><td>Native Android shell; system-follow dark theme; nothing exotic.</td></tr>
+  </tbody>
+</table>
+
+<h2>Tests</h2>
+<ul>
+  <li><strong>81</strong> unit tests in <code>greek-core</code> (SRS scheduling, gates, questions, sync replay, migrations).</li>
+  <li><strong>+6</strong> each in the UniFFI integration tests and <code>sync-nostr</code> unit tests; workspace total 93 <code>#[test]</code> items.</li>
+  <li>A live-relay round-trip test (<code>#[ignore]</code> by default) verifies the nostr transport against public relays.</li>
+  <li>Run everything: <code>cargo test --workspace</code>.</li>
+</ul>
+
+<h2>Design documents (in the repo)</h2>
+<ul>
+  <li><a href="https://github.com/EthnTuttle/greek/blob/master/ANALYSIS.md">ANALYSIS.md</a> — uncensored codebase audit that set the current priorities.</li>
+  <li><a href="https://github.com/EthnTuttle/greek/blob/master/PLAN-PARALLEL-AGENTS.md">PLAN-PARALLEL-AGENTS.md</a> — execution plan and wave status.</li>
+  <li><a href="https://github.com/EthnTuttle/greek/blob/master/DESIGN-alphabet-gate.md">DESIGN-alphabet-gate.md</a> — gate pedagogy, lanes, anti-gaming math, UX copy.</li>
+  <li><a href="https://github.com/EthnTuttle/greek/blob/master/DESIGN-device-sync.md">DESIGN-device-sync.md</a> — CRDT design, rejected alternatives, adversary model.</li>
+  <li><a href="https://github.com/EthnTuttle/greek/blob/master/SYNC-WIRE.md">SYNC-WIRE.md</a> — canonical wire format with live-relay evidence.</li>
+  <li><a href="https://github.com/EthnTuttle/greek/blob/master/data/README.md">data/README.md</a> — morphology DB provenance and known data quirks.</li>
+  <li><a href="https://github.com/EthnTuttle/greek/blob/master/spikes/iroh/SPIKE-IROH.md">spikes/iroh/SPIKE-IROH.md</a> — iroh on Android verdict (GO, +~1.2&nbsp;MB/ABI).</li>
+</ul>
+
+<h2>Contributing</h2>
+<p>
+  Issues and PRs at <a href="https://github.com/EthnTuttle/greek">github.com/EthnTuttle/greek</a>.
+  The codebase is organized so that pedagogic changes happen in
+  <code>crates/core</code> against the tests; new curator-editable gloss fixes go
+  in <code>data/overrides/lemma_glosses.tsv</code> (one TSV row, no code) and are
+  applied by <code>tools/data-pipeline/overrides/apply_overrides.py</code>.
+  High-leverage areas per the plan: LSJ ingestion, reader corpus growth with
+  coverage-aware difficulty, the Tauri desktop shell, and the sync UI wiring.
+</p>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>Greek — <a href="https://github.com/EthnTuttle/greek">source on GitHub</a>. Last updated October 2026.</p>
+  </div>
+</footer>
+
+</body>
+</html>

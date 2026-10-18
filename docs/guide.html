@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learner's guide — Greek</title>
+<meta name="description" content="How Greek teaches you Greek: the alphabet gate, FSRS review, measured practice, reader and dictionary, and why new cards are capped at 10 per day.">
+<link rel="icon" href="assets/owl.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/owl.png" alt="Owl of Athena icon">Greek</a>
+    <nav class="site-nav" aria-label="Site">
+      <a href="index.html">Home</a>
+      <a href="guide.html" aria-current="page">Learner's guide</a>
+      <a href="sync.html">Sync</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="dev.html">For developers</a>
+    </nav>
+  </div>
+</header>
+
+<main class="main">
+
+<h1>Learner's guide</h1>
+<p>
+  How the app teaches, in order: the alphabet gate, the review loop, practice
+  mode, and the reader and dictionary. Every claim on this page matches shipped
+  behavior as of October 2026.
+</p>
+
+<h2>1. The alphabet gate</h2>
+<p>
+  The app refuses to pour vocabulary into your queue until you can read the
+  script. Flashcard recognition is not the skill that matters for reading
+  Greek — glyph recognition is — so new vocabulary cards are gated, and only
+  new cards: due reviews are never blocked, and the reader and dictionary stay
+  open the whole time (decoding real words <em>is</em> alphabet practice).
+</p>
+
+<h3>The letters track</h3>
+<p>
+  "The Alphabet &amp; Pronunciation" is 43 cards in 5 staged chapters:
+</p>
+<table>
+  <thead><tr><th>Chapter</th><th>Contents</th><th>Cards</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>The Vowels</td><td>7</td></tr>
+    <tr><td>2</td><td>The Stops</td><td>9</td></tr>
+    <tr><td>3</td><td>The Continuants</td><td>9</td></tr>
+    <tr><td>4</td><td>Breathings &amp; Accents</td><td>7</td></tr>
+    <tr><td>5</td><td>Diphthongs</td><td>11</td></tr>
+  </tbody>
+</table>
+<p>
+  Chapters unlock in sequence, but with a pragmatic rule specific to letters:
+  a card counts toward unlock progress once you have <em>seen it twice</em>
+  (2 or more reviews, any source). Vocabulary chapters use the stricter 30-day
+  stability rule — punishingly slow for a recognition skill of 24 glyphs, so
+  the letters track deliberately doesn't apply it to itself.
+</p>
+
+<h3>Unlocking vocabulary — three honest lanes</h3>
+<ol class="steps">
+  <li>
+    <strong>The Alphabet Check.</strong> 24 multiple-choice questions drawn
+    stratified across the whole letters track, alternating both directions —
+    see the glyph, name it; see the name, pick the glyph. Pass with
+    <strong>22 or more of 24 (~92%)</strong>. It is available from minute one as a
+    placement test: an experienced classicist unlocks vocabulary in about three
+    minutes. Retakes are unlimited, and every miss is recycled straight into
+    your FSRS review deck — taking the check <em>teaches</em>.
+  </li>
+  <li>
+    <strong>The organic lane.</strong> No buttons, no test: if you simply work
+    the letters track, the gate lifts automatically once every one of the 43
+    cards is introduced, your measured letters-practice accuracy is at least
+    <strong>85%</strong> over at least 20 practice attempts, and letters activity
+    spans at least 2 distinct days (so a same-day cram doesn't count).
+  </li>
+  <li>
+    <strong>Prior knowledge / history.</strong> There's an explicit
+    "I already know the Greek alphabet" switch in Settings (logged as
+    self-reported), and any existing review history for vocabulary cards — for
+    example from an earlier install — satisfies the gate on its own.
+  </li>
+</ol>
+<p>
+  Once satisfied, the gate latches permanently — passing the check on one
+  device unlocks it everywhere when you sync, and it never re-locks.
+  A diligent beginner doing ~20 minutes a day typically unlocks vocabulary on
+  day 4–6. The full reasoning, including the anti-gaming math (a retake-spammer
+  with true accuracy 0.7 passes about 1% of attempts), is in
+  <a href="https://github.com/EthnTuttle/greek/blob/master/DESIGN-alphabet-gate.md">DESIGN-alphabet-gate.md</a>.
+</p>
+
+<h2>2. Review</h2>
+<p>
+  The review loop is FSRS — the modern, two-component memory model (stability
+  and difficulty) used by AniM-like ecosystems, here via the official Rust
+  <code>fsrs</code> crate at 90% desired retention.
+</p>
+<ul>
+  <li><strong>Due cards first, most overdue first.</strong> Nothing due today is dropped.</li>
+  <li>
+    <strong>Misses come back the same session.</strong> Due dates are full
+    timestamps with no whole-day rounding and no midnight stamping, so FSRS's
+    sub-day learning steps survive: a card you rate <em>Again</em> on its first
+    lapses is due again in minutes (an established card you forgot shows its own
+    longer relearn interval — see the screenshot, where Again is 10 hours on a
+    16-day-stable card).
+  </li>
+  <li>
+    <strong>Interval previews on the buttons.</strong> Again / Hard / Good /
+    Easy each display the interval they'd schedule, so you calibrate honestly
+    instead of gaming a mystery scheduler.
+  </li>
+  <li>
+    <strong>Session state survives.</strong> An interrupted review session is
+    persisted and resumes where it left off, even after the process is killed.
+  </li>
+</ul>
+
+<figure class="shots" style="grid-template-columns: 1fr; max-width: 14rem; margin-left:0;">
+  <img src="assets/shot-review.png" alt="Review screen with interval previews Again 10h, Hard 28h, Good 3d, Easy 16d" loading="lazy">
+  <figcaption>Every button tells you exactly what it will schedule.</figcaption>
+</figure>
+
+<h2>3. Practice — measured, not self-reported</h2>
+<p>
+  Self-rating inflates; measured assessment doesn't. Practice mode generates
+  objective questions from your own deck:
+</p>
+<ul>
+  <li>
+    <strong>Multiple choice (EN → GR):</strong> the prompt is the card's English
+    gloss, the four choices are Greek fronts. Distractors are chosen by a strict
+    widening policy — same part of speech and chapter first, then the same
+    textbook, then anywhere — so wrong answers are plausible on purpose.
+  </li>
+  <li>
+    <strong>Typed answers:</strong> graded three ways — <em>Exact</em>
+    (accents and all), <em>Lenient</em> (right letters, accents off or case
+    folded), or <em>Wrong</em>. The accent-tolerant check reuses the dictionary's
+    own normalization, so grading can't drift from search.
+  </li>
+  <li>
+    Results are written into your review history tagged
+    <code>source = practice</code> — scheduling is identical, but Home shows a
+    separate, honest <strong>practice accuracy</strong> number measured only
+    over practice rows.
+  </li>
+</ul>
+
+<h2>4. Reader and dictionary</h2>
+<ul>
+  <li>
+    <strong>Tap-to-parse reader.</strong> tap any Greek word in a text to get
+    its full morphological analysis from a 36,165-lemma / 958,469-form database
+    derived from <em>Morpheus</em> (the Perseus lemmatizer output). Exact-form
+    lookup first, accent-stripped fallback second. A word can be marked known or
+    added to your SRS deck in one tap.
+  </li>
+  <li>
+    <strong>Dictionary.</strong> Full-text search (FTS5 + BM25) over all 36k
+    lemmas, searching headwords and glosses alike. Because raw BM25 buries core
+    words — a search for "man" once ranked ἄνθρωπος below a screen of
+    "man-slaying" compounds — an exact/leading-gloss match sorts before anything
+    BM25 finds.
+  </li>
+  <li>
+    <strong>Honest glosses.</strong> Glosses are Morpheus-derived short hints,
+    not LSJ (the UI says so: "Morpheus glosses (LSJ pending)"). An audit of the
+    most-visible entries found junk like ἄνθρωπος → "manfaced"; a curated
+    override table (80 TSV rules covering 88 lemmas) fixes the top offenders —
+    ἄνθρωπος now reads "man, human being" and leads the "man" results.
+    Corrections live in version-controlled text you can read:
+    <code>data/overrides/lemma_glosses.tsv</code>.
+  </li>
+</ul>
+
+<h2>5. Why only 10 new cards a day?</h2>
+<p>
+  New-card introductions are capped at <strong>10 per day</strong>, and Home
+  shows the counter ("New today: 3 / 10") so the budget is visible.
+</p>
+<p>
+  This is not arbitrary austerity. Every card you introduce today becomes
+  future review debt; spaced-repetition research and long practitioner
+  experience agree that unbounded intake collapses into overdue queues and quit
+  spirals — the spacing effect (Cepeda et al. 2006; Bahrick et al. 1993) is
+  exactly the effect you're buying, and it can't be massed. The design
+  discussion's counterpoint lives in
+  <a href="https://github.com/EthnTuttle/greek/blob/master/DESIGN-alphabet-gate.md">DESIGN-alphabet-gate.md</a>
+  and the pacing notes in
+  <a href="https://github.com/EthnTuttle/greek/blob/master/PLAN-PARALLEL-AGENTS.md">PLAN-PARALLEL-AGENTS.md</a>:
+  at the 10-card cap, the full 43-card alphabet track is still introduced in
+  4–5 days. Chapters behind you unlock the next one when you've mastered 80%
+  of the current one's cards (mastered = FSRS stability of 30 days or more) —
+  the firehose stays closed until said mastery is real, not "seen once".
+</p>
+
+<p>
+  <a class="btn" href="https://github.com/EthnTuttle/greek/releases">Get the APK</a>
+  <a class="btn secondary" href="sync.html">Back it up / sync devices</a>
+</p>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>Greek — <a href="https://github.com/EthnTuttle/greek">source on GitHub</a>. Last updated October 2026.</p>
+  </div>
+</footer>
+
+</body>
+</html>

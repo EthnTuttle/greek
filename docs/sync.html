@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Device sync — Greek</title>
+<meta name="description" content="How Greek syncs your study progress between devices: an encrypted, offline-first CRDT design with QR-pair direct sync and a self-encrypted nostr spool.">
+<link rel="icon" href="assets/owl.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/owl.png" alt="Owl of Athena icon">Greek</a>
+    <nav class="site-nav" aria-label="Site">
+      <a href="index.html">Home</a>
+      <a href="guide.html">Learner's guide</a>
+      <a href="sync.html" aria-current="page">Sync</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="dev.html">For developers</a>
+    </nav>
+  </div>
+</header>
+
+<main class="main">
+
+<h1>Sync between your devices</h1>
+
+<div class="note warn">
+  <strong>October 2026 status.</strong> The sync <em>core</em> is implemented and
+  unit-tested (merging, clocks, replay — see <a href="dev.html">For developers</a>),
+  and both wire transports are validated: the nostr spool round-trips against a
+  live public relay, and the iroh stream built and ran on Android hardware in a
+  spike. The in-app Sync screens you tap through (QR pairing, the Sync now
+  button) are the current work item. This page documents what the design
+  guarantees and what the UI will walk you through; nothing here already syncs
+  on its own.
+</div>
+
+<h2>How it works, in three sentences</h2>
+<ol class="steps">
+  <li>
+    Your <strong>review log</strong> is the only shared truth: a grow-only set of
+    review events, each stamped with a globally unique id (UUID) and a hybrid
+    logical clock. Devices merge logs by deduplicating on that id — the union
+    of both sets, no matter the arrival order.
+  </li>
+  <li>
+    <strong>Memory states are never synced.</strong> Each device re-computes its
+    FSRS schedule locally by deterministically re-folding the merged log (per
+    card, ordered by clock then id) — so any set of devices that has seen the
+    same events converges to byte-identical schedules, and divergent floating-point
+    scheduler state can never need merging.
+  </li>
+  <li>
+    <strong>Settings</strong> merge last-write-wins per key under the logical
+    clock, with one extra rule — absence is not a value — so the alphabet-gate
+    latch (pass the check on your desktop, phone unlocks) can never be lost by
+    syncing from an older device.
+  </li>
+</ol>
+<p>
+  These are CRDT properties (convergence, idempotency, commutativity), and each
+  one maps to a test in the repo. Full specification:
+  <a href="https://github.com/EthnTuttle/greek/blob/master/DESIGN-device-sync.md">DESIGN-device-sync.md</a>.
+</p>
+
+<h2>Two transports — pick either or both</h2>
+
+<h3>1. Direct pairing (iroh)</h3>
+<p>
+  For two devices that can be online at the same time. Sync is peer-to-peer
+  (QUIC), relay-assisted only for NAT traversal — no server ever stores your
+  data. Pairing is one gesture:
+</p>
+<ol class="steps">
+  <li>On the device that has your progress: <strong>Settings → Sync → Show QR</strong>. The QR encodes an iroh-docs share ticket (<code>greeksync://ticket/…</code>) — treat it as a credential.</li>
+  <li>On the other device: <strong>Join from code</strong>, scan the QR or paste the ticket string.</li>
+  <li>Both devices sync immediately and hereafter whenever both are online together (plus a manual <em>Sync now</em> button).</li>
+</ol>
+<p>
+  The QR contains the write capability for the shared sync document. Show it to
+  someone else's camera, and that's their access. Never send it over a network.
+</p>
+
+<h3>2. Offline store-and-forward (nostr spool)</h3>
+<p>
+  For devices that are never online together: each device encrypts its sync
+  batches <em>to itself</em> (NIP-44) and publishes them to a nostr relay as
+  ordinary events (kind 1078, chunked at 48&nbsp;KiB, with a kind-30078
+  checkpoint whose tag is HMAC-blinded). The relay is untrusted storage — it
+  serves ciphertext to whichever of your devices asks next.
+</p>
+<ol class="steps">
+  <li><strong>Settings → Sync</strong>, enter the relay URL.</li>
+  <li>Enter or generate your sync key (<code>nsec</code>). The same key on all your devices is the whole identity system.</li>
+  <li>That's it — devices push and pull through the relay asynchronously.</li>
+</ol>
+
+<div class="note warn">
+  <strong>The default relay belongs to the developer.</strong> If your build
+  ships with a prefilled URL (<code>wss://chat.virginiafreedom.tech</code>), that's the
+  developer's private Pyramid relay, listed for the developer's own convenience —
+  do not use it for your data. Point the field at <em>any relay you control or
+  trust</em>: your own strfry/nostr-rs-relay instance is the intended production
+  setup, and public relays also work. Verified-working public options include
+  <code>wss://relay.damus.io</code>, <code>wss://nos.lol</code>, and
+  <code>wss://offchain.pub</code>. Public relays rate-limit fresh keys and
+  bursts (measured: damus rejects a ~140-event burst from a new key), so the
+  transport paces chunk publishes (500&nbsp;ms apart, 10&nbsp;s backoff on
+  <code>rate-limited</code>) — a large first sync takes minutes on a public
+  relay, seconds on a private one. Details:
+  <a href="https://github.com/EthnTuttle/greek/blob/master/SYNC-WIRE.md">SYNC-WIRE.md</a> §2.
+</div>
+
+<h3>Which should you use?</h3>
+<table>
+  <thead><tr><th></th><th>iroh direct</th><th>nostr spool</th></tr></thead>
+  <tbody>
+    <tr><td>Devices must be online together</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Server stores anything</td><td>No (NAT relays are pipes, not storage)</td><td>Ciphertext only, on a relay you choose</td></tr>
+    <tr><td>Pairing</td><td>QR code ticket</td><td>shared <code>nsec</code> + relay URL</td></tr>
+    <tr><td>Best for</td><td>Phone ↔ desktop on the same network</td><td>Devices on separate schedules/networks</td></tr>
+  </tbody>
+</table>
+
+<h2>Backup / export — "transport zero"</h2>
+<p>
+  The same merge layer doubles as disaster recovery: a third transport writes
+  your entire syncable state — full review log with ids, devices, clocks, plus
+  all settings and the paired-device roster — to <strong>one JSON file</strong>.
+  Importing it on a fresh install replays the log and rebuilds memory states,
+  and sync picks up from there. It needs no network and no paired device, so
+  even if you never enable sync, you have an off-device copy of months of study
+  history.
+</p>
+
+<h2>Privacy of synced data</h2>
+<p>
+  Everything above is designed around an untrusted middle:
+</p>
+<ul>
+  <li>nostr payloads are NIP-44 self-encrypted; the private relay runbook write-whitelists a single public key so the relay can't host anyone else's data.</li>
+  <li>Checkpoint tags are HMAC-blinded so the relay can't even enumerate sync metadata by label.</li>
+  <li>Malformed, forged, or replayed events are silently dropped — signature-checked against your own key before decrypting.</li>
+  <li>Secrets live in Android Keystore-backed encrypted storage; a lost device is dropped from the roster and you rotate the key/ticket on the survivors.</li>
+</ul>
+<p>
+  See <a href="privacy.html">Privacy</a> for what a relay could and could not
+  infer.
+</p>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>Greek — <a href="https://github.com/EthnTuttle/greek">source on GitHub</a>. Last updated October 2026.</p>
+  </div>
+</footer>
+
+</body>
+</html>

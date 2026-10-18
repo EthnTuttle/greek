@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — Greek</title>
+<meta name="description" content="Greek collects nothing: no analytics, no crash reporting, no accounts. Network access only if you configure sync yourself.">
+<link rel="icon" href="assets/owl.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/owl.png" alt="Owl of Athena icon">Greek</a>
+    <nav class="site-nav" aria-label="Site">
+      <a href="index.html">Home</a>
+      <a href="guide.html">Learner's guide</a>
+      <a href="sync.html">Sync</a>
+      <a href="privacy.html" aria-current="page">Privacy</a>
+      <a href="dev.html">For developers</a>
+    </nav>
+  </div>
+</header>
+
+<main class="main">
+
+<h1>Privacy</h1>
+<p class="tagline" style="color:var(--accent)">The app phones no one home.</p>
+
+<h2>What the app never does</h2>
+<ul>
+  <li><strong>No analytics</strong> — no usage telemetry, no event tracking, no A/B frameworks.</li>
+  <li><strong>No crash reporting</strong> — no Sentry, no Crashlytics, nothing.</li>
+  <li><strong>No accounts</strong> — no email, no sign-in, no user id uploaded anywhere.</li>
+  <li><strong>No advertising</strong> — no ad SDKs, no attribution, no trackers.</li>
+</ul>
+<p>
+  All of your study data — review history, FSRS memory states, practice
+  accuracy, known words, settings — lives in two SQLite databases
+  <em>on your device</em>: the app's store (your progress) and the bundled
+  morphology database (read-only reference data, shipped with the app).
+</p>
+
+<h2>Network access</h2>
+<p>
+  The app makes <strong>no network requests during normal use</strong>.
+  Textbook cards and the 113&nbsp;MB morphology database are bundled with the
+  APK and consulted locally. The only time the app touches the network is if
+  <em>you</em> go to Settings and configure device sync — and even then it
+  talks only to the destination you configured: your chosen nostr relay, or a
+  device you paired by QR code (off-LAN, that peer-to-peer connection is
+  bootstrapped through iroh's default DNS/n0 discovery relays, which are
+  transport pipes, not storage).
+</p>
+
+<h2>If you enable sync: what a relay can and cannot see</h2>
+<p>
+  Sync payloads on the nostr transport are NIP-44 end-to-end encrypted
+  <em>to yourself</em>, and direct sync over iroh is QUIC/TLS between your own
+  devices. Assume a hostile relay or a network observer anyway — here's the
+  honest accounting:
+</p>
+<table>
+  <thead><tr><th>Visible to a relay / observer</th><th>Never visible</th></tr></thead>
+  <tbody>
+    <tr><td>Encrypted blobs (ciphertext) of sync batches</td><td>What you studied — card ids, Greek text of study items, ratings, schedule — all inside the ciphertext</td></tr>
+    <tr><td>Your sync public key (written under it)</td><td>Your settings values (also encrypted)</td></tr>
+    <tr><td>Timing: when your devices publish/fetch</td><td>The checkpoint label — d-tags are HMAC-blinded, so even the existence and cadence of sync metadata is hidden</td></tr>
+    <tr><td>Count and size of events (chunking makes an educated guess of total study volume possible)</td><td></td></tr>
+    <tr><td>The <code>greek-sync</code> topic tag and a device id on chunk events</td><td></td></tr>
+  </tbody>
+</table>
+<p>
+  Timing-plus-size metadata is the accepted residual leak in v1 (documented in
+  <a href="https://github.com/EthnTuttle/greek/blob/master/SYNC-WIRE.md">SYNC-WIRE.md</a> §2.3).
+  If that's too much, your options, strongest first: don't enable sync at all,
+  use only the local JSON export for backup, use QR-paired direct sync between
+  your own devices on your own network, or run your own relay (the runbook is
+  10 lines of strfry + nginx, write-whitelisted to your key).
+</p>
+
+<h2>Data sources and credit</h2>
+<p>
+  Morphological data is derived from <strong>Morpheus</strong> (the Perseus
+  morphology/lemmatizer XML output — part of the Perseus Digital Library's
+  openly licensed data; Perseus texts and morphology are CC BY-SA).
+  Dictionary glosses in the app are Morpheus short glosses with a
+  version-controlled set of human corrections
+  (<code>data/overrides/lemma_glosses.tsv</code>) applied on top; full
+  provenance, warts included, is in the repository at
+  <a href="https://github.com/EthnTuttle/greek/blob/master/data/README.md">data/README.md</a>.
+  The LSJ Greek–English lexicon (1940) is public domain but is <em>not yet
+  ingested</em> — the app's dictionary is labelled "Morpheus glosses (LSJ
+  pending)" and will say so until real LSJ entries ship.
+</p>
+<p>
+  The app's own source repository does not currently carry a LICENSE file;
+  project notes express intent to license the code permissively (MIT/Apache-2.0).
+  Treat all app code as all-rights-reserved until the explicit license lands.
+</p>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>Greek — <a href="https://github.com/EthnTuttle/greek">source on GitHub</a>. Last updated October 2026.</p>
+  </div>
+</footer>
+
+</body>
+</html>
