@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/core", "crates/uniffi-bindings", "crates/cli", "tools/data-pipeline"]
+members = ["crates/core", "crates/uniffi-bindings", "crates/cli", "crates/sync-nostr", "tools/data-pipeline"]
 resolver = "2"
 
 [workspace.dependencies]
