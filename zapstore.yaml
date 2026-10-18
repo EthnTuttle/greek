@@ -10,7 +10,7 @@
 # ─── WHITELISTING ────────────────────────────────────────────────────────────
 # npub that will sign the publish events (owner's existing nostr key is fine).
 # ⚠ REQUIRED for first publish — the relay matches this against SIGN_WITH.
-pubkey: npub1FILL_ME_IN_REPLACE_WITH_OWNER_NPUB_PUBLIC_KEY_ONLY
+pubkey: npub160t5zfxalddaccdc7xx30sentwa5lrr3rq4rtm38x99ynf8t0vwsvzyjc9
 
 # ─── SOURCE CONFIGURATION ────────────────────────────────────────────────────
 # Public source mirror on GitHub (also where the relay looks for this file).
