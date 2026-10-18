@@ -1,7 +1,7 @@
 # Execution Plan — Parallel-Agent Pedagogy & Completeness Fixes
 
 **Date:** 2026-10-16 · **Input:** `ANALYSIS.md` §5 · **Execution model:** git worktrees + parallel subagents + single integration gate
-**Status (2026-10-17, final): Waves 1–4 + Alphabet Gate (research×design×2 impl agents) COMPLETE. 76 core + 6 integration tests green; APK rebuilt. Remaining: on-device verification pass pending, then §6 epics (LLM tutor, corpus, LSJ).**
+**Status (2026-10-17, night): Waves 1–5 COMPLETE + verified on-device (bugs fixed: lexicon re-copy guard, dictionary ranking, streak plural). Wave 6a (device sync) COMPLETE: DESIGN-device-sync.md + SYNC-WIRE.md, core CRDT merge layer (schema v3, HLC, G-set apply, FSRS fold-replay, LWW settings — 81 core tests), crates/sync-nostr proven against live relay, iroh-docs spike GO incl. Android aarch64/x86_64 builds (+~1.2MB/ABI). Remaining: Wave 6b (iroh transport + Sync UI + UniFFI exports), 6c (nostr spool wiring + strfry deploy), Wave 7 (Tauri desktop).**
 
 ## Design rules
 
