@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Greek</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="assets/owl.png">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-wrap">
+      <span class="brand">
+        <img src="assets/owl.png" alt="" width="28" height="28">
+        <span>Greek</span>
+      </span>
+      <nav class="site-nav" id="tab-nav" aria-label="Main">
+        <button class="tab-btn" data-tab="home" aria-current="page">Home</button>
+        <button class="tab-btn" data-tab="review">Review</button>
+        <button class="tab-btn" data-tab="curriculum">Curriculum</button>
+        <button class="tab-btn" data-tab="dictionary">Dictionary</button>
+        <button class="tab-btn" data-tab="sync">Sync</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main" id="main">
+    <p id="backend-error" class="note warn" hidden>
+      Could not reach the app backend. This page must run inside the Greek desktop app.
+    </p>
+
+    <!-- ==================== HOME ==================== -->
+    <section id="screen-home" class="screen">
+      <h1>Welcome back!</h1>
+
+      <div id="gate-banner" class="note warn gate-banner" hidden>
+        <p class="gate-title">Read Greek first</p>
+        <p>
+          Vocabulary unlocks when you can recognize the alphabet.
+          <span id="gate-progress"></span>
+          Pass the Alphabet Check on your phone — the check stays phone-only for now.
+        </p>
+      </div>
+
+      <div class="stat-grid">
+        <button class="card stat-card stat-due" id="stat-due" type="button" title="Start review">
+          <span class="stat-label">Due today</span>
+          <span class="stat-big" id="stat-due-num">0</span>
+          <span class="stat-sub">cards</span>
+        </button>
+        <div class="card stat-card">
+          <span class="stat-label">New today</span>
+          <span class="stat-big" id="stat-new">0 / 10</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">Day streak</span>
+          <span class="stat-big" id="stat-streak">0</span>
+        </div>
+        <div class="card stat-card" id="stat-accuracy" hidden>
+          <span class="stat-label">Practice accuracy</span>
+          <span class="stat-big" id="stat-accuracy-num">—</span>
+        </div>
+      </div>
+
+      <div class="home-actions">
+        <button class="btn" id="btn-start-review" type="button">Start Review</button>
+        <button class="btn secondary" id="btn-open-curriculum" type="button">Open Curriculum</button>
+        <button class="btn secondary" id="btn-open-dictionary" type="button">Open Dictionary</button>
+      </div>
+    </section>
+
+    <!-- ==================== REVIEW ==================== -->
+    <section id="screen-review" class="screen" hidden>
+      <div class="review-topline">
+        <span class="chip" id="review-remaining">0 left</span>
+        <span class="chip chip-new" id="review-new-badge" hidden>New card</span>
+      </div>
+
+      <div class="card review-card" id="review-card">
+        <p class="greek review-front" id="review-front"></p>
+        <div id="review-answer-wrap" hidden>
+          <hr class="review-divider">
+          <p class="review-back" id="review-back"></p>
+        </div>
+      </div>
+
+      <button class="btn btn-block" id="btn-show-answer" type="button">Show answer <kbd>Space</kbd></button>
+
+      <div class="rating-row" id="rating-row" hidden>
+        <button class="rate-btn" type="button" data-rating="1">
+          <span class="rate-label">Again</span><span class="rate-preview">…</span><kbd>1</kbd>
+        </button>
+        <button class="rate-btn" type="button" data-rating="2">
+          <span class="rate-label">Hard</span><span class="rate-preview">…</span><kbd>2</kbd>
+        </button>
+        <button class="rate-btn" type="button" data-rating="3">
+          <span class="rate-label">Good</span><span class="rate-preview">…</span><kbd>3</kbd>
+        </button>
+        <button class="rate-btn" type="button" data-rating="4">
+          <span class="rate-label">Easy</span><span class="rate-preview">…</span><kbd>4</kbd>
+        </button>
+      </div>
+
+      <div class="review-empty" id="review-empty" hidden>
+        <p class="empty-owl">🦉</p>
+        <h2>All caught up</h2>
+        <p class="text-dim">Nothing due right now. Unlock a new chapter or come back later.</p>
+      </div>
+    </section>
+
+    <!-- ==================== CURRICULUM ==================== -->
+    <section id="screen-curriculum" class="screen" hidden>
+      <h1>Curriculum</h1>
+
+      <div id="curr-gate" class="note warn gate-banner" hidden>
+        <p class="gate-title">Read Greek first</p>
+        <p>
+          Vocabulary unlocks when you can recognize the alphabet.
+          Pass the Alphabet Check on your phone — the check stays phone-only for now.
+        </p>
+      </div>
+
+      <div id="curr-list"></div>
+    </section>
+
+    <!-- ==================== DICTIONARY ==================== -->
+    <section id="screen-dictionary" class="screen" hidden>
+      <h1>Dictionary</h1>
+      <input id="dict-input" class="text-input" type="search"
+             placeholder="Search Greek or English…" autocomplete="off" spellcheck="false">
+      <p id="dict-status" class="text-dim" hidden></p>
+      <ul id="dict-results" class="dict-results"></ul>
+    </section>
+
+    <!-- ==================== SYNC ==================== -->
+    <section id="screen-sync" class="screen" hidden>
+      <h1>Sync &amp; Backup</h1>
+      <p class="text-dim">Device sync is in beta. Your data always stays on your devices.</p>
+
+      <!-- This device -->
+      <div class="card sync-card">
+        <h2>This device</h2>
+        <p>Device ID: <code id="sync-device-id" class="mono">…</code></p>
+        <p class="transport-line">
+          <span class="dot" id="sync-dot-iroh"></span> iroh direct pairing
+          <span class="dot" id="sync-dot-nostr"></span> nostr relays
+        </p>
+        <p class="text-dim">Relays: <code id="sync-relays-view" class="mono"></code></p>
+      </div>
+
+      <!-- iroh pairing -->
+      <div class="card sync-card">
+        <h2>Pair directly (iroh)</h2>
+        <p class="text-dim">
+          Pairing uses a copyable ticket string. Show it here, paste it on your phone
+          (or send it to yourself over a nostr DM), and the phone joins.
+        </p>
+        <button class="btn secondary" id="btn-ticket" type="button">Show pairing ticket</button>
+        <div id="ticket-wrap" hidden>
+          <pre id="ticket-text" class="mono ticket-pre"></pre>
+          <button class="btn secondary" id="btn-copy-ticket" type="button">Copy ticket</button>
+        </div>
+        <h3>Join from a ticket</h3>
+        <textarea id="join-ticket" class="text-input mono" rows="3"
+                  placeholder="greeksync://ticket/…"></textarea>
+        <button class="btn secondary" id="btn-join" type="button">Join from ticket</button>
+      </div>
+
+      <!-- nostr -->
+      <div class="card sync-card">
+        <h2>Sync over nostr</h2>
+        <label class="field-label" for="relays-input">Relays (comma-separated)</label>
+        <textarea id="relays-input" class="text-input mono" rows="2"
+                  placeholder="wss://relay.damus.io, wss://nos.lol"></textarea>
+        <button class="btn secondary" id="btn-save-relays" type="button">Save relays</button>
+        <div class="identity-row">
+          <button class="btn secondary" id="btn-ensure-identity" type="button">Ensure identity</button>
+          <code id="pubkey-out" class="mono" hidden></code>
+        </div>
+      </div>
+
+      <!-- sync now -->
+      <div class="card sync-card">
+        <h2>Sync now</h2>
+        <div class="identity-row">
+          <button class="btn" id="btn-sync-now" type="button">Sync now</button>
+          <span class="spinner" id="sync-busy" hidden aria-label="Syncing…"></span>
+        </div>
+        <p id="sync-result" class="text-dim" hidden></p>
+      </div>
+
+      <!-- paired devices -->
+      <div class="card sync-card">
+        <h2>Paired devices</h2>
+        <p id="paired-empty" class="text-dim">No devices paired yet.</p>
+        <ul id="paired-list" class="paired-list"></ul>
+      </div>
+
+      <!-- backup -->
+      <div class="card sync-card">
+        <h2>Backup</h2>
+        <button class="btn secondary" id="btn-export" type="button">Export backup</button>
+        <button class="btn secondary" id="btn-import" type="button">Import backup</button>
+        <input id="import-file" type="file" accept="application/json,.json" hidden>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

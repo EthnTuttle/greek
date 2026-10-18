@@ -1,0 +1,41 @@
+[package]
+name = "greek-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "Greek learning app — Tauri desktop shell over the shared Rust core"
+build = "build.rs"
+
+# Own workspace + lockfile: root Cargo.toml has `exclude = ["desktop"]`.
+
+[lib]
+name = "greek_desktop"
+path = "src/lib.rs"
+
+[[bin]]
+name = "greek-desktop"
+path = "src/main.rs"
+
+[dependencies]
+# The shared Rust core is consumed EXCLUSIVELY through the uniffi-bindings
+# crate as a plain Rust library (rlib target). GreekCore there centralizes
+# alphabet-gate enforcement, daily new-cap enforcement, and all sync
+# exports — desktop must not re-implement or bypass any of it by calling
+# greek-core directly.
+uniffi-bindings = { path = "../../crates/uniffi-bindings" }
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
+# nostr-sdk vs rusqlite: used ONLY by nostr_identity_ensure to derive the
+# existing identity's pubkey hex when one is already stored (GreekCore
+# exposes generation but no pubkey getter). It is a read-only peek at the
+# app DB's user_settings table, mirroring sync_generate_nostr_identity's
+# Keys::parse path; all learning/sync logic still flows through GreekCore.
+nostr-sdk = { version = "0.43", default-features = false, features = ["nip44"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

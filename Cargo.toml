@@ -1,5 +1,8 @@
 [workspace]
 members = ["crates/core", "crates/uniffi-bindings", "crates/cli", "crates/sync-nostr", "crates/sync-iroh", "tools/data-pipeline"]
+# The Tauri desktop app carries its own lockfile/workspace (see
+# desktop/src-tauri/Cargo.toml); keep it out of the mobile/CLI workspace.
+exclude = ["desktop"]
 resolver = "2"
 
 [workspace.dependencies]
