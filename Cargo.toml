@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/core", "crates/uniffi-bindings", "crates/cli", "crates/sync-nostr", "tools/data-pipeline"]
+members = ["crates/core", "crates/uniffi-bindings", "crates/cli", "crates/sync-nostr", "crates/sync-iroh", "tools/data-pipeline"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -10,3 +10,11 @@ rusqlite = { version = "0.31", features = ["bundled", "vtab"] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 thiserror = "2"
+
+# Mobile code-size profile for the shipped cdylib (sync transports pulled in
+# ~26 MB of .text at the default release profile; fat LTO lets the linker
+# prune what UniFFI's exported surface can't reach across crates).
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3

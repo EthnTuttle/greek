@@ -1,0 +1,22 @@
+[package]
+name = "sync-iroh"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+greek-core = { path = "../core" }
+# Versions locked by spikes/iroh (SYNC-WIRE.md §3): ring provider required —
+# aws-lc-rs must not sneak in (no cmake on the Android NDK path).
+iroh = "=1.3.0"
+iroh-docs = "=0.101.0"
+iroh-blobs = "=0.103.1"
+iroh-gossip = "=0.101.0"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+n0-future = "0.2"
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+uuid = { workspace = true }

@@ -31,6 +31,13 @@ import java.nio.charset.CodingErrorAction
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.resume
+import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 // This is a helper for safely working with byte buffers returned from the Rust code.
 // A rust-owned buffer is represented by its capacity, its current length, and a
@@ -772,6 +779,32 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -847,6 +880,32 @@ internal interface UniffiLib : Library {
     ): Byte
     fun uniffi_uniffi_bindings_fn_method_greekcore_submit_review(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`rating`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_device_id(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_export_backup_json(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_generate_nostr_identity(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_import_backup_json(`ptr`: Pointer,`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_iroh_join(`ptr`: Pointer,`ticket`: RustBuffer.ByValue,
+    ): Long
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_iroh_now(`ptr`: Pointer,
+    ): Long
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_iroh_ticket(`ptr`: Pointer,
+    ): Long
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_nostr_config(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_nostr_pull(`ptr`: Pointer,
+    ): Long
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_nostr_push(`ptr`: Pointer,
+    ): Long
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_paired_devices(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_set_nostr_nsec(`ptr`: Pointer,`nsec`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_set_nostr_relays(`ptr`: Pointer,`relaysCsv`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun uniffi_uniffi_bindings_fn_method_greekcore_typed_answer_exact(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`answer`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     fun uniffi_uniffi_bindings_fn_method_greekcore_unlock_chapter(`ptr`: Pointer,`textbook`: RustBuffer.ByValue,`chapter`: Int,uniffi_out_err: UniffiRustCallStatus, 
@@ -1015,6 +1074,32 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_submit_review(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_device_id(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_export_backup_json(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_generate_nostr_identity(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_import_backup_json(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_join(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_now(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_ticket(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_config(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_pull(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_push(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_paired_devices(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_set_nostr_nsec(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_set_nostr_relays(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_typed_answer_exact(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_unlock_chapter(
@@ -1115,6 +1200,45 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_submit_review() != 47365.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_device_id() != 50660.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_export_backup_json() != 18749.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_generate_nostr_identity() != 44829.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_import_backup_json() != 52366.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_join() != 35801.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_now() != 29920.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_ticket() != 52676.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_config() != 62123.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_pull() != 1736.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_push() != 790.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_paired_devices() != 29038.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_set_nostr_nsec() != 1936.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_set_nostr_relays() != 30112.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_typed_answer_exact() != 28089.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1130,6 +1254,46 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
 }
 
 // Async support
+// Async return type handlers
+
+internal const val UNIFFI_RUST_FUTURE_POLL_READY = 0.toByte()
+internal const val UNIFFI_RUST_FUTURE_POLL_MAYBE_READY = 1.toByte()
+
+internal val uniffiContinuationHandleMap = UniffiHandleMap<CancellableContinuation<Byte>>()
+
+// FFI type for Rust future continuations
+internal object uniffiRustFutureContinuationCallbackImpl: UniffiRustFutureContinuationCallback {
+    override fun callback(data: Long, pollResult: Byte) {
+        uniffiContinuationHandleMap.remove(data).resume(pollResult)
+    }
+}
+
+internal suspend fun<T, F, E: kotlin.Exception> uniffiRustCallAsync(
+    rustFuture: Long,
+    pollFunc: (Long, UniffiRustFutureContinuationCallback, Long) -> Unit,
+    completeFunc: (Long, UniffiRustCallStatus) -> F,
+    freeFunc: (Long) -> Unit,
+    liftFunc: (F) -> T,
+    errorHandler: UniffiRustCallStatusErrorHandler<E>
+): T {
+    try {
+        do {
+            val pollResult = suspendCancellableCoroutine<Byte> { continuation ->
+                pollFunc(
+                    rustFuture,
+                    uniffiRustFutureContinuationCallbackImpl,
+                    uniffiContinuationHandleMap.insert(continuation)
+                )
+            }
+        } while (pollResult != UNIFFI_RUST_FUTURE_POLL_READY);
+
+        return liftFunc(
+            uniffiRustCallWithError(errorHandler, { status -> completeFunc(rustFuture, status) })
+        )
+    } finally {
+        freeFunc(rustFuture)
+    }
+}
 
 // Public interface members begin here.
 
@@ -1643,6 +1807,85 @@ public interface GreekCoreInterface {
     fun `submitReview`(`cardId`: kotlin.String, `rating`: kotlin.UByte): kotlin.Boolean
     
     /**
+     * This device's stable sync id (bootstrapped once into the database).
+     */
+    fun `syncDeviceId`(): kotlin.String
+    
+    /**
+     * Full backup: a complete v1 SyncBatch (`v`, all events, all settings)
+     * as JSON — the "export backup" / paired-file payload.
+     */
+    fun `syncExportBackupJson`(): kotlin.String
+    
+    /**
+     * Generate a fresh nostr identity and store it; returns the public key
+     * (hex) for display. Any previous identity is REPLACED — old batches
+     * encrypted to it become unreadable, so the UI must confirm first.
+     */
+    fun `syncGenerateNostrIdentity`(): kotlin.String
+    
+    /**
+     * Import a backup produced by `sync_export_backup_json`. STRICT: only
+     * wire version v==1 is accepted. Applies review events (uuid-dedup)
+     * and settings (HLC-LWW), then folds memory state.
+     */
+    fun `syncImportBackupJson`(`json`: kotlin.String): SyncStatsView
+    
+    /**
+     * Join an existing notebook from a scanned ticket (raw string or the
+     * `greeksync://ticket/…` payload). Devices seen via the doc are recorded
+     * in the paired-device registry on the next `sync_iroh_now`.
+     */
+    suspend fun `syncIrohJoin`(`ticket`: kotlin.String)
+    
+    /**
+     * One full sync round over iroh: push the local delta, sync with known
+     * peers (tolerates everyone being offline), pull every doc entry back,
+     * and merge (reviews uuid-dedup, settings HLC-LWW, then the FSRS fold).
+     */
+    suspend fun `syncIrohNow`(): SyncStatsView
+    
+    /**
+     * Share payload for pairing a new device (render into a QR code).
+     * Contains the write-capable namespace secret: it is a credential —
+     * never send it over a network channel.
+     */
+    suspend fun `syncIrohTicket`(): kotlin.String
+    
+    /**
+     * Snapshot of the nostr spool config for the Settings screen.
+     */
+    fun `syncNostrConfig`(): NostrConfigView
+    
+    /**
+     * Pull all batches after the pull cursor from the nostr relays, apply
+     * them, and advance the (device-local) cursor.
+     */
+    suspend fun `syncNostrPull`(): SyncStatsView
+    
+    /**
+     * Push all local events/settings since the last push cursor to the
+     * configured nostr relays, then advance the (device-local) cursor.
+     */
+    suspend fun `syncNostrPush`(): SyncStatsView
+    
+    /**
+     * All paired devices (from iroh sync rounds), most recent first.
+     */
+    fun `syncPairedDevices`(): List<PairedDeviceView>
+    
+    /**
+     * Import a nostr identity (hex or `nsec1…` bech32); validated before
+     * storing.
+     */
+    fun `syncSetNostrNsec`(`nsec`: kotlin.String)
+    
+    /**
+     * Set the relay list (comma-separated `wss://…` URLs).
+     */
+    fun `syncSetNostrRelays`(`relaysCsv`: kotlin.String)
+    
+    /**
      * Strict typed-answer check: true only on an Exact grade (accents must
      * match). Unknown card -> false.
      */
@@ -2090,6 +2333,261 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     )
     }
+    
+
+    
+    /**
+     * This device's stable sync id (bootstrapped once into the database).
+     */override fun `syncDeviceId`(): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_device_id(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Full backup: a complete v1 SyncBatch (`v`, all events, all settings)
+     * as JSON — the "export backup" / paired-file payload.
+     */override fun `syncExportBackupJson`(): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_export_backup_json(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Generate a fresh nostr identity and store it; returns the public key
+     * (hex) for display. Any previous identity is REPLACED — old batches
+     * encrypted to it become unreadable, so the UI must confirm first.
+     */override fun `syncGenerateNostrIdentity`(): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_generate_nostr_identity(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Import a backup produced by `sync_export_backup_json`. STRICT: only
+     * wire version v==1 is accepted. Applies review events (uuid-dedup)
+     * and settings (HLC-LWW), then folds memory state.
+     */
+    @Throws(GreekException::class)override fun `syncImportBackupJson`(`json`: kotlin.String): SyncStatsView {
+            return FfiConverterTypeSyncStatsView.lift(
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_import_backup_json(
+        it, FfiConverterString.lower(`json`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Join an existing notebook from a scanned ticket (raw string or the
+     * `greeksync://ticket/…` payload). Devices seen via the doc are recorded
+     * in the paired-device registry on the next `sync_iroh_now`.
+     */
+    @Throws(GreekException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `syncIrohJoin`(`ticket`: kotlin.String) {
+        return uniffiRustCallAsync(
+        callWithPointer { thisPtr ->
+            UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_iroh_join(
+                thisPtr,
+                FfiConverterString.lower(`ticket`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        
+        // Error FFI converter
+        GreekException.ErrorHandler,
+    )
+    }
+
+    
+    /**
+     * One full sync round over iroh: push the local delta, sync with known
+     * peers (tolerates everyone being offline), pull every doc entry back,
+     * and merge (reviews uuid-dedup, settings HLC-LWW, then the FSRS fold).
+     */
+    @Throws(GreekException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `syncIrohNow`() : SyncStatsView {
+        return uniffiRustCallAsync(
+        callWithPointer { thisPtr ->
+            UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_iroh_now(
+                thisPtr,
+                
+            )
+        },
+        { future, callback, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_poll_rust_buffer(future, callback, continuation) },
+        { future, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_complete_rust_buffer(future, continuation) },
+        { future -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_free_rust_buffer(future) },
+        // lift function
+        { FfiConverterTypeSyncStatsView.lift(it) },
+        // Error FFI converter
+        GreekException.ErrorHandler,
+    )
+    }
+
+    
+    /**
+     * Share payload for pairing a new device (render into a QR code).
+     * Contains the write-capable namespace secret: it is a credential —
+     * never send it over a network channel.
+     */
+    @Throws(GreekException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `syncIrohTicket`() : kotlin.String {
+        return uniffiRustCallAsync(
+        callWithPointer { thisPtr ->
+            UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_iroh_ticket(
+                thisPtr,
+                
+            )
+        },
+        { future, callback, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_poll_rust_buffer(future, callback, continuation) },
+        { future, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_complete_rust_buffer(future, continuation) },
+        { future -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_free_rust_buffer(future) },
+        // lift function
+        { FfiConverterString.lift(it) },
+        // Error FFI converter
+        GreekException.ErrorHandler,
+    )
+    }
+
+    
+    /**
+     * Snapshot of the nostr spool config for the Settings screen.
+     */override fun `syncNostrConfig`(): NostrConfigView {
+            return FfiConverterTypeNostrConfigView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_nostr_config(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Pull all batches after the pull cursor from the nostr relays, apply
+     * them, and advance the (device-local) cursor.
+     */
+    @Throws(GreekException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `syncNostrPull`() : SyncStatsView {
+        return uniffiRustCallAsync(
+        callWithPointer { thisPtr ->
+            UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_nostr_pull(
+                thisPtr,
+                
+            )
+        },
+        { future, callback, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_poll_rust_buffer(future, callback, continuation) },
+        { future, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_complete_rust_buffer(future, continuation) },
+        { future -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_free_rust_buffer(future) },
+        // lift function
+        { FfiConverterTypeSyncStatsView.lift(it) },
+        // Error FFI converter
+        GreekException.ErrorHandler,
+    )
+    }
+
+    
+    /**
+     * Push all local events/settings since the last push cursor to the
+     * configured nostr relays, then advance the (device-local) cursor.
+     */
+    @Throws(GreekException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `syncNostrPush`() : SyncStatsView {
+        return uniffiRustCallAsync(
+        callWithPointer { thisPtr ->
+            UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_nostr_push(
+                thisPtr,
+                
+            )
+        },
+        { future, callback, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_poll_rust_buffer(future, callback, continuation) },
+        { future, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_complete_rust_buffer(future, continuation) },
+        { future -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_free_rust_buffer(future) },
+        // lift function
+        { FfiConverterTypeSyncStatsView.lift(it) },
+        // Error FFI converter
+        GreekException.ErrorHandler,
+    )
+    }
+
+    
+    /**
+     * All paired devices (from iroh sync rounds), most recent first.
+     */override fun `syncPairedDevices`(): List<PairedDeviceView> {
+            return FfiConverterSequenceTypePairedDeviceView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_paired_devices(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Import a nostr identity (hex or `nsec1…` bech32); validated before
+     * storing.
+     */
+    @Throws(GreekException::class)override fun `syncSetNostrNsec`(`nsec`: kotlin.String)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_set_nostr_nsec(
+        it, FfiConverterString.lower(`nsec`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Set the relay list (comma-separated `wss://…` URLs).
+     */override fun `syncSetNostrRelays`(`relaysCsv`: kotlin.String)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_set_nostr_relays(
+        it, FfiConverterString.lower(`relaysCsv`),_status)
+}
+    }
+    
     
 
     
@@ -2601,6 +3099,84 @@ public object FfiConverterTypeMcqView: FfiConverterRustBuffer<McqView> {
 
 
 
+/**
+ * Nostr spool configuration snapshot for the Settings screen.
+ */
+data class NostrConfigView (
+    var `relaysCsv`: kotlin.String, 
+    var `hasIdentity`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeNostrConfigView: FfiConverterRustBuffer<NostrConfigView> {
+    override fun read(buf: ByteBuffer): NostrConfigView {
+        return NostrConfigView(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: NostrConfigView) = (
+            FfiConverterString.allocationSize(value.`relaysCsv`) +
+            FfiConverterBoolean.allocationSize(value.`hasIdentity`)
+    )
+
+    override fun write(value: NostrConfigView, buf: ByteBuffer) {
+            FfiConverterString.write(value.`relaysCsv`, buf)
+            FfiConverterBoolean.write(value.`hasIdentity`, buf)
+    }
+}
+
+
+
+/**
+ * One entry of the paired-device registry (`sync_devices` table).
+ */
+data class PairedDeviceView (
+    var `deviceId`: kotlin.String, 
+    var `label`: kotlin.String, 
+    var `pairedAt`: kotlin.String, 
+    var `lastSyncHlc`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePairedDeviceView: FfiConverterRustBuffer<PairedDeviceView> {
+    override fun read(buf: ByteBuffer): PairedDeviceView {
+        return PairedDeviceView(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PairedDeviceView) = (
+            FfiConverterString.allocationSize(value.`deviceId`) +
+            FfiConverterString.allocationSize(value.`label`) +
+            FfiConverterString.allocationSize(value.`pairedAt`) +
+            FfiConverterString.allocationSize(value.`lastSyncHlc`)
+    )
+
+    override fun write(value: PairedDeviceView, buf: ByteBuffer) {
+            FfiConverterString.write(value.`deviceId`, buf)
+            FfiConverterString.write(value.`label`, buf)
+            FfiConverterString.write(value.`pairedAt`, buf)
+            FfiConverterString.write(value.`lastSyncHlc`, buf)
+    }
+}
+
+
+
 data class PracticeStatsView (
     var `total`: kotlin.UInt, 
     var `correct`: kotlin.UInt
@@ -2713,6 +3289,45 @@ public object FfiConverterTypeSearchResultView: FfiConverterRustBuffer<SearchRes
 
 
 
+/**
+ * Stats returned by every sync operation.
+ */
+data class SyncStatsView (
+    var `reviewsSent`: kotlin.UInt, 
+    var `reviewsReceived`: kotlin.UInt, 
+    var `settingsApplied`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSyncStatsView: FfiConverterRustBuffer<SyncStatsView> {
+    override fun read(buf: ByteBuffer): SyncStatsView {
+        return SyncStatsView(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SyncStatsView) = (
+            FfiConverterUInt.allocationSize(value.`reviewsSent`) +
+            FfiConverterUInt.allocationSize(value.`reviewsReceived`) +
+            FfiConverterUInt.allocationSize(value.`settingsApplied`)
+    )
+
+    override fun write(value: SyncStatsView, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`reviewsSent`, buf)
+            FfiConverterUInt.write(value.`reviewsReceived`, buf)
+            FfiConverterUInt.write(value.`settingsApplied`, buf)
+    }
+}
+
+
+
 data class TextSectionView (
     var `id`: kotlin.String, 
     var `title`: kotlin.String, 
@@ -2809,6 +3424,14 @@ sealed class GreekException: kotlin.Exception() {
             get() = "msg=${ `msg` }"
     }
     
+    class Sync(
+        
+        val v1: kotlin.String
+        ) : GreekException() {
+        override val message
+            get() = "v1=${ v1 }"
+    }
+    
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<GreekException> {
         override fun lift(error_buf: RustBuffer.ByValue): GreekException = FfiConverterTypeGreekError.lift(error_buf)
@@ -2828,6 +3451,9 @@ public object FfiConverterTypeGreekError : FfiConverterRustBuffer<GreekException
             1 -> GreekException.Database(
                 FfiConverterString.read(buf),
                 )
+            2 -> GreekException.Sync(
+                FfiConverterString.read(buf),
+                )
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
     }
@@ -2839,6 +3465,11 @@ public object FfiConverterTypeGreekError : FfiConverterRustBuffer<GreekException
                 4UL
                 + FfiConverterString.allocationSize(value.`msg`)
             )
+            is GreekException.Sync -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.v1)
+            )
         }
     }
 
@@ -2847,6 +3478,11 @@ public object FfiConverterTypeGreekError : FfiConverterRustBuffer<GreekException
             is GreekException.Database -> {
                 buf.putInt(1)
                 FfiConverterString.write(value.`msg`, buf)
+                Unit
+            }
+            is GreekException.Sync -> {
+                buf.putInt(2)
+                FfiConverterString.write(value.v1, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -3148,6 +3784,34 @@ public object FfiConverterSequenceTypeMcqView: FfiConverterRustBuffer<List<McqVi
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypePairedDeviceView: FfiConverterRustBuffer<List<PairedDeviceView>> {
+    override fun read(buf: ByteBuffer): List<PairedDeviceView> {
+        val len = buf.getInt()
+        return List<PairedDeviceView>(len) {
+            FfiConverterTypePairedDeviceView.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PairedDeviceView>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePairedDeviceView.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PairedDeviceView>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePairedDeviceView.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeSearchResultView: FfiConverterRustBuffer<List<SearchResultView>> {
     override fun read(buf: ByteBuffer): List<SearchResultView> {
         val len = buf.getInt()
@@ -3224,7 +3888,15 @@ public object FfiConverterSequenceTypeTokenView: FfiConverterRustBuffer<List<Tok
             FfiConverterTypeTokenView.write(it, buf)
         }
     }
-} fun `parsePostag`(`postag`: kotlin.String): kotlin.String {
+}
+
+
+
+
+
+
+
+ fun `parsePostag`(`postag`: kotlin.String): kotlin.String {
             return FfiConverterString.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_func_parse_postag(

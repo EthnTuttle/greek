@@ -10,15 +10,20 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 name = "uniffi_bindings"
 
 [dependencies]
-uniffi = { version = "0.28", features = ["cli"] }
+uniffi = { version = "0.28", features = ["cli", "tokio"] }
 greek-core = { path = "../core" }
+sync-nostr = { path = "../sync-nostr" }
+sync-iroh = { path = "../sync-iroh" }
+nostr-sdk = { version = "0.43", default-features = false, features = ["nip44"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 rusqlite = { workspace = true }
 anyhow = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 uuid = { workspace = true }
+tokio = { workspace = true }
 
 [[bin]]
 name = "uniffi-bindgen"

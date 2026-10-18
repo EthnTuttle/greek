@@ -138,7 +138,8 @@ pub fn hlc_now(db: &Database) -> Hlc {
 
 /// One review event — the portable, mergeable projection of a
 /// `review_logs` row. `timestamp` is RFC3339 UTC as stored by the app.
-#[derive(Debug, Clone, PartialEq)]
+/// Serde shape is frozen by SYNC-WIRE.md §2.1 (shared with transports).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ReviewEvent {
     pub uuid: String,
     pub card_id: String,
@@ -149,6 +150,21 @@ pub struct ReviewEvent {
     pub source: String,
     pub device_id: String,
     pub hlc: String,
+}
+
+/// A sync batch — v1 of the sync wire format (SYNC-WIRE.md §2.1), the
+/// canonical type both transports (nostr spool, iroh-docs) and the
+/// backup export/import path serialize.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SyncBatch {
+    /// Wire format version; must be 1.
+    pub v: u32,
+    pub device_id: String,
+    pub from_hlc: String,
+    pub to_hlc: String,
+    pub reviews: Vec<ReviewEvent>,
+    /// (key, value, hlc) settings triples.
+    pub settings: Vec<(String, String, String)>,
 }
 
 /// All review events strictly after `since_hlc` (None = everything),
@@ -211,9 +227,26 @@ pub fn settings_since(
 /// Merge remote review events: uuid-dedup INSERT (FSRS state is NOT
 /// incrementally updated per event), then one deterministic fold via
 /// [`rebuild_memory_states`]. Returns the number of newly inserted rows.
+///
+/// Events can arrive over untrusted transports (a relay stores ciphertext,
+/// but a compromised peer could inject plaintext): DROP anything that is
+/// not a plausible review — rating must be 1..=4 (FSRS grades), card_id
+/// must match the deck-id charset, timestamps/HLC must parse — instead of
+/// letting garbage poison the fold.
 pub fn apply_review_events(db: &Database, events: &[ReviewEvent]) -> Result<u32> {
     let mut inserted = 0u32;
     for e in events {
+        if !(1..=4).contains(&e.rating)
+            || e.card_id.is_empty()
+            || e.card_id.len() > 128
+            || !e
+                .card_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            || e.hlc.parse::<Hlc>().is_err()
+        {
+            continue; // malformed / foreign-injected event: skip silently
+        }
         let n = db.conn().execute(
             "INSERT INTO review_logs (uuid, card_id, timestamp, rating, elapsed_days, scheduled_days, source, device_id, hlc)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
@@ -787,5 +820,43 @@ mod tests {
                 .unwrap()
         };
         assert_eq!(sources_b, ["flashcard", "practice", "practice"]);
+    }
+
+    // 8. Foreign-injected garbage (a compromised peer writing plaintext events)
+    //    must not poison the log or the fold: bad ratings, hostile card ids,
+    //    unparseable HLCs are dropped; valid events in the same batch merge.
+    #[test]
+    fn test_apply_drops_malformed_events() {
+        let db = Database::open(":memory:", None).unwrap();
+        let hlc = Hlc { ms: 1_760_000_000_000, counter: 0, node: "abcd1234".into() }.to_string();
+        let base = ReviewEvent {
+            uuid: uuid::Uuid::new_v4().to_string(),
+            card_id: "athenaze-i-0001".into(),
+            timestamp: "2025-10-09T12:00:00Z".into(),
+            rating: 3,
+            elapsed_days: 0.0,
+            scheduled_days: 1.0,
+            source: "flashcard".into(),
+            device_id: "deadbeefcafe".into(),
+            hlc: hlc.clone(),
+        };
+        let bad_rating = ReviewEvent { rating: 9, uuid: uuid::Uuid::new_v4().to_string(), ..base.clone() };
+        let bad_zero = ReviewEvent { rating: 0, uuid: uuid::Uuid::new_v4().to_string(), ..base.clone() };
+        let bad_card = ReviewEvent { card_id: "x'; DROP TABLE memory_states;--".into(), uuid: uuid::Uuid::new_v4().to_string(), ..base.clone() };
+        let bad_hlc = ReviewEvent { hlc: "not-an-hlc".into(), uuid: uuid::Uuid::new_v4().to_string(), ..base.clone() };
+        let good = ReviewEvent { uuid: uuid::Uuid::new_v4().to_string(), ..base };
+
+        let inserted = apply_review_events(&db, &[bad_rating, bad_zero, bad_card, bad_hlc, good.clone()]).unwrap();
+        assert_eq!(inserted, 1);
+
+        let uuids: Vec<String> = {
+            let mut s = db.conn().prepare("SELECT uuid FROM review_logs").unwrap();
+            s.query_map([], |r| r.get(0)).unwrap().collect::<std::result::Result<_, _>>().unwrap()
+        };
+        assert_eq!(uuids, vec![good.uuid]);
+
+        // The surviving event still folds into memory_states.
+        let n: i64 = db.conn().query_row("SELECT COUNT(*) FROM memory_states", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 1);
     }
 }

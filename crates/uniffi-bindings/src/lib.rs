@@ -14,6 +14,8 @@ uniffi::setup_scaffolding!();
 pub enum GreekError {
     #[error("database error: {msg}")]
     Database { msg: String },
+    #[error("sync error: {0}")]
+    Sync(String),
 }
 
 impl From<anyhow::Error> for GreekError {
@@ -29,6 +31,12 @@ impl From<rusqlite::Error> for GreekError {
         GreekError::Database {
             msg: e.to_string(),
         }
+    }
+}
+
+impl From<serde_json::Error> for GreekError {
+    fn from(e: serde_json::Error) -> Self {
+        GreekError::Sync(format!("json error: {e}"))
     }
 }
 
@@ -284,6 +292,11 @@ pub struct GreekCore {
     morphology: MorphologyDb,
     search: SearchEngine,
     cards: Vec<Card>,
+    /// Path of the app database; `<dir>/iroh-sync/` holds the iroh store.
+    db_path: String,
+    /// Lazily-opened iroh sync node (never started unless a sync_iroh_*
+    /// method is called, so non-sync users pay nothing).
+    iroh: Mutex<Option<Arc<sync_iroh::SyncIrohTransport>>>,
     /// Index of card id -> position in `cards`, built once at construction
     /// so due-card enrichment is O(1) per card instead of O(n).
     card_index: HashMap<String, usize>,
@@ -317,6 +330,8 @@ impl GreekCore {
             search,
             cards: Vec::new(),
             card_index: HashMap::new(),
+            db_path,
+            iroh: Mutex::new(None),
         }))
     }
 
@@ -340,6 +355,8 @@ impl GreekCore {
             search,
             cards,
             card_index,
+            db_path,
+            iroh: Mutex::new(None),
         }))
     }
 
@@ -789,6 +806,380 @@ impl GreekCore {
         }
 
         Ok(card_id)
+    }
+}
+
+// --- Device sync (DESIGN-device-sync.md §9, SYNC-WIRE.md) ---
+
+/// Stats returned by every sync operation.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SyncStatsView {
+    pub reviews_sent: u32,
+    pub reviews_received: u32,
+    pub settings_applied: u32,
+}
+
+/// One entry of the paired-device registry (`sync_devices` table).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct PairedDeviceView {
+    pub device_id: String,
+    pub label: String,
+    pub paired_at: String,
+    pub last_sync_hlc: String,
+}
+
+/// Nostr spool configuration snapshot for the Settings screen.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct NostrConfigView {
+    pub relays_csv: String,
+    pub has_identity: bool,
+}
+
+/// Default nostr relay seed when the user has not configured any.
+const DEFAULT_NOSTR_RELAYS: &str = "wss://chat.virginiafreedom.tech";
+
+/// Local-only settings helpers. Sync cursors are per-device high-water marks
+/// and must NOT ride settings_sync (LWW across devices with drifting clocks
+/// could rewind a cursor so far that events are skipped forever, or advance
+/// it past unsent local events), so they upsert `user_settings` directly —
+/// mirroring how `hlc_now` persists its own state.
+fn user_setting_get(db: &Database, key: &str) -> Option<String> {
+    db.conn()
+        .query_row(
+            "SELECT value FROM user_settings WHERE key = ?1",
+            [key],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+}
+
+fn user_setting_put_local(db: &Database, key: &str, value: &str) -> Result<(), GreekError> {
+    db.conn().execute(
+        "INSERT INTO user_settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![key, value],
+    )?;
+    Ok(())
+}
+
+/// Build a v1 SyncBatch from local state after `since` (None = everything).
+fn build_batch(
+    db: &Database,
+    since: Option<&str>,
+) -> Result<greek_core::SyncBatch, GreekError> {
+    let device_id = greek_core::device_id(db);
+    let reviews = greek_core::events_since(db, since)?;
+    let settings = greek_core::settings_since(db, since)?;
+    Ok(greek_core::SyncBatch {
+        v: 1,
+        device_id,
+        from_hlc: since.unwrap_or_default().to_string(),
+        to_hlc: greek_core::hlc_now(db).to_string(),
+        reviews,
+        settings,
+    })
+}
+
+/// Parse the stored nostr identity, or explain how to configure one.
+fn nostr_keys(db: &Database) -> Result<nostr_sdk::prelude::Keys, GreekError> {
+    let nsec = user_setting_get(db, "nostr_nsec").ok_or_else(|| {
+        GreekError::Sync(
+            "nostr sync identity not configured; call sync_generate_nostr_identity \
+             or sync_set_nostr_nsec first"
+                .to_string(),
+        )
+    })?;
+    nostr_sdk::prelude::Keys::parse(&nsec)
+        .map_err(|e| GreekError::Sync(format!("stored nostr key is invalid: {e}")))
+}
+
+fn nostr_relays(db: &Database) -> Vec<String> {
+    user_setting_get(db, "nostr_relays")
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_NOSTR_RELAYS.to_string())
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+fn sync_err(e: impl std::fmt::Display) -> GreekError {
+    GreekError::Sync(e.to_string())
+}
+
+#[uniffi::export]
+impl GreekCore {
+    /// This device's stable sync id (bootstrapped once into the database).
+    pub fn sync_device_id(&self) -> String {
+        let db = self.db.lock().unwrap();
+        greek_core::device_id(&db)
+    }
+
+    /// All paired devices (from iroh sync rounds), most recent first.
+    pub fn sync_paired_devices(&self) -> Vec<PairedDeviceView> {
+        let db = self.db.lock().unwrap();
+        db.conn()
+            .prepare(
+                "SELECT device_id, label, paired_at, COALESCE(last_sync_hlc, '')
+                 FROM sync_devices ORDER BY paired_at DESC",
+            )
+            .ok()
+            .and_then(|mut stmt| {
+                stmt.query_map([], |row| {
+                    Ok(PairedDeviceView {
+                        device_id: row.get(0)?,
+                        label: row.get(1)?,
+                        paired_at: row.get(2)?,
+                        last_sync_hlc: row.get(3)?,
+                    })
+                })
+                .ok()
+                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+            })
+            .unwrap_or_default()
+    }
+
+    /// Full backup: a complete v1 SyncBatch (`v`, all events, all settings)
+    /// as JSON — the "export backup" / paired-file payload.
+    pub fn sync_export_backup_json(&self) -> String {
+        let db = self.db.lock().unwrap();
+        build_batch(&db, None)
+            .and_then(|b| serde_json::to_string(&b).map_err(GreekError::from))
+            .unwrap_or_else(|e| format!("{{\"error\":\"{}\"}}", e))
+    }
+
+    /// Import a backup produced by `sync_export_backup_json`. STRICT: only
+    /// wire version v==1 is accepted. Applies review events (uuid-dedup)
+    /// and settings (HLC-LWW), then folds memory state.
+    pub fn sync_import_backup_json(&self, json: String) -> Result<SyncStatsView, GreekError> {
+        let batch: greek_core::SyncBatch =
+            serde_json::from_str(&json).map_err(|e| sync_err(format!("bad backup JSON: {e}")))?;
+        if batch.v != 1 {
+            return Err(GreekError::Sync(format!(
+                "unsupported sync wire version {} (this app speaks v1)",
+                batch.v
+            )));
+        }
+        let db = self.db.lock().unwrap();
+        let reviews_received = greek_core::apply_review_events(&db, &batch.reviews)?;
+        let settings_applied = greek_core::apply_settings(&db, &batch.settings)?;
+        Ok(SyncStatsView {
+            reviews_sent: 0,
+            reviews_received,
+            settings_applied,
+        })
+    }
+
+    /// Snapshot of the nostr spool config for the Settings screen.
+    pub fn sync_nostr_config(&self) -> NostrConfigView {
+        let db = self.db.lock().unwrap();
+        NostrConfigView {
+            relays_csv: user_setting_get(&db, "nostr_relays")
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| DEFAULT_NOSTR_RELAYS.to_string()),
+            has_identity: user_setting_get(&db, "nostr_nsec").is_some(),
+        }
+    }
+
+    /// Set the relay list (comma-separated `wss://…` URLs).
+    pub fn sync_set_nostr_relays(&self, relays_csv: String) {
+        let db = self.db.lock().unwrap();
+        // Propagates via settings sync: the whole wallet of devices shares
+        // one relay config.
+        let _ = greek_core::setting_put(&db, "nostr_relays", relays_csv.trim());
+    }
+
+    /// Generate a fresh nostr identity and store it; returns the public key
+    /// (hex) for display. Any previous identity is REPLACED — old batches
+    /// encrypted to it become unreadable, so the UI must confirm first.
+    pub fn sync_generate_nostr_identity(&self) -> String {
+        let keys = nostr_sdk::prelude::Keys::generate();
+        let nsec_hex = keys.secret_key().to_secret_hex();
+        let db = self.db.lock().unwrap();
+        // Secrets at rest: stored in sqlite for v1. Android Keystore-backed
+        // storage is a rollout-gate item — see ROLLOUT.md.
+        let _ = greek_core::setting_put(&db, "nostr_nsec", &nsec_hex);
+        keys.public_key().to_hex()
+    }
+
+    /// Import a nostr identity (hex or `nsec1…` bech32); validated before
+    /// storing.
+    pub fn sync_set_nostr_nsec(&self, nsec: String) -> Result<(), GreekError> {
+        let keys = nostr_sdk::prelude::Keys::parse(nsec.trim())
+            .map_err(|e| sync_err(format!("not a valid nostr secret key (hex or nsec1…): {e}")))?;
+        let db = self.db.lock().unwrap();
+        // Secrets at rest: sqlite v1 — see sync_generate_nostr_identity / ROLLOUT.md.
+        greek_core::setting_put(&db, "nostr_nsec", &keys.secret_key().to_secret_hex())?;
+        Ok(())
+    }
+}
+
+/// Internal iroh lazy-open — deliberately OUTSIDE the exported impl blocks
+/// (uniffi tries to export every method of an annotated impl, and the
+/// transport type is not a uniffi type).
+impl GreekCore {
+    async fn open_iroh(&self) -> Result<Arc<sync_iroh::SyncIrohTransport>, GreekError> {
+        {
+            let g = self.iroh.lock().unwrap();
+            if let Some(t) = &*g {
+                return Ok(t.clone());
+            }
+        }
+        let dir = std::path::Path::new(&self.db_path)
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join("iroh-sync");
+        let t = Arc::new(
+            sync_iroh::SyncIrohTransport::open(&dir)
+                .await
+                .map_err(|e| sync_err(format!("iroh sync open failed: {e:#}")))?,
+        );
+        *self.iroh.lock().unwrap() = Some(t.clone());
+        Ok(t)
+    }
+}
+
+/// Async sync operations (nostr spool + iroh). Futures run on uniffi's
+/// tokio async runtime (`async_compat` schedules a runtime on first poll).
+#[uniffi::export(async_runtime = "tokio")]
+impl GreekCore {
+    /// Push all local events/settings since the last push cursor to the
+    /// configured nostr relays, then advance the (device-local) cursor.
+    pub async fn sync_nostr_push(&self) -> Result<SyncStatsView, GreekError> {
+        let (keys, relays, batch) = {
+            let db = self.db.lock().unwrap();
+            let keys = nostr_keys(&db)?;
+            let cursor = user_setting_get(&db, "nostr_last_push_hlc");
+            let batch = build_batch(&db, cursor.as_deref())?;
+            (keys, nostr_relays(&db), batch)
+        };
+        let to_hlc = batch.to_hlc.clone();
+        if batch.reviews.is_empty() && batch.settings.is_empty() {
+            // Nothing to spool: don't burn a relay publish (and rate limits
+            // on public relays) on an empty checkpoint round. Cursor stays.
+            return Ok(SyncStatsView {
+                reviews_sent: 0,
+                reviews_received: 0,
+                settings_applied: 0,
+            });
+        }
+        let reviews_sent = batch.reviews.len() as u32;
+        let relay_refs: Vec<&str> = relays.iter().map(|s| s.as_str()).collect();
+        let transport = sync_nostr::NostrSpoolTransport::connect(keys, &relay_refs)
+            .await
+            .map_err(sync_err)?;
+        transport.push(&batch).await.map_err(sync_err)?;
+        let db = self.db.lock().unwrap();
+        user_setting_put_local(&db, "nostr_last_push_hlc", &to_hlc)?;
+        Ok(SyncStatsView {
+            reviews_sent,
+            reviews_received: 0,
+            settings_applied: 0,
+        })
+    }
+
+    /// Pull all batches after the pull cursor from the nostr relays, apply
+    /// them, and advance the (device-local) cursor.
+    pub async fn sync_nostr_pull(&self) -> Result<SyncStatsView, GreekError> {
+        let (keys, relays, cursor) = {
+            let db = self.db.lock().unwrap();
+            (
+                nostr_keys(&db)?,
+                nostr_relays(&db),
+                user_setting_get(&db, "nostr_last_pull_hlc"),
+            )
+        };
+        let relay_refs: Vec<&str> = relays.iter().map(|s| s.as_str()).collect();
+        let transport = sync_nostr::NostrSpoolTransport::connect(keys, &relay_refs)
+            .await
+            .map_err(sync_err)?;
+        let batches = transport
+            .fetch_since(cursor.as_deref())
+            .await
+            .map_err(sync_err)?;
+        let mut stats = SyncStatsView {
+            reviews_sent: 0,
+            reviews_received: 0,
+            settings_applied: 0,
+        };
+        let db = self.db.lock().unwrap();
+        let mut max_hlc: Option<String> = None;
+        for batch in &batches {
+            stats.reviews_received += greek_core::apply_review_events(&db, &batch.reviews)?;
+            stats.settings_applied += greek_core::apply_settings(&db, &batch.settings)?;
+            if max_hlc.as_deref() < Some(batch.to_hlc.as_str()) {
+                max_hlc = Some(batch.to_hlc.clone());
+            }
+        }
+        if let Some(h) = max_hlc {
+            user_setting_put_local(&db, "nostr_last_pull_hlc", &h)?;
+        }
+        Ok(stats)
+    }
+
+    /// Share payload for pairing a new device (render into a QR code).
+    /// Contains the write-capable namespace secret: it is a credential —
+    /// never send it over a network channel.
+    pub async fn sync_iroh_ticket(&self) -> Result<String, GreekError> {
+        let t = self.open_iroh().await?;
+        let ticket = t.create_or_get_ticket().await.map_err(sync_err)?;
+        Ok(format!("{}{}", sync_iroh::TICKET_SCHEME_PREFIX, ticket))
+    }
+
+    /// Join an existing notebook from a scanned ticket (raw string or the
+    /// `greeksync://ticket/…` payload). Devices seen via the doc are recorded
+    /// in the paired-device registry on the next `sync_iroh_now`.
+    pub async fn sync_iroh_join(&self, ticket: String) -> Result<(), GreekError> {
+        let t = self.open_iroh().await?;
+        t.join_from_ticket(&ticket).await.map_err(sync_err)
+    }
+
+    /// One full sync round over iroh: push the local delta, sync with known
+    /// peers (tolerates everyone being offline), pull every doc entry back,
+    /// and merge (reviews uuid-dedup, settings HLC-LWW, then the FSRS fold).
+    pub async fn sync_iroh_now(&self) -> Result<SyncStatsView, GreekError> {
+        let t = self.open_iroh().await?;
+        let (reviews, settings, new_cursor) = {
+            let db = self.db.lock().unwrap();
+            let cursor = user_setting_get(&db, "iroh_last_push_hlc");
+            let reviews = greek_core::events_since(&db, cursor.as_deref())?;
+            let settings = greek_core::settings_since(&db, cursor.as_deref())?;
+            let new_cursor = greek_core::hlc_now(&db).to_string();
+            (reviews, settings, new_cursor)
+        };
+        let reviews_sent = reviews.len() as u32;
+        t.push_local(&reviews, &settings).await.map_err(sync_err)?;
+        {
+            let db = self.db.lock().unwrap();
+            user_setting_put_local(&db, "iroh_last_push_hlc", &new_cursor)?;
+        }
+        t.sync_once().await.map_err(sync_err)?;
+        let (remote_reviews, remote_settings) = t.pull_remote().await.map_err(sync_err)?;
+        let db = self.db.lock().unwrap();
+        let reviews_received = greek_core::apply_review_events(&db, &remote_reviews)?;
+        let settings_applied = greek_core::apply_settings(&db, &remote_settings)?;
+        // Any device id appearing in the doc that isn't ours is a paired
+        // peer; record it, and remember the newest hlc we saw from it.
+        let local_device = greek_core::device_id(&db);
+        let mut seen: HashMap<String, String> = HashMap::new();
+        for ev in &remote_reviews {
+            if ev.device_id != local_device {
+                let entry = seen.entry(ev.device_id.clone()).or_default();
+                if ev.hlc > *entry {
+                    *entry = ev.hlc.clone();
+                }
+            }
+        }
+        for (dev, max_hlc) in seen {
+            greek_core::pair_device(&db, &dev, "")?;
+            greek_core::note_last_sync(&db, &dev, &max_hlc)?;
+        }
+        Ok(SyncStatsView {
+            reviews_sent,
+            reviews_received,
+            settings_applied,
+        })
     }
 }
 

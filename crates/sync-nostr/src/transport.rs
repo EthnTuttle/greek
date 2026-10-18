@@ -16,11 +16,8 @@ pub const SEND_TIMEOUT: Duration = Duration::from_secs(10);
 /// Timeout for REQ -> EOSE collection.
 pub const FETCH_TIMEOUT: Duration = Duration::from_secs(8);
 
-/// SYNC-CORE-MIRROR: trait shape canonicalized to greek_core::sync at integration
-// pub trait SyncTransport {
-//     async fn push(&self, batch: &SyncBatch) -> Result<()>;
-//     async fn fetch_since(&self, since_hlc: Option<&str>) -> Result<Vec<SyncBatch>>;
-// }
+// SyncBatch / ReviewEvent are re-exported from greek_core::sync (formerly a
+// SYNC-CORE-MIRROR local copy; canonicalized at wave 6b).
 
 pub struct NostrSpoolTransport {
     pub client: Client,

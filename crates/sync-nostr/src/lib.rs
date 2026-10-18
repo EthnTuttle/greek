@@ -11,36 +11,9 @@ pub mod transport;
 pub use codec::{chunk_batch, reassemble_chunks, CHUNK_SIZE};
 pub use transport::NostrSpoolTransport;
 
-// SYNC-CORE-MIRROR: canonicalized to greek_core::sync at integration
-use serde::{Deserialize, Serialize};
-
-/// A single spaced-repetition review event.
-// SYNC-CORE-MIRROR: canonicalized to greek_core::sync at integration
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ReviewEvent {
-    pub uuid: String,
-    pub card_id: String,
-    pub timestamp: String,
-    pub rating: u32,
-    pub elapsed_days: f64,
-    pub scheduled_days: f64,
-    pub source: String,
-    pub device_id: String,
-    pub hlc: String,
-}
-
-/// A sync batch: v1 of the sync wire format.
-// SYNC-CORE-MIRROR: canonicalized to greek_core::sync at integration
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SyncBatch {
-    pub v: u32, // 1
-    pub device_id: String,
-    pub from_hlc: String,
-    pub to_hlc: String,
-    pub reviews: Vec<ReviewEvent>,
-    /// (key, value, hlc) settings triples.
-    pub settings: Vec<(String, String, String)>,
-}
+// Canonical wire types live in greek-core (SYNC-WIRE.md §2.1); re-exported
+// here so existing sync-nostr call sites keep working unchanged.
+pub use greek_core::sync::{ReviewEvent, SyncBatch};
 
 /// Errors surfaced by the nostr spool transport.
 #[derive(Debug, thiserror::Error)]
