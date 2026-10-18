@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -8,12 +10,22 @@ android {
     namespace = "com.greekapp"
     compileSdk = 35
 
+    // Release signing (zapstore/GitHub distribution): the keystore lives
+    // outside git (see android/keystore/ + keystore.properties, both
+    // gitignored). `gradlew assembleRelease` signs when the properties file
+    // exists on this machine, and produces an unsigned APK otherwise.
+    val keystoreProperties = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
+
     defaultConfig {
         applicationId = "com.greekapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -21,8 +33,18 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = keystoreProperties.getProperty("storeFile")?.let { rootProject.file(it) }
+            storePassword = keystoreProperties.getProperty("storePassword")
+            keyAlias = keystoreProperties.getProperty("keyAlias")
+            keyPassword = keystoreProperties.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseKey) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

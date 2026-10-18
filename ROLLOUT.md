@@ -7,7 +7,7 @@
 
 ## 1. TL;DR
 
-**"Launch" means:** (1) signed public APK on GitHub Releases (primary channel), (2) F-Droid inclusion later (real effort — see §2), (3) Play Store closed-track first, open only after sync-beta stabilizes. Current APK is **debug-signed** (verified: `CN=Android Debug`), `versionCode 1 / versionName "1.0"`, ~90 MB with the 113 MB morphology asset, device-verified on Pixel 6 / Android 17. No CI exists (`.github/` absent at HEAD — spec only in §4 P2).
+**"Launch" means:** (1) signed universal APK on **zapstore** (nostr-native, primary — tooling `zsp`, see §2.4 + ZAPSTORE.md) with GitHub Releases as asset host, (2) F-Droid inclusion later (real effort — see §2), (3) Play Store closed-track first, open only after sync-beta stabilizes. Current APK is **release-signed** (own key, cert SHA-256 `8802681e…`, gitignored `android/keystore/`), `versionCode 2 / versionName "0.1.0"`, ~92 MB release with the 113 MB morphology asset, device-verified on Pixel 6 / Android 17. No CI exists (`.github/` absent at HEAD — spec only in §4 P2).
 
 Phase spine: **P0 internal soak → P1 private beta (3–5 users) → P2 public beta (GitHub tags + community posts) → P3 stable (Play open).** Every phase has exit criteria and a rollback lever (§4). Two security gates (**nsec secret storage**, **DocTicket/relay policy**) are MUST-FIX before P2 public (§5).
 
@@ -16,7 +16,8 @@ Phase spine: **P0 internal soak → P1 private beta (3–5 users) → P2 public 
 | Channel | Status today | Gating work | Verdict |
 |---|---|---|---|
 | Direct sideload (adb) | ✅ works now (debug-signed APK) | none | Internal/P0 only |
-| GitHub Releases (signed APK) | ❌ no release signing key, no CI | Key gen + `signingConfigs` task below; tag-push automation (§7) | **Primary public channel** — start P1 |
+| **Zapstore (nostr app store)** | ⏳ **channeled & ready**: `zapstore.yaml` committed at repo root (pubkey field awaits owner's npub), `zsp` 0.4.17 validated end-to-end offline against a real APK (events parse version/package/cert correctly) | Owner fills `pubkey:` in zapstore.yaml + pushes to GitHub; runs one `zsp publish` with the chosen nostr key (see ZAPSTORE.md) | **Primary public channel** — changelog §2.4 |
+| GitHub Releases (signed APK) | ✅ release signing key generated (`android/keystore/`, gitignored), `signingConfigs` wired; universal `app-release.apk` builds signed (cert SHA-256 `8802681e…`) | Tag-push CI (§7) optional; manual attach fine | Asset host for zapstore + fallback downloads — P1 |
 | F-Droid | ❌ not submitted | Metadata + reproducible-build proof; blocked on Rust/NDK pinning | **Defer until after P3** |
 | Play Store | ❌ no account, assets half-ready | Feature graphic + screenshots + privacy URL + data-safety (drafts below); 20-tester closed-track rule | **After ≥2 public APK releases** |
 
@@ -53,7 +54,7 @@ keytool -genkeypair -v -keystore greek-release.jks -alias greek \
 
 Verify every release: `apksigner verify --print-certs app-release.apk` — cert DN must **not** be `Android Debug` (debug APK verified 2026-10-18 to carry exactly that DN).
 
-VersionCode rule: **monotonic, never reused, current max = 1** (gradle line 15). First public beta = `versionCode 2, versionName 0.9.0` (see §3).
+VersionCode rule: **monotonic, never reused, current max = 2** (`versionName "0.1.0"` — the zapstore-first build). Next beta = `versionCode 3, versionName 0.2.0`.
 
 ### 2.2 F-Droid audit (deferred)
 
@@ -74,6 +75,12 @@ VersionCode rule: **monotonic, never reused, current max = 1** (gradle line 15).
 | $25 + identity disclosure | — | decision §9 |
 
 **Data-safety form (draft answers):** *Collects or shares user data?* — While the build has no `INTERNET` permission (verified: manifest declares only `POST_NOTIFICATIONS`), the honest current answer is **"No data is collected or shared"** for the no-sync build. Once sync ships: *App activity → other actions (review history, settings)* — Collected: **Yes**; Shared: **No**; Optional: **Yes** (sync disabled by default); Purpose: App functionality; Encrypted in transit: **Yes** (NIP-44 E2E + TLS); User can request deletion: **Yes** (local; relay events are user-owned ciphertext, deletable via NIP-09 on user-configured relays). *Device or other IDs*: the random `device_id` UUID — same answers, disclose. Keep both versions saved for re-submission.
+
+Update 2026-10-18: `INTERNET` + `ACCESS_NETWORK_STATE` are now declared (sync transports need sockets — caught pre-launch by this document's audit); the "sync ships" column above is the live one.
+
+### 2.4 Zapstore (nostr-native; chosen primary)
+
+Full runbook in [ZAPSTORE.md](ZAPSTORE.md). Key facts (verified 2026-10-18): publishing tool is `zsp` 0.4.17 (the 2025-era Dart `zapstore-cli` flow is dead); events = kind 32267 app / 30063 release / 3063 asset; zapstore indexes from its own relay (`wss://relay.zapstore.dev`), and whitelists the publishing npub by fetching the committed `zapstore.yaml` from the GitHub repo — **order matters: push yaml to GitHub first, then run one command** (`SIGN_WITH=<key> zsp publish -y zapstore.yaml`). APK cert = update identity (back up `android/keystore/` offline — losing it means users must reinstall); nostr key = listing ownership, linked once via `zsp identity --link-key`. APK/media hosting via Blossom (`cdn.zapstore.dev`; `BLOSSOM_URL` self-host escape hatch). A validated `zsp` binary is staged at `/tmp/opencode/zapstore-setup/zsp-0.4.17-linux-amd64` — move it onto `$PATH` and delete the copy after first publish.
 
 ## 3. Versioning policy
 

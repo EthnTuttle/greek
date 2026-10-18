@@ -56,3 +56,7 @@ captures/
 # Native .so files (will be added later from Rust build)
 # For now, keep the jniLibs directory structure but ignore .so files
 *.so
+
+# Release signing secrets (never commit)
+keystore.properties
+keystore/

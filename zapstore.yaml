@@ -1,0 +1,101 @@
+# ─── zapstore.yaml — Greek (com.greekapp) ────────────────────────────────────
+# Zapstore / ZSP publishing config. Lives at the repo ROOT and must be COMMITTED:
+# the Zapstore relay fetches this file from GitHub to whitelist the pubkey below
+# (repository verification — see https://zapstore.dev/docs/trust-model).
+#
+# Sources verified 2026-10-18:
+#   https://zapstore.dev/docs/publish
+#   https://github.com/zapstore/zsp (v0.4.17 README + binary)
+
+# ─── WHITELISTING ────────────────────────────────────────────────────────────
+# npub that will sign the publish events (owner's existing nostr key is fine).
+# ⚠ REQUIRED for first publish — the relay matches this against SIGN_WITH.
+pubkey: npub1FILL_ME_IN_REPLACE_WITH_OWNER_NPUB_PUBLIC_KEY_ONLY
+
+# ─── SOURCE CONFIGURATION ────────────────────────────────────────────────────
+# Public source mirror on GitHub (also where the relay looks for this file).
+# NOTE: zapstore.yaml must exist on github.com/EthnTuttle/greek's default branch
+# before first publish, or the relay cannot whitelist the pubkey.
+repository: https://github.com/EthnTuttle/greek
+
+# APK source: local universal release build (arm64-v8a + x86_64).
+# Build with: cd android && ./gradlew assembleRelease
+release_source: ./android/app/build/outputs/apk/release/app-release.apk
+
+# ALTERNATIVE (once a GitHub Release exists with the universal APK attached):
+# delete `release_source` above and zsp auto-fetches from
+# https://github.com/EthnTuttle/greek/releases/latest, auto-selecting the best
+# APK. If several APKs are attached, e.g.:
+#   match: ".*universal.*\\.apk$"
+
+# ─── APP METADATA ────────────────────────────────────────────────────────────
+# display name — project is simply "Greek" per docs/index.html + app label.
+# (Alternative considered: "Attic Greek"; rejected, not the project's own name.)
+name: Greek
+
+# ≤80 chars
+summary: Learn Ancient Greek with honest FSRS spaced repetition, offline-first
+
+description: |
+  Read Ancient Greek, not flashcard gimmicks.
+
+  An offline-first app for learning Ancient Greek — a Rust core, a real FSRS
+  scheduler, an alphabet-first curriculum that proves you can read the script
+  before feeding you vocabulary, and optional end-to-end-encrypted sync you
+  control.
+
+  **Honest spaced repetition.** Real FSRS at 90% desired retention: full
+  per-rating next-state computation, interval previews on every rating button,
+  sub-day learning steps so a missed card comes back the same session — and a
+  cap of 10 new cards a day so you never drown.
+
+  **Alphabet gate.** Vocabulary stays locked until you can actually read the
+  letters: a 43-card letters track across 5 chapters, then a 24-question
+  check, pass at 22 or more. Already know the script? The check is your
+  3-minute placement test.
+
+  **Measured, not vibes.** Multiple-choice practice questions, not
+  self-rating. A tap-to-parse reader with Morpheus morphology and curated
+  glosses. 1,183 cards from Athenaze I/II, JACT, and the DCC Core list.
+
+  **Private by default.** No accounts, no analytics, no crash reporting.
+  Everything lives in an on-device SQLite database. Optional sync between
+  your own devices is end-to-end encrypted — the relay never sees your data
+  (nostr-encrypted and direct P2P transports).
+
+  Requires Android 8.0 (API 26) or newer. Works on arm64 and x86-64.
+  Free and open source (MIT).
+
+tags:
+  - education
+  - language-learning
+  - ancient-greek
+  - spaced-repetition
+  - offline-first
+
+license: MIT
+
+website: https://ethntuttle.github.io/greek/
+
+# ─── MEDIA ───────────────────────────────────────────────────────────────────
+# 512px Play-Store-style launcher icon (zsp uploads to its Blossom CDN by
+# default: BLOSSOM_URL=https://cdn.zapstore.dev)
+icon: ./art/ic_launcher-playstore.png
+
+# 5 real device screenshots (Pixel 6), in store-listing view order
+images:
+  - ./docs/assets/shot-home.png
+  - ./docs/assets/shot-curriculum.png
+  - ./docs/assets/shot-review.png
+  - ./docs/assets/shot-practice.png
+  - ./docs/assets/shot-dictionary.png
+
+# ─── RELEASE CONFIGURATION ───────────────────────────────────────────────────
+# No CHANGELOG.md exists yet; uncomment when added:
+# release_notes: ./CHANGELOG.md
+
+# Metadata fetched from external sources is DISABLED here — every field above
+# is already set explicitly, and the docs/ HTML is richer than anything on
+# GitHub. If you ever want GitHub README enrichment, remove this line (Fastlane
+# is tried automatically for github.com repositories).
+metadata_sources: []
