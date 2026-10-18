@@ -125,6 +125,44 @@
   </tbody>
 </table>
 
+<h2>Phone ↔ desktop pairing <span class="chip">Status: rolling out</span></h2>
+<p>
+  The desktop companion is <strong>in development</strong> — nothing in this
+  section has shipped yet. This is the exact flow being built in Wave 7, on
+  top of the sync core and transports above (which exist and are tested).
+</p>
+<ol class="steps">
+  <li>
+    On the device that already has your progress, open its Sync card and show
+    the pairing ticket: on the desktop it's a <strong>copyable ticket
+    string</strong>; on the phone the same ticket is shown as a
+    <strong>QR code</strong>. The ticket carries the write capability for the
+    shared sync document — treat it like a credential and never send it over a
+    network.
+  </li>
+  <li>
+    On the other device: <strong>paste the ticket</strong> (or scan the QR)
+    and press <strong>Join</strong>. Pairing and authorization happen in that
+    one gesture.
+  </li>
+  <li>
+    Press <strong>Sync now</strong> for an immediate merge; thereafter the
+    devices merge whenever they're online together.
+  </li>
+</ol>
+<p>
+  Never have both devices online at once? Take the <strong>nostr relay
+  path</strong> instead: point both devices at your own relay — or any relay
+  you trust — and they exchange store-and-forward batches asynchronously, as
+  described above.
+</p>
+<p>
+  <strong>Wire hygiene:</strong> only ciphertext crosses the wire. Direct
+  pairing runs peer-to-peer over QUIC/TLS, and relay traffic is NIP-44
+  self-encrypted — no plaintext review history or settings ever touch a relay
+  or a middlebox.
+</p>
+
 <h2>Backup / export — "transport zero"</h2>
 <p>
   The same merge layer doubles as disaster recovery: a third transport writes

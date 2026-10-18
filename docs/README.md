@@ -16,7 +16,7 @@ Static site published with GitHub Pages from `/docs` on branch `master`.
 1. Edit the HTML/CSS in place; every factual claim about features must stay
    checkable against the repo (numbers: 43 letters cards, 24-question check at
    ≥22 to pass, daily new-card cap 10, organic lane ≥85% accuracy over ≥20
-   attempts across ≥2 days, tests: 81 in `greek-core`, 93 workspace-wide).
+   attempts across ≥2 days, tests: 82 in `greek-core`, 102 passed workspace-wide).
 2. Date-stamp edits: pages currently read "October 2026".
 3. Before committing, validate (from inside `docs/`):
 

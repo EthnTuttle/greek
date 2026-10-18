@@ -67,11 +67,31 @@ data/                cards (5 decks, 1,183 total), curated gloss overrides</code
   </tbody>
 </table>
 
+<h2>Desktop app (in development)</h2>
+<p>
+  The next front-end is a native desktop companion built with
+  <strong>Tauri 2</strong> (system webview — WebKitGTK on Linux, WebView2 on
+  Windows, WKWebView on macOS) over <strong>the same Rust core</strong>:
+  <code>crates/core</code> (<code>greek-core</code>) links in directly as a
+  native Rust library — the UniFFI layer exists for Kotlin, but Tauri commands
+  are Rust too, so no binding layer is needed on desktop
+  (<code>crates/uniffi-bindings</code> stays the Android-facing surface).
+  Desktop sync reuses the exact same merge layer, database schema, and
+  <code>SyncBatch</code> wire format as the phone — phone ↔ desktop is just
+  another paired device (see <a href="sync.html">the sync page</a> for the
+  pairing flow as it's being built).
+</p>
+<p>
+  Design:
+  <a href="https://github.com/EthnTuttle/greek/blob/master/DESIGN-device-sync.md">DESIGN-device-sync.md</a>
+  ("Wave 7 — Tauri desktop shell"). Status: in development, not yet shipped.
+</p>
+
 <h2>Tests</h2>
 <ul>
-  <li><strong>81</strong> unit tests in <code>greek-core</code> (SRS scheduling, gates, questions, sync replay, migrations).</li>
-  <li><strong>+6</strong> each in the UniFFI integration tests and <code>sync-nostr</code> unit tests; workspace total 93 <code>#[test]</code> items.</li>
-  <li>A live-relay round-trip test (<code>#[ignore]</code> by default) verifies the nostr transport against public relays.</li>
+  <li><strong>82</strong> unit tests in <code>greek-core</code> (SRS scheduling, gates, questions, sync replay, migrations).</li>
+  <li><strong>+9</strong> UniFFI integration tests (alphabet-gate, sync round-trip, and wave-2/3 suites), <strong>+6</strong> in <code>sync-nostr</code> and <strong>+5</strong> in <code>sync-iroh</code> — <strong>102 passed, 0 failed</strong> workspace-wide (<code>cargo test --workspace</code>, re-counted October 2026).</li>
+  <li>Four tests are <code>#[ignore]</code>d by default: three live-relay round-trip probes in <code>sync-nostr</code> (verify the nostr transport against public relays) and one two-host iroh WAN round-trip in <code>sync-iroh</code>.</li>
   <li>Run everything: <code>cargo test --workspace</code>.</li>
 </ul>
 
@@ -84,6 +104,7 @@ data/                cards (5 decks, 1,183 total), curated gloss overrides</code
   <li><a href="https://github.com/EthnTuttle/greek/blob/master/SYNC-WIRE.md">SYNC-WIRE.md</a> — canonical wire format with live-relay evidence.</li>
   <li><a href="https://github.com/EthnTuttle/greek/blob/master/data/README.md">data/README.md</a> — morphology DB provenance and known data quirks.</li>
   <li><a href="https://github.com/EthnTuttle/greek/blob/master/spikes/iroh/SPIKE-IROH.md">spikes/iroh/SPIKE-IROH.md</a> — iroh on Android verdict (GO, +~1.2&nbsp;MB/ABI).</li>
+  <li><a href="https://github.com/EthnTuttle/greek/blob/master/ZAPSTORE.md">ZAPSTORE.md</a> — Zapstore publishing runbook (<code>zsp</code> CLI, event kinds, key separation), with the committed <code>zapstore.yaml</code>.</li>
 </ul>
 
 <h2>Contributing</h2>
