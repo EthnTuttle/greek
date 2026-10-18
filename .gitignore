@@ -12,7 +12,7 @@
 /data/morphology.sqlite
 
 # Android assets (copied from data/ during build)
-/android/app/src/main/assets/morphology.sqlite
+/android/app/src/main/assets/morphology.sqlite*
 /android/app/src/main/assets/cards/
 
 # IDE
