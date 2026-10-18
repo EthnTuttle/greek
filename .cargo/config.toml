@@ -1,0 +1,7 @@
+# 16 KB page-size alignment for Android 15+ (Play requirement since Nov 2025;
+# our Pixel on Android 17 warns otherwise). Applies only to Android targets.
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
