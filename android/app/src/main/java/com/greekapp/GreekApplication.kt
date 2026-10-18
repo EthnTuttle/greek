@@ -3,6 +3,7 @@ package com.greekapp
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import java.io.File
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -117,6 +118,14 @@ object SettingsRepository {
 class GreekApplication : Application() {
 
     companion object {
+        /**
+         * Version of the bundled morphology.sqlite lexicon asset.
+         * Bump whenever the asset changes (curated gloss overrides, schema
+         * fixes) so existing installs re-copy on upgrade. v1 = Morpheus
+         * baseline (July); v2 = +88 curated gloss fixes (Oct 2026).
+         */
+        private const val MORPHOLOGY_DB_VERSION = 2
+
         var greekCore: GreekCore? = null
             private set
         var isInitialized: Boolean = false
@@ -142,15 +151,25 @@ class GreekApplication : Application() {
         // main thread to avoid an ANR. UI observes [initState] and gates on it.
         appScope.launch {
             try {
-                // Copy morphology.sqlite from assets to internal storage if not already present.
+                // Copy morphology.sqlite from assets to internal storage. A version
+                // marker guards the 113MB copy: bundled lexicon updates (e.g. the
+                // curated gloss overrides) MUST reach existing installs, so we
+                // re-copy whenever the bundled version moves past the stored one.
                 val morphFile = getDatabasePath("morphology.sqlite")
-                if (!morphFile.exists()) {
+                val markerFile = File(filesDir, "morphology.version")
+                val storedVersion = markerFile.takeIf { it.exists() }
+                    ?.readText()?.trim()?.removePrefix("v")?.toIntOrNull() ?: 0
+                if (!morphFile.exists() || storedVersion < MORPHOLOGY_DB_VERSION) {
                     morphFile.parentFile?.mkdirs()
+                    morphFile.delete() // clean slate; WAL/SHM cannot outlive the process
+                    File(morphFile.path + "-wal").delete()
+                    File(morphFile.path + "-shm").delete()
                     assets.open("morphology.sqlite").use { input ->
                         morphFile.outputStream().use { output ->
                             input.copyTo(output)
                         }
                     }
+                    markerFile.writeText("v" + MORPHOLOGY_DB_VERSION)
                 }
 
                 // Merge the card JSON arrays without a parse/re-serialize round trip:

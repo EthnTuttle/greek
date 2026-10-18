@@ -222,7 +222,7 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                     Text(
-                        text = "${state.streak} days",
+                        text = if (state.streak == 1) "1 day" else "${state.streak} days",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.secondary
