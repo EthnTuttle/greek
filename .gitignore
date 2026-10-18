@@ -28,3 +28,7 @@ Thumbs.db
 *.apk
 build.log
 spikes/iroh/target/
+
+# Wave 7 desktop (Tauri) build artifacts
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

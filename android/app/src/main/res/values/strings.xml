@@ -74,7 +74,7 @@
     <!-- Home gate card (replaces the wave-4 letters banner); copy per design §6 -->
     <string name="home_gate_title">Read Greek first.</string>
     <string name="home_gate_body">Vocabulary unlocks when you can recognize the alphabet.</string>
-    <string name="home_gate_progress">Letters %1$d/5 stages · Practice accuracy: %2$s (goal 85%)</string>
+    <string name="home_gate_progress">Letters %1$d/5 stages · Practice accuracy: %2$s (goal 85%%)</string>
     <string name="home_gate_continue">Continue letters</string>
     <string name="home_gate_take_check">Take the Alphabet Check (~3 min)</string>
     <string name="home_gate_skip_hint">Already know it? Skip with the check — passing counts instantly.</string>
