@@ -215,7 +215,7 @@ class CrossDeviceSyncE2E {
         // Stale-output hygiene; nsec_in.hex + b_pushed.flag are orchestrator
         // inputs, but b_pushed.flag from a PREVIOUS run must not be honored.
         listOf("nsec.hex", "push_done.flag", "pull_done.flag", "export_a.json",
-               "stats_a.json", "b_pushed.flag").forEach { File(e2e, it).delete() }
+               "stats_a.json", "seeds_a.json", "b_pushed.flag").forEach { File(e2e, it).delete() }
 
         val core = coreWithLetters(dir)
         try {
@@ -239,6 +239,11 @@ class CrossDeviceSyncE2E {
             writeEvidence("nsec.hex", nsec + "\n")
 
             seedDeviceReviewsAndGate(core)
+            // Contract: publish seeds_a.json BEFORE push_done.flag — host B
+            // compares its pulled uuid set against these.
+            val seeds = reviewUuids(core.syncExportBackupJson())
+            val seedArr = seeds.joinToString(",") { "\"$it\"" }
+            writeEvidence("seeds_a.json", "{\"uuids\":[$seedArr],\"hlc\":\"\"}")
             call(NOSTR_OP_TIMEOUT_MS) { core.syncNostrPush() }
             writeEvidence("push_done.flag", "done\n")
 

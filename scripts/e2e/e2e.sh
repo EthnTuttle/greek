@@ -135,11 +135,22 @@ dev_read() {
   fi
 }
 
+bridge_reset() { # drop stale protocol artifacts between flows in the same run
+  [ -n "${BRIDGE:-}" ] || return 0
+  rm -f "$BRIDGE"/ticket.txt "$BRIDGE"/seeds_a.json "$BRIDGE"/push_done.flag \
+        "$BRIDGE"/b_pushed.flag "$BRIDGE"/export_a.json "$BRIDGE"/export_b.json \
+        "$BRIDGE"/nsec_in.hex 2>/dev/null || true
+  note "bridge protocol files reset"
+}
+
 dev_writef() { # stdin → files/e2e/$1
   if [ "$TARGET" = "selfcheck" ]; then
     cat > "$EVID/$1"
   else
-    adb_s shell "run-as $APP_ID sh -c 'cat > files/e2e/$1'"
+    # files/e2e may not exist yet (preflight wipes it; the app recreates it
+    # lazily) — mkdir first or the redirect silently fails and tests time out
+    # polling for files that can never appear.
+    adb_s shell "run-as $APP_ID sh -c 'mkdir -p files/e2e && cat > files/e2e/$1'"
   fi
 }
 
@@ -169,11 +180,14 @@ dev_poll_file() { # $1 rel, $2 timeout_s, $3 optional dest file. Prints content 
 }
 
 # ---------------------------------------------------------------- host runners (E2E_STUB aware)
-run_sync_peer() { # args: serve|join [--nostr --relay U] --dir D --db DB
+run_sync_peer() { # args: inproc|serve|join [--nostr --relay U] --dir D --db DB
   if [ "${E2E_STUB:-0}" = "1" ]; then
     timeout "$HOST_TIMEOUT_S" "$STUBDIR/sync-peer-stub" "$@"
   else
-    (cd "$REPO_ROOT" && timeout "$HOST_TIMEOUT_S" \
+    # E2E_DEBUG=1 turns on iroh/docs/blobs tracing for host-side diagnosis.
+    local rl="${E2E_RUST_LOG:-warn}"
+    [ "${E2E_DEBUG:-0}" = "1" ] && rl="iroh=debug,iroh_docs=debug,iroh_blobs=debug,iroh_gossip=debug,sync_iroh=debug"
+    (cd "$REPO_ROOT" && RUST_LOG="$rl" timeout "$HOST_TIMEOUT_S" \
       cargo run -p uniffi-bindings --example sync-peer -- "$@")
   fi
 }
@@ -321,6 +335,7 @@ trap on_exit EXIT
 flow_iroh() {
   local host_exit="n/a" dev_exit="n/a"
   local instr_extra=()
+  bridge_reset
 
   # Netmode selection: selfcheck is hermetic (loopback = presets::Empty,
   # no relay, no DNS). Device keeps the production N0 path, unless host
@@ -389,6 +404,7 @@ gen_nsec_hex() {
 
 flow_nostr() {
   local host_exit="n/a" dev_exit="n/a"
+  bridge_reset
 
   # Relay FIRST — device ws cleartext reaches it through `adb reverse`.
   resolve_relay_port
@@ -416,9 +432,15 @@ flow_nostr() {
     DEV_PID=$!
   fi
 
-  # A pushed its spool to the relay → B may fetch.
-  dev_poll_file push_done.flag "$POLL_TIMEOUT_S" >/dev/null || \
+  # A pushed its spool to the relay → B may fetch. Bridge both artifacts A
+  # publishes (selfcheck A writes them into the shared dir itself; device
+  # mode must ferry them across run-as).
+  dev_poll_file push_done.flag "$POLL_TIMEOUT_S" "$BRIDGE/push_done.flag" || \
     die "push_done.flag never appeared (relay ready? ws cleartext blocked? check debug networkSecurityConfig)"
+  if [ "$TARGET" = "device" ]; then
+    dev_poll_file seeds_a.json "$POLL_TIMEOUT_S" "$BRIDGE/seeds_a.json" || \
+      die "seeds_a.json never appeared"
+  fi
 
   echo "--- B := sync-peer join --nostr --relay $RELAY_URL --dir $BRIDGE --db $WORK/host_b_nostr.db"
   host_exit=0
@@ -460,7 +482,11 @@ flow_edges() {
   echo "--- raw INSTRUMENTATION_STATUS tail ($logf):"
   grep -E "INSTRUMENTATION_(STATUS|RESULT)" "$logf" | tail -n 40 || true
 
-  if [ "$rc" = "0" ] && grep -q "INSTRUMENTATION_CODE: -1" "$logf"; then
+  # PASS markers observed across adb versions: "INSTRUMENTATION_CODE: -1"
+  # (status-bundle style) or bare JUnit text "OK (N tests)" without FAILURES.
+  if [ "$rc" = "0" ] && ! grep -q "FAILURES!!!" "$logf" && \
+     { grep -q "INSTRUMENTATION_CODE: -1" "$logf" \
+       || grep -qE "^OK \([0-9]+ tests?\)" "$logf"; }; then
     echo "E2E-EDGES: PASS"; return 0
   fi
   echo "E2E-EDGES: FAIL (instrument exit=$rc; see $logf)"

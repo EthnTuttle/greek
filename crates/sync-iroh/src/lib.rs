@@ -363,14 +363,25 @@ impl SyncIrohTransport {
         while let Some(item) = stream.next().await {
             let entry = item?;
             let key = entry.key();
-            let bytes = self
+            // A blob may lag its entry across the network (iroh-docs syncs
+            // entry metadata first). Skip it for this round — the next
+            // pull retries. Never abort the whole pull on one straggler.
+            let bytes = match self
                 .blobs
                 .blobs()
                 .get_bytes(entry.content_hash())
                 .await
-                .with_context(|| {
-                    format!("missing blob for key {:?}", String::from_utf8_lossy(key))
-                })?;
+            {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!(
+                        key = %String::from_utf8_lossy(key),
+                        error = %e,
+                        "entry blob not yet available; skipping this round"
+                    );
+                    continue;
+                }
+            };
             if let Some(rest) = key.strip_prefix(b"reviews/") {
                 let _ = rest;
                 let ev: ReviewEvent = serde_json::from_slice(&bytes)

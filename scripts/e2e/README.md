@@ -148,3 +148,21 @@ device PASS.
 6. **Relay port is probed**, not hardcoded, since other services squat on
    7777; the androidTest always dials loopback `127.0.0.1:7777` on the PHONE
    and `adb reverse` maps it to the probed host port.
+7. **`run-as` redirect needs the dir to exist.** Writes use
+   `sh -c 'mkdir -p files/e2e && cat > ...'` — a bare redirect fails silently
+   and leaves device tests waiting on files that can never appear.
+8. **Blob pull is skip-and-retry, not abort.** iroh-docs delivers entry
+   metadata ahead of blob content; `pull_remote` skips (tracing::warn) and the
+   next sync round retries. Aborting the whole pull on one lagging blob
+   permanently wedged cross-device sync while looking "healthy" (settings,
+   which are smaller and inline, still flowed).
+9. **`am instrument -w` exits 0 even when tests FAIL** — verdicts must parse
+   the stream (`OK (N tests)` / `FAILURES!!!`), never the process exit code.
+10. **Host-side tracing**: `E2E_DEBUG=1` (or `E2E_RUST_LOG=...`) turns on
+    `iroh*/sync_iroh` debug logs for the host half while staying quiet by
+    default.
+11. **Protocol artifacts are flow-scoped, not run-scoped.** The bridge dir
+    persists across flows in one `--all` run; leftover `seeds_a.json` from
+    the iroh flow silently poisoned the nostr flow's superset check
+    (stale-but-wellformed files are worse than missing files). Every flow
+    starts with `bridge_reset`.
