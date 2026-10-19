@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  Debug-build overlay only (this file never merges into release).
+  Purpose: permit cleartext WebSocket traffic to 127.0.0.1 so the Wave-8
+  nostr E2E (CrossDeviceSyncE2E.nostrLocalRelayE2E) can talk to a relay the
+  host forwards with `adb reverse tcp:7777`. Cleartext is pinned to localhost
+  only via res/xml/network_security_config.xml; the base config stays
+  closed. The main manifest has no networkSecurityConfig attribute, so this
+  merge is purely additive — no tools:replace needed.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+
+</manifest>

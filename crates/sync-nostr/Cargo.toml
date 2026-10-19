@@ -17,3 +17,7 @@ hex = "0.4"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
+# Local relay for E2E tests (examples/local_relay.rs). Pinned to the same
+# 0.43 line as the nostr-sdk/nostr stack above so types unify.
+nostr-relay-builder = "0.43"
+nostr-database = "0.43"

@@ -102,6 +102,11 @@ where
 /// proving the merge is symmetric, not producer->consumer only.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn e2e_iroh_two_instances_converge() {
+    // Hermetic mode: no n0 relay / DNS discovery — this test must not
+    // depend on host DNS being able to reach n0.iroh.network (hosts with
+    // filtered/broken DNS otherwise hang 60s+ inside sync_iroh_join).
+    // N0 dialing fidelity is covered by the on-device E2E (scripts/e2e).
+    std::env::set_var("GREEK_IROH_NET", "loopback");
     let t0 = Instant::now();
     let (dir_a, db_a) = tmp_db("iroh-a");
     let (dir_b, db_b) = tmp_db("iroh-b");

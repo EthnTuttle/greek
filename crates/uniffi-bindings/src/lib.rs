@@ -1030,10 +1030,17 @@ impl GreekCore {
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or_else(|| std::path::Path::new("."))
             .join("iroh-sync");
+        // GREEK_IROH_NET=loopback selects the hermetic no-relay/no-DNS
+        // mode (E2E harnesses, hosts with broken/filtered DNS). Default
+        // stays N0 — production behavior on devices is unchanged.
+        let loopback = std::env::var("GREEK_IROH_NET").ok().as_deref() == Some("loopback");
         let t = Arc::new(
-            sync_iroh::SyncIrohTransport::open(&dir)
-                .await
-                .map_err(|e| sync_err(format!("iroh sync open failed: {e:#}")))?,
+            if loopback {
+                sync_iroh::SyncIrohTransport::open_loopback(&dir).await
+            } else {
+                sync_iroh::SyncIrohTransport::open(&dir).await
+            }
+            .map_err(|e| sync_err(format!("iroh sync open failed: {e:#}")))?,
         );
         *self.iroh.lock().unwrap() = Some(t.clone());
         Ok(t)

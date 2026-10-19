@@ -20,10 +20,12 @@ thiserror = { workspace = true }
 rusqlite = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 uuid = { workspace = true }
 tokio = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [[bin]]
 name = "uniffi-bindgen"

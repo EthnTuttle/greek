@@ -62,8 +62,11 @@ struct DocState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NetMode {
     N0,
-    /// Only constructed by tests (matching the spike's loopback setup).
-    #[allow(dead_code)]
+    /// Hermetic loopback mode: `presets::Empty` — no relay, no DNS
+    /// discovery; peers dial only the direct addresses carried in the
+    /// ticket. Works host↔host on one machine or across two devices on
+    /// the same LAN/VPN. Used by cross-process E2E harnesses; Android
+    /// production stays on N0.
     Loopback,
 }
 
@@ -72,6 +75,12 @@ impl SyncIrohTransport {
     /// (the app passes `<dir_of_greek_app.db>/iroh-sync/`).
     pub async fn open(data_dir: &Path) -> Result<Self> {
         Self::spawn(Some(data_dir), NetMode::N0).await
+    }
+
+    /// Like [`open`], but in hermetic loopback mode (see [`NetMode::Loopback`]).
+    /// Selected by callers via the `GREEK_IROH_NET=loopback` env var.
+    pub async fn open_loopback(data_dir: &Path) -> Result<Self> {
+        Self::spawn(Some(data_dir), NetMode::Loopback).await
     }
 
     async fn spawn(data_dir: Option<&Path>, net: NetMode) -> Result<Self> {

@@ -3038,7 +3038,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.58.0",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -4430,6 +4430,22 @@ dependencies = [
  "lru 0.16.4",
  "nostr",
  "tokio",
+]
+
+[[package]]
+name = "nostr-relay-builder"
+version = "0.43.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "019df99035f53643078e4733b9559f6d5a2f666d576e26254aa3ab8a043eb86e"
+dependencies = [
+ "async-utility",
+ "async-wsocket",
+ "atomic-destructor",
+ "negentropy",
+ "nostr",
+ "nostr-database",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -6362,6 +6378,8 @@ dependencies = [
  "greek-core",
  "hex",
  "hmac",
+ "nostr-database",
+ "nostr-relay-builder",
  "nostr-sdk",
  "serde",
  "serde_json",
@@ -7031,6 +7049,7 @@ dependencies = [
  "sync-nostr",
  "thiserror 2.0.18",
  "tokio",
+ "tracing-subscriber",
  "uniffi",
  "uuid",
 ]
