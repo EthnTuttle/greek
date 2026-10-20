@@ -40,7 +40,13 @@ data class CurriculumState(
      * Wave-5 alphabet gate unmet → the screen shows a compact gate card above
      * the textbook list with a check CTA. False while unknown (load failure).
      */
-    val alphabetGateUnmet: Boolean = false
+    val alphabetGateUnmet: Boolean = false,
+    /**
+     * Wave-9: a letters deck is loaded (lettersTotal > 0) → the "Type the
+     * letters" typed_letter drill row shows regardless of gate state
+     * (the drill stays useful after the gate is satisfied).
+     */
+    val lettersAvailable: Boolean = false
 )
 
 class CurriculumViewModel : ViewModel() {
@@ -65,8 +71,10 @@ class CurriculumViewModel : ViewModel() {
             try {
                 // Alphabet gate (wave 5): one shared evaluation, kept local to
                 // this ViewModel; any failure fails open (card hidden).
+                var lettersTotal = 0u
                 val gateUnmet = try {
                     val gate = core.getAlphabetGateState()
+                    lettersTotal = gate.lettersTotal
                     !gate.satisfied && gate.lettersTotal > 0u
                 } catch (e: Exception) {
                     false
@@ -98,7 +106,8 @@ class CurriculumViewModel : ViewModel() {
                 _state.value = CurriculumState(
                     sections = sections,
                     isLoading = false,
-                    alphabetGateUnmet = gateUnmet
+                    alphabetGateUnmet = gateUnmet,
+                    lettersAvailable = lettersTotal > 0u
                 )
             } catch (e: Exception) {
                 _state.value = _state.value.copy(isLoading = false)

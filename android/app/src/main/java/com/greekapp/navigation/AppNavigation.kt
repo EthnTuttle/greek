@@ -22,7 +22,9 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -37,6 +39,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import androidx.navigation.compose.rememberNavController
 import com.greekapp.ui.screens.*
+import com.greekapp.ui.components.GreekInputDispatcher
+import com.greekapp.ui.components.LocalGreekInputDispatcher
 import com.greekapp.viewmodel.PracticeViewModel
 
 sealed class Screen(
@@ -57,6 +61,10 @@ sealed class Screen(
     object Settings : Screen("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
     // Wave-6 Device Sync: pushed destination, NOT a bottom-nav tab (like Review).
     object Sync : Screen("sync", "Sync", Icons.Filled.Settings, Icons.Outlined.Settings)
+    // Wave-9 Share progress: pushed destination, NOT a bottom-nav tab (like Sync).
+    object Share : Screen("share", "Share progress", Icons.Filled.Settings, Icons.Outlined.Settings)
+    // Wave-9 typed_letter drill: pushed from the Curriculum (letters root) tab.
+    object LetterTyping : Screen("letter-typing", "Type the Letters", Icons.Filled.Quiz, Icons.Outlined.Quiz)
 }
 
 val bottomNavItems = listOf(
@@ -96,6 +104,11 @@ fun AppNavigation() {
     val windowSizeClass = calculateWindowSizeClass(activity)
     val useNavRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
 
+    // Wave-9: one app-wide registry of "which Greek-enabled field is focused"
+    // so the screen-level keyboard panel can commit into it.
+    val greekInputDispatcher = remember { GreekInputDispatcher() }
+
+    CompositionLocalProvider(LocalGreekInputDispatcher provides greekInputDispatcher) {
     if (useNavRail) {
         Row(modifier = Modifier.fillMaxSize()) {
             NavigationRail {
@@ -139,6 +152,7 @@ fun AppNavigation() {
         ) { innerPadding ->
             AppNavHost(navController = navController, modifier = Modifier.padding(innerPadding))
         }
+    }
     }
 }
 
@@ -222,6 +236,9 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
             CurriculumScreen(
                 onTakeAlphabetCheck = {
                     navController.navigate(Screen.AlphabetCheck.route)
+                },
+                onOpenLetterTyping = {
+                    navController.navigate(Screen.LetterTyping.route)
                 }
             )
         }
@@ -237,6 +254,9 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
                 },
                 onOpenSync = {
                     navController.navigate(Screen.Sync.route)
+                },
+                onOpenShare = {
+                    navController.navigate(Screen.Share.route)
                 }
             )
         }
@@ -244,6 +264,24 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
         // Wave-6 Device Sync destination (pushed from Settings).
         composable(Screen.Sync.route) {
             SyncScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Wave-9 Share progress destination (pushed from Settings).
+        composable(Screen.Share.route) {
+            ShareScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Wave-9 typed_letter drill (pushed from Curriculum / letters root).
+        composable(Screen.LetterTyping.route) {
+            LetterTypingScreen(
                 onBack = {
                     navController.popBackStack()
                 }

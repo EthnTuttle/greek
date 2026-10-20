@@ -375,9 +375,57 @@ pub fn rebuild_memory_states(db: &Database) -> Result<u32> {
     Ok(rewritten)
 }
 
+/// nostr secret material must NEVER enter the synced/plaintext settings
+/// tables (DESIGN-progress-sharing.md, Appendix R "Secrets"). A write is
+/// refused when the KEY matches the glob `*nsec*` (case-insensitive) or the
+/// VALUE contains a bech32 `nsec1…` secret (pattern
+/// `nsec1[02-9ac-hj-np-z]{58}`, matched anywhere). Hand-rolled so the guard
+/// adds zero dependencies.
+fn secret_blocklist_reason(key: &str, value: &str) -> Option<&'static str> {
+    let key_lc = key.to_lowercase();
+    if key_lc.contains("nsec") {
+        return Some("key matches the '*nsec*' blocklist");
+    }
+    if value_contains_nsec_bech32(value) {
+        return Some("value matches the nsec1 bech32 pattern");
+    }
+    None
+}
+
+/// `true` if `value` contains `nsec1` followed by 58 chars of the bech32
+/// data charset `[02-9ac-hj-np-z]` (i.e. excludes `1`, `b`, `i`, `o`),
+/// matching the pattern `nsec1[02-9ac-hj-np-z]{58}` anywhere in the value.
+fn value_contains_nsec_bech32(value: &str) -> bool {
+    const NSEC_LEN: usize = 5 + 58; // "nsec1" + 58 data chars
+    let bytes = value.as_bytes();
+    let mut i = 0;
+    while i + NSEC_LEN <= bytes.len() {
+        if &bytes[i..i + 5] == b"nsec1" {
+            let all_bech32 = bytes[i + 5..i + NSEC_LEN].iter().all(|c| {
+                matches!(c, b'0' | b'2'..=b'9' | b'a' | b'c'..=b'h' | b'j'..=b'n' | b'p'..=b'z')
+            });
+            if all_bech32 {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 /// Local settings write: stamps `hlc_now` and upserts BOTH `settings_sync`
 /// (the sync view) and `user_settings` (what local readers consume today).
+///
+/// REFUSES anything shaped like a nostr secret (see
+/// [`secret_blocklist_reason`]) — such values belong in the `secrets`
+/// table via [`secret_put`], never in a table that syncs or exports.
 pub fn setting_put(db: &Database, key: &str, value: &str) -> Result<()> {
+    if let Some(reason) = secret_blocklist_reason(key, value) {
+        anyhow::bail!(
+            "refusing to store {key:?} in synced settings ({reason}); \
+             use the secrets table (secret_put) instead"
+        );
+    }
     let hlc = hlc_now(db).to_string();
     db.conn().execute(
         "INSERT INTO settings_sync (key, value, hlc) VALUES (?1, ?2, ?3)
@@ -394,7 +442,15 @@ pub fn setting_put(db: &Database, key: &str, value: &str) -> Result<()> {
 
 /// LWW merge for an incoming `(key, value, hlc)`: a strictly-greater incoming
 /// HLC wins; on a win BOTH tables are written. Returns whether it was applied.
+///
+/// Rows shaped like a nostr secret (see [`secret_blocklist_reason`]) are
+/// DROPPED before any HLC comparison, so no remote batch or imported backup
+/// can bypass the blocklist to re-plant a secret into the synced tables.
 pub fn setting_merge(db: &Database, key: &str, value: &str, hlc: &str) -> Result<bool> {
+    if let Some(reason) = secret_blocklist_reason(key, value) {
+        eprintln!("sync: refusing to merge setting {key:?} ({reason}); dropped");
+        return Ok(false);
+    }
     let incoming: Hlc = hlc.parse()?;
     let existing: Option<String> = db
         .conn()
@@ -446,6 +502,49 @@ pub fn note_last_sync(db: &Database, device_id: &str, hlc: &str) -> Result<()> {
         rusqlite::params![device_id, crate::srs::now_iso8601(), hlc],
     )?;
     Ok(())
+}
+
+// --- Secrets vault (schema v4) ---
+//
+// The `secrets` table is NEVER read by `settings_since`, never written by
+// the settings sync paths, and never serialized into backup payloads — it
+// exists precisely so nostr secret keys have a home that cannot leak into
+// sync or exports (DESIGN-progress-sharing.md, Appendix R "Secrets").
+
+/// Read a secret. `None` when the key is absent.
+pub fn secret_get(db: &Database, key: &str) -> Result<Option<String>> {
+    let v = db
+        .conn()
+        .query_row("SELECT value FROM secrets WHERE key = ?1", [key], |row| {
+            row.get::<_, String>(0)
+        })
+        .ok();
+    Ok(v)
+}
+
+/// Store a secret (upsert). Device-local only — never synced, never
+/// included in backup exports.
+pub fn secret_put(db: &Database, key: &str, value: &str) -> Result<()> {
+    db.conn().execute(
+        "INSERT INTO secrets (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![key, value],
+    )?;
+    Ok(())
+}
+
+/// Remove a secret; no-op when absent.
+pub fn secret_delete(db: &Database, key: &str) -> Result<()> {
+    db.conn()
+        .execute("DELETE FROM secrets WHERE key = ?1", [key])?;
+    Ok(())
+}
+
+/// `true` when the secret exists (no value read-out).
+pub fn secret_has(db: &Database, key: &str) -> bool {
+    db.conn()
+        .query_row("SELECT 1 FROM secrets WHERE key = ?1", [key], |_| Ok(()))
+        .is_ok()
 }
 
 #[cfg(test)]
@@ -541,7 +640,7 @@ mod tests {
             .conn()
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4, "a v2 db converges through v3 to the current v4");
 
         // uuid: present, 36-char, unique per row
         let uuids = review_uuid_set(&db);
@@ -858,5 +957,120 @@ mod tests {
         // The surviving event still folds into memory_states.
         let n: i64 = db.conn().query_row("SELECT COUNT(*) FROM memory_states", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 1);
+    }
+
+    // 9. SECRETS VAULT roundtrip: put/get/has/delete against the `secrets`
+    //    table (schema v4), including overwrite semantics.
+    #[test]
+    fn test_secrets_roundtrip() {
+        let db = Database::open(":memory:", None).unwrap();
+        assert!(!secret_has(&db, "nostr_nsec"));
+        assert_eq!(secret_get(&db, "nostr_nsec").unwrap(), None);
+
+        secret_put(&db, "nostr_nsec", "hex-aaaa").unwrap();
+        assert!(secret_has(&db, "nostr_nsec"));
+        assert_eq!(secret_get(&db, "nostr_nsec").unwrap().as_deref(), Some("hex-aaaa"));
+
+        // Upsert semantics.
+        secret_put(&db, "nostr_nsec", "hex-bbbb").unwrap();
+        assert_eq!(secret_get(&db, "nostr_nsec").unwrap().as_deref(), Some("hex-bbbb"));
+
+        secret_delete(&db, "nostr_nsec").unwrap();
+        assert!(!secret_has(&db, "nostr_nsec"));
+        // Delete of an absent key is a no-op, not an error.
+        secret_delete(&db, "nostr_nsec").unwrap();
+    }
+
+    // 10. BLOCKLIST: setting_put refuses keys matching *nsec* (any case)
+    //     and values matching the nsec1 bech32 pattern; plausible-but-
+    //     innocent keys/values still pass.
+    #[test]
+    fn test_setting_put_rejects_nsec_keys_and_values() {
+        let db = Database::open(":memory:", None).unwrap();
+        let nsec_val = format!("nsec1{}", "q".repeat(58));
+
+        for bad_key in ["nostr_nsec", "NSEC_backup", "other_nsec2"] {
+            let err = setting_put(&db, bad_key, "harmless").unwrap_err();
+            assert!(err.to_string().contains("blocklist"), "{bad_key}: {err}");
+        }
+        let err = setting_put(&db, "innocent_key", &nsec_val).unwrap_err();
+        assert!(err.to_string().contains("nsec1"), "{err}");
+        // Embedded anywhere in the value, not just at the start.
+        let err = setting_put(&db, "blob", &format!("prefix {nsec_val} suffix")).unwrap_err();
+        assert!(err.to_string().contains("nsec1"), "{err}");
+
+        // Nothing blocked was written to either settings table (fresh DBs
+        // legitimately hold bootstrap keys like device_id, so count only
+        // the keys under test).
+        for table in ["user_settings", "settings_sync"] {
+            let n: i64 = db
+                .conn()
+                .query_row(
+                    &format!(
+                        "SELECT COUNT(*) FROM {table}
+                         WHERE key IN ('nostr_nsec', 'NSEC_backup', 'other_nsec2',
+                                       'innocent_key', 'blob')"
+                    ),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(n, 0, "{table} must hold none of the refused rows");
+        }
+
+        // Innocent writes still work (incl. short nsec-looking strings).
+        setting_put(&db, "theme", "dark").unwrap();
+        setting_put(&db, "note", "nsec1tooshort").unwrap();
+        assert_eq!(user_setting(&db, "theme"), "dark");
+    }
+
+    // 11. BLOCKLIST via the MERGE path: a remote batch (or imported backup)
+    //     cannot re-plant a secret — blocked rows are dropped pre-HLC-check,
+    //     innocent rows in the same batch still merge.
+    #[test]
+    fn test_setting_merge_cannot_bypass_blocklist() {
+        let db = Database::open(":memory:", None).unwrap();
+        let hlc = Hlc { ms: 1_800_000_000_000, counter: 7, node: "cafebabe".into() }.to_string();
+        let nsec_val = format!("nsec1{}", "q".repeat(58));
+
+        let kv = vec![
+            ("nostr_nsec".to_string(), "deadbeef".to_string(), hlc.clone()),
+            ("blob".to_string(), format!("payload {nsec_val}"), hlc.clone()),
+            ("theme".to_string(), "solarized".to_string(), hlc.clone()),
+        ];
+        // First two rows fail the blocklist (bad key; bad value), the
+        // innocent row in the same batch still applies.
+        assert_eq!(apply_settings(&db, &kv).unwrap(), 1);
+        assert_eq!(user_setting(&db, "theme"), "solarized");
+        for table in ["user_settings", "settings_sync"] {
+            let n: i64 = db
+                .conn()
+                .query_row(
+                    &format!(
+                        "SELECT COUNT(*) FROM {table} WHERE key IN ('nostr_nsec', 'blob')"
+                    ),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(n, 0, "{table} must never receive blocked rows");
+        }
+    }
+
+    // 12. settings_since REGRESSION: the sync view must never surface
+    //     secrets rows (they live in a different table entirely — this test
+    //     pins that even a secret named like a synced key stays invisible).
+    #[test]
+    fn test_settings_since_never_returns_secrets() {
+        let db = Database::open(":memory:", None).unwrap();
+        secret_put(&db, "nostr_nsec", "hex-secret").unwrap();
+        secret_put(&db, "theme", "this-is-a-secret-not-a-setting").unwrap();
+        setting_put(&db, "theme", "light").unwrap();
+
+        let rows = settings_since(&db, None).unwrap();
+        assert_eq!(rows.len(), 1, "only the real setting may be visible: {rows:?}");
+        assert_eq!(rows[0].0, "theme");
+        assert_eq!(rows[0].1, "light");
+        assert!(!rows.iter().any(|(_, v, _)| v.contains("secret")));
     }
 }

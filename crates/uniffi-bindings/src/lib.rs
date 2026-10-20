@@ -439,7 +439,16 @@ impl GreekCore {
     pub fn submit_review(&self, card_id: String, rating: u8) -> bool {
         let db = self.db.lock().unwrap();
         let srs = self.srs.lock().unwrap();
-        srs.submit_review(&db, &card_id, rating).is_ok()
+        let ok = srs.submit_review(&db, &card_id, rating).is_ok();
+        if ok {
+            // Progress sharing (W9): reviews.* thresholds were REMOVED from
+            // the milestone set (Appendix R); this hook only marks today's
+            // streak dirty so the lazy detector (get_review_stats / flush)
+            // re-checks it. No-op when sharing is disabled — see
+            // share_hook_review_submitted.
+            share_hook_review_submitted(&db);
+        }
+        ok
     }
 
     pub fn get_review_stats(&self) -> ReviewStats {
@@ -469,6 +478,12 @@ impl GreekCore {
             .unwrap_or(0);
 
         let streak_days = compute_streak_days(&db);
+
+        // Progress sharing (W9): this is the bindings call the Android home
+        // screen makes on foreground — the designated lazy detection point
+        // for streak.{7,30,100} and chapter.mastered (Appendix R). Cheap:
+        // the engine caches its last detection pass. No-op when disabled.
+        share_hook_stats_refresh(&db, &self.cards);
 
         let total_cards = self.cards.len() as i32;
 
@@ -691,8 +706,12 @@ impl GreekCore {
     /// latches as check_passed. Returns the gate's satisfied flag afterward.
     pub fn record_alphabet_check_result(&self, correct: u32, total: u32) -> bool {
         let db = self.db.lock().unwrap();
-        if Curriculum::evaluate_alphabet_check(correct, total) {
+        let passed = Curriculum::evaluate_alphabet_check(correct, total);
+        if passed {
             let _ = Curriculum::record_alphabet_gate(&db, AlphabetGateMethod::CheckPassed);
+            // Progress sharing (W9): the latch transition just above is
+            // `gate.passed`'s only trigger. No-op when sharing is disabled.
+            share_hook_gate_latched(&db);
         }
         Curriculum::alphabet_gate_state(&db, &self.cards).satisfied
     }
@@ -880,9 +899,28 @@ fn build_batch(
     })
 }
 
+/// Load the nostr identity secret from the `secrets` vault (schema v4).
+/// Falls back to the legacy `user_settings.nostr_nsec` location (pre-v4
+/// databases that somehow skipped the migration) — and MIGRATES it on
+/// read: into `secrets`, out of both synced/plaintext settings tables.
+fn load_nostr_nsec(db: &Database) -> Option<String> {
+    if let Ok(Some(v)) = greek_core::secret_get(db, "nostr_nsec") {
+        return Some(v);
+    }
+    let legacy = user_setting_get(db, "nostr_nsec")?;
+    let _ = greek_core::secret_put(db, "nostr_nsec", &legacy);
+    let _ = db
+        .conn()
+        .execute("DELETE FROM user_settings WHERE key = 'nostr_nsec'", []);
+    let _ = db
+        .conn()
+        .execute("DELETE FROM settings_sync WHERE key = 'nostr_nsec'", []);
+    Some(legacy)
+}
+
 /// Parse the stored nostr identity, or explain how to configure one.
 fn nostr_keys(db: &Database) -> Result<nostr_sdk::prelude::Keys, GreekError> {
-    let nsec = user_setting_get(db, "nostr_nsec").ok_or_else(|| {
+    let nsec = load_nostr_nsec(db).ok_or_else(|| {
         GreekError::Sync(
             "nostr sync identity not configured; call sync_generate_nostr_identity \
              or sync_set_nostr_nsec first"
@@ -977,7 +1015,10 @@ impl GreekCore {
             relays_csv: user_setting_get(&db, "nostr_relays")
                 .filter(|s| !s.trim().is_empty())
                 .unwrap_or_else(|| DEFAULT_NOSTR_RELAYS.to_string()),
-            has_identity: user_setting_get(&db, "nostr_nsec").is_some(),
+            // Identity now lives in the secrets vault; the legacy
+            // user_settings check only exists for not-yet-migrated reads.
+            has_identity: greek_core::secret_has(&db, "nostr_nsec")
+                || user_setting_get(&db, "nostr_nsec").is_some(),
         }
     }
 
@@ -996,9 +1037,9 @@ impl GreekCore {
         let keys = nostr_sdk::prelude::Keys::generate();
         let nsec_hex = keys.secret_key().to_secret_hex();
         let db = self.db.lock().unwrap();
-        // Secrets at rest: stored in sqlite for v1. Android Keystore-backed
-        // storage is a rollout-gate item — see ROLLOUT.md.
-        let _ = greek_core::setting_put(&db, "nostr_nsec", &nsec_hex);
+        // Secrets live in the vault (never synced, never exported).
+        // Keystore-backed wrapping stays a rollout-gate item — ROLLOUT.md.
+        let _ = greek_core::secret_put(&db, "nostr_nsec", &nsec_hex);
         keys.public_key().to_hex()
     }
 
@@ -1008,9 +1049,41 @@ impl GreekCore {
         let keys = nostr_sdk::prelude::Keys::parse(nsec.trim())
             .map_err(|e| sync_err(format!("not a valid nostr secret key (hex or nsec1…): {e}")))?;
         let db = self.db.lock().unwrap();
-        // Secrets at rest: sqlite v1 — see sync_generate_nostr_identity / ROLLOUT.md.
-        greek_core::setting_put(&db, "nostr_nsec", &keys.secret_key().to_secret_hex())?;
+        // Secrets live in the vault — see sync_generate_nostr_identity.
+        greek_core::secret_put(&db, "nostr_nsec", &keys.secret_key().to_secret_hex())?;
         Ok(())
+    }
+}
+
+/// Secrets vault accessors (schema v4). Values stored here are device-local
+/// ONLY: they never ride settings sync and never appear in
+/// `sync_export_backup_json` (DESIGN-progress-sharing.md, Appendix R
+/// "Secrets"). Writing a secret through the settings API is refused.
+#[uniffi::export]
+impl GreekCore {
+    /// Read a secret (e.g. `nostr_nsec`); `None` when absent.
+    pub fn secret_get(&self, key: String) -> Option<String> {
+        let db = self.db.lock().unwrap();
+        greek_core::secret_get(&db, &key).ok().flatten()
+    }
+
+    /// Store a secret (upsert).
+    pub fn secret_put(&self, key: String, value: String) -> Result<(), GreekError> {
+        let db = self.db.lock().unwrap();
+        greek_core::secret_put(&db, &key, &value)?;
+        Ok(())
+    }
+
+    /// Remove a secret; no-op when absent.
+    pub fn secret_delete(&self, key: String) {
+        let db = self.db.lock().unwrap();
+        let _ = greek_core::secret_delete(&db, &key);
+    }
+
+    /// `true` when the secret exists (no value read-out).
+    pub fn secret_has(&self, key: String) -> bool {
+        let db = self.db.lock().unwrap();
+        greek_core::secret_has(&db, &key)
     }
 }
 
@@ -1190,6 +1263,325 @@ impl GreekCore {
     }
 }
 
+// --- Progress sharing over nostr (DESIGN-progress-sharing.md, Appendix R) ---
+//
+// Thin UniFFI surface over the `share-nostr` engine crate (W9-B). ALL logic —
+// milestone detection, template validation (caps / NFC / no-URL / no-mention),
+// outbox, rate caps, per-relay delivery state, HKDF key derivation — lives in
+// the engine; this region only maps types, enforces the disabled fast-path,
+// and returns errors.
+//
+// REQ-B (assumed engine API; if final share_nostr names/types differ at merge
+// time, adapt in THIS region only — the frozen UniFFI surface below does not
+// change):
+//   REQ-B1: `share_nostr::is_enabled(db: &Database) -> bool`
+//   REQ-B2: `share_nostr::relays_get(db: &Database) -> Vec<String>`
+//           (defaults from the Appendix-R curated suggestions when unset)
+//   REQ-B3: `share_nostr::share_pubkey_hex(db: &Database) -> Option<String>`
+//           (stateless HKDF-SHA256(sync_secret, "greek/share-nostr/v1");
+//            engine reads the sync secret via the W9-A `secret_get` helper —
+//            "nostr_nsec" — from the secrets table; if the helper is absent
+//            at merge time the merger wires it. Returns None when sharing
+//            has never been enabled or no sync secret exists.)
+//   REQ-B4: `share_nostr::enable(db: &Database, relays: &[String]) -> Result<(), E>`
+//           (derives the identity key per REQ-B3 — derivation is STATELESS,
+//            nothing is persisted beyond the enable flag and markers; seeds
+//            `share.posted.*` markers for all already-crossed thresholds so
+//            enabling is NEVER retroactive; validates relays per policy
+//            (wss:// only, <=8, dedupe — see share_relays_set) then stores
+//            `share.relays`.)
+//   REQ-B5: `share_nostr::disable(db: &Database, forget_identity: bool) -> Result<(), E>`
+//           (stops + clears queued outbox rows. `forget_identity` purges any
+//            derived-key materialization cache; derivation being stateless,
+//            this is expected to be a documented no-op — see surface docs on
+//            share_disable.)
+//   REQ-B6: `share_nostr::relays_set(db: &Database, relays: &[String]) -> Result<(), E>`
+//   REQ-B7: `share_nostr::milestones(db: &Database) -> Vec<share_nostr::MilestoneInfo>`
+//           where MilestoneInfo has slug/title_en/title_el/template_en/
+//           template_el/custom_template_en: Option<String>/
+//           custom_template_el: Option<String>/enabled: bool/
+//           last_posted_ms: Option<i64>/last_state: String
+//   REQ-B8: `share_nostr::set_template(db, slug: &str, locale: &str, text: &str) -> Result<(), E>`
+//           (locale validated "en"|"el"; engine validates caps/NFC/no-URL/
+//            no-mention/non-empty and rejects unknown slugs)
+//   REQ-B9: `share_nostr::reset_template(db, slug: &str, locale: &str) -> Result<(), E>`
+//   REQ-B10: `share_nostr::set_milestone_enabled(db, slug: &str, enabled: bool) -> Result<(), E>`
+//   REQ-B11: `share_nostr::preview(db, slug: &str, suffix: &str) -> Result<String, E>`
+//           (render only, no publish; runs ALL publish-time validation)
+//   REQ-B12: `async share_nostr::flush_now(db: &Mutex<Database>) -> Result<share_nostr::FlushReport, E>`
+//           where FlushReport { posted: u32, deferred: u32, duplicates: u32,
+//           failed: Vec<String> /* "relay: reason" */ } — single-flight,
+//           bypasses the jitter window on user request. Engine locks the
+//           mutex only around short db-critical sections, never across I/O
+//           awaits (uniffi exported futures must be Send).
+//   REQ-B13: `share_nostr::pending_count(db: &Database) -> u32`
+//   REQ-B14: `share_nostr::history(db: &Database, slug: &str) -> Vec<share_nostr::HistoryEntry>`
+//           where HistoryEntry { event_id: String, created_ms: i64,
+//           state: String, per_relay_json: String }
+//   REQ-B15 (where `E` appears above): any `impl std::fmt::Display` error;
+//           bindings map every engine error through `share_err` (below) into
+//           GreekError. NOTE: engine errors currently land in the
+//           `GreekError::Sync` variant — a dedicated `Share` variant would be
+//           cleaner but GreekError is joint-edited territory in Wave 9
+//           (W9-A secrets), so the mapping stays reuse-based to avoid an
+//           edit collision; merger MAY introduce `GreekError::Share`.
+//   REQ-B16 (hooks): `share_nostr::mark_streak_dirty(db)`,
+//           `share_nostr::detect_gate_latch(db) -> bool`,
+//           `share_nostr::detect_streak_chapter(db)`.
+//
+// Error-mapping sink for the whole share region (see REQ-B15).
+fn share_err(e: impl std::fmt::Display) -> GreekError {
+    GreekError::Sync(format!("sharing: {e}"))
+}
+
+/// Sharing-config snapshot for the Settings screen. Field names camelCase in
+/// Kotlin via UniFFI.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ShareConfigView {
+    pub enabled: bool,
+    pub relays: Vec<String>,
+    /// Empty string when sharing identity does not exist yet (never enabled).
+    pub share_pubkey_hex: String,
+}
+
+/// One milestone's editor/row state (see DESIGN-progress-sharing.md §10/OQ-3).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ShareMilestoneView {
+    pub slug: String,
+    pub title_en: String,
+    pub title_el: String,
+    pub template_en: String,
+    pub template_el: String,
+    pub custom_template_en: Option<String>,
+    pub custom_template_el: Option<String>,
+    pub enabled: bool,
+    pub last_posted_ms: Option<i64>,
+    /// Engine outbox/posted state for the last attempt ("", "queued",
+    /// "posted", "deferred", "failed:<reason>", ...).
+    pub last_state: String,
+}
+
+/// Result of a manual flush (Settings "retry now"). `failed` entries are
+/// pre-formatted "<relay>: <reason>" strings for direct display.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ShareFlushReportView {
+    pub posted: u32,
+    pub deferred: u32,
+    pub duplicates: u32,
+    pub failed: Vec<String>,
+}
+
+/// One post-history row for a milestone's editor sheet. `per_relay_json` is a
+/// serialized `{ "<relay>": {"state": ..., "reason": ...}, ... }` map — kept
+/// opaque across the FFI so the per-relay schema can evolve engine-side
+/// without a bindings regen.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ShareHistoryEntryView {
+    pub event_id: String,
+    pub created_ms: i64,
+    pub state: String,
+    pub per_relay_json: String,
+}
+
+/// Fast-path gate for every detection hook: one settings read through the
+/// engine's enabled flag. Detection is ALWAYS a no-op while disabled, and
+/// hook helpers additionally swallow engine errors by design — sharing
+/// failures must never surface in, or block, learning flows
+/// (DESIGN §6: "publishing failures are never user-visible errors").
+fn share_enabled_fast(db: &Database) -> bool {
+    // REQ-B1
+    share_nostr::is_enabled(db)
+}
+
+/// Hook: after a successful review submit. reviews.* threshold milestones
+/// were removed (Appendix R), so this only dirties today's streak for the
+/// lazy streak detector (evaluated at flush / next hook_stats_refresh).
+fn share_hook_review_submitted(db: &Database) {
+    if share_enabled_fast(db) {
+        // REQ-B16
+        share_nostr::mark_streak_dirty(db);
+    }
+}
+
+/// Hook: after the alphabet gate latches (record_alphabet_check_result pass
+/// lane). The engine re-reads the gate state and is lane-aware (the
+/// declared_known lane never posts).
+fn share_hook_gate_latched(db: &Database) {
+    if share_enabled_fast(db) {
+        // REQ-B16
+        let _ = share_nostr::detect_gate_latch(db);
+    }
+}
+
+/// Hook: on the home-screen stats refresh. Engine runs streak.{7,30,100} +
+/// chapter.mastered detection; internally cheap-cached so a UITab storm
+/// costs at most one detection pass per cache window.
+fn share_hook_stats_refresh(db: &Database, cards: &[greek_core::srs::Card]) {
+    if share_enabled_fast(db) {
+        // REQ-B16
+        share_nostr::facade::detect_streak_chapter(db, cards);
+    }
+}
+
+/// Progress-sharing operations. Kotlin-side names camelCase via UniFFI:
+/// share_config_get -> shareConfigGet, share_enable -> shareEnable, ...
+#[uniffi::export]
+impl GreekCore {
+    /// Sharing config snapshot for the Settings screen.
+    pub fn share_config_get(&self) -> ShareConfigView {
+        let db = self.db.lock().unwrap();
+        ShareConfigView {
+            enabled: share_nostr::is_enabled(&db),      // REQ-B1
+            relays: share_nostr::relays_get(&db),       // REQ-B2
+            share_pubkey_hex: share_nostr::share_pubkey_hex(&db) // REQ-B3
+                .unwrap_or_default(),
+        }
+    }
+
+    /// Enable sharing: validates + stores the relay list, derives the sharing
+    /// identity, and seeds posted markers for already-crossed thresholds so
+    /// NOTHING already achieved post-dates enable (zero retroactivity).
+    /// The UI must show the Appendix-R disclosure screen before calling this.
+    pub fn share_enable(&self, relays: Vec<String>) -> Result<(), GreekError> {
+        let db = self.db.lock().unwrap();
+        share_nostr::facade::enable(&db, &relays, &self.cards).map_err(share_err) // REQ-B4 (facade, cards for seeding)
+    }
+
+    /// Disable sharing: stops the publisher and clears queued outbox rows.
+    /// When `forget_identity` is set the engine also drops any derived-key
+    /// materialization cache it holds; HKDF derivation is stateless, so the
+    /// next enable derives byte-identical keys again (i.e. "forget" does not
+    /// and cannot retire the derived pubkey — deletion of already-posted
+    /// notes is off-table for v1; see DESIGN Appendix R).
+    pub fn share_disable(&self, forget_identity: bool) {
+        let db = self.db.lock().unwrap();
+        // Errors are swallowed: disable must always succeed UI-side (worst
+        // case leftover queue rows, which the next enable clears anyway).
+        let _ = share_nostr::disable(&db, forget_identity); // REQ-B5
+    }
+
+    /// Replace the sharing relay list. Policy (engine-enforced): `wss://`
+    /// only, at most 8, deduped. Loopback affordance used by the e2e harness:
+    /// `ws://127.0.0.1…` / `ws://localhost…` IS accepted; plain `http(s)://`
+    /// and non-loopback `ws://` are refused.
+    pub fn share_relays_set(&self, relays: Vec<String>) -> Result<(), GreekError> {
+        let db = self.db.lock().unwrap();
+        share_nostr::relays_set(&db, &relays).map_err(share_err) // REQ-B6
+    }
+
+    /// All milestones with titles/templates (shipped defaults + any custom
+    /// overrides) and per-slug enable/state, for the Share settings section
+    /// and the milestone editor sheet.
+    pub fn share_milestones(&self) -> Vec<ShareMilestoneView> {
+        let db = self.db.lock().unwrap();
+        // REQ-B7 — if the engine returns a differently-shaped row, adapt the
+        // field mapping here only.
+        share_nostr::milestones(&db)
+            .into_iter()
+            .map(|m| ShareMilestoneView {
+                slug: m.slug,
+                title_en: m.title_en,
+                title_el: m.title_el,
+                template_en: m.template_en,
+                template_el: m.template_el,
+                custom_template_en: m.custom_template_en,
+                custom_template_el: m.custom_template_el,
+                enabled: m.enabled,
+                last_posted_ms: m.last_posted_ms,
+                last_state: m.last_state,
+            })
+            .collect()
+    }
+
+    /// Set a custom template override for one milestone + locale ("en"|"el").
+    /// Engine validates: non-empty, <=1024 UTF-8 bytes + grapheme cap, NFC
+    /// normalization, no URLs / image extensions / nostr:or-@ mentions /
+    /// key material patterns. Empty text is REFUSED (use
+    /// share_reset_template to restore the preset instead).
+    pub fn share_set_template(
+        &self,
+        slug: String,
+        locale: String,
+        text: String,
+    ) -> Result<(), GreekError> {
+        let db = self.db.lock().unwrap();
+        share_nostr::set_template(&db, &slug, &locale, &text).map_err(share_err) // REQ-B8
+    }
+
+    /// Restore the shipped preset for one milestone + locale ("reset to
+    /// default" chip). Unknown slug/locale are ignored — reset is idempotent
+    /// UI-side.
+    pub fn share_reset_template(&self, slug: String, locale: String) {
+        let db = self.db.lock().unwrap();
+        let _ = share_nostr::reset_template(&db, &slug, &locale); // REQ-B9
+    }
+
+    /// Per-milestone on/off toggle (independent of the global enable).
+    pub fn share_set_milestone_enabled(&self, slug: String, enabled: bool) {
+        let db = self.db.lock().unwrap();
+        let _ = share_nostr::set_milestone_enabled(&db, &slug, enabled); // REQ-B10
+    }
+
+    /// Render the full post text for the milestone editor's live preview.
+    /// Render ONLY — never publishes — but runs all publish-time validation
+    /// so exactly what the user sees is what would post. `suffix` is the
+    /// milestone-gated personal note (OQ-5); pass "" when there is none.
+    pub fn share_preview(&self, slug: String, suffix: String) -> Result<String, GreekError> {
+        let db = self.db.lock().unwrap();
+        share_nostr::preview(&db, &slug, &suffix).map_err(share_err) // REQ-B11
+    }
+
+    /// Outbox rows waiting for publish: source for the quiet persistent
+    /// "deferred/failed" badge on the Share settings section.
+    pub fn share_pending_count(&self) -> u32 {
+        let db = self.db.lock().unwrap();
+        share_nostr::pending_count(&db) // REQ-B13
+    }
+
+    /// Post history for one milestone (editor sheet): each posted/attempted
+    /// event with its per-relay delivery state.
+    pub fn share_history(&self, slug: String) -> Vec<ShareHistoryEntryView> {
+        let db = self.db.lock().unwrap();
+        // REQ-B14 — same "adapt mapping here only" rule as share_milestones.
+        share_nostr::history(&db, &slug)
+            .into_iter()
+            .map(|h| ShareHistoryEntryView {
+                event_id: h.event_id,
+                created_ms: h.created_ms,
+                state: h.state,
+                per_relay_json: h.per_relay_json,
+            })
+            .collect()
+    }
+}
+
+/// Async progress-sharing operation. Kept in its own async impl block so the
+/// sync fns above stay lock-cheap.
+#[uniffi::export(async_runtime = "tokio")]
+impl GreekCore {
+    /// Manually flush the outbox NOW (Settings "retry"), bypassing the
+    /// jittered daily window. REQ-B12 (integration constraint): the engine
+    /// takes the SHARED `Mutex<Database>` and must lock it only for short
+    /// db-critical sections — never across network awaits (a std MutexGuard
+    /// is !Send, and uniffi requires exported futures to be Send; this is
+    /// the same snapshot/relock discipline as sync_nostr_push). Engine flush
+    /// is single-flight and rate-cap bounded; while in flight other bindings
+    /// calls may block briefly on individual engine lock sections.
+    pub async fn share_flush_now(&self) -> Result<ShareFlushReportView, GreekError> {
+        let r = share_nostr::flush_now(&self.db).await.map_err(share_err)?; // REQ-B12
+        Ok(ShareFlushReportView {
+            posted: r.posted,
+            deferred: r.deferred,
+            duplicates: r.duplicates,
+            failed: r
+                .failed
+                .into_iter()
+                .map(|(relay, reason)| format!("{relay}: {reason}"))
+                .collect(),
+        })
+    }
+}
+
 /// Count consecutive calendar days (working backward from today) that have
 /// at least one review in `review_logs`. Timestamps are ISO-8601 (with a 'T');
 /// we compare on the YYYY-MM-DD date prefix.
@@ -1265,4 +1657,94 @@ fn date_to_epoch_days(date: &str) -> Option<i64> {
 #[uniffi::export]
 pub fn parse_postag(postag: String) -> String {
     MorphologyDb::parse_postag(&postag)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp_db_path(tag: &str) -> (std::path::PathBuf, String) {
+        let dir = std::env::temp_dir().join(format!("greek-w9-{tag}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("app.db");
+        (dir, path.to_string_lossy().into_owned())
+    }
+
+    // Backup export must contain neither the secret's key nor its value,
+    // even when one is stashed (secrets live outside the sync projection).
+    #[test]
+    fn test_backup_export_scrubs_secrets() {
+        let (dir, path) = tmp_db_path("export");
+        let core = GreekCore::new(path, None).unwrap();
+        let secret = format!("nsec1{}", "q".repeat(58));
+        core.secret_put("nostr_nsec".to_string(), secret.clone()).unwrap();
+        core.sync_set_nostr_relays("wss://relay.example.com".to_string());
+
+        let json = core.sync_export_backup_json();
+        assert!(!json.contains("nostr_nsec"), "export leaked the secret KEY");
+        assert!(!json.contains(&secret), "export leaked the secret VALUE");
+        // (and confirm the export isn't just empty — relays must be there)
+        assert!(json.contains("relay.example.com"), "sanity: {json:?}");
+
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Identity generation routes to the vault; the synced settings tables
+    // stay clean, and sync round-trips still parse the key.
+    #[test]
+    fn test_generate_identity_stores_in_vault_not_settings() {
+        let (dir, path) = tmp_db_path("ident");
+        let core = GreekCore::new(path, None).unwrap();
+        let pubkey = core.sync_generate_nostr_identity();
+        assert_eq!(pubkey.len(), 64);
+        assert!(core.secret_has("nostr_nsec".to_string()));
+
+        let json = core.sync_export_backup_json();
+        assert!(!json.contains("nostr_nsec"));
+        let cfg = core.sync_nostr_config();
+        assert!(cfg.has_identity);
+
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Legacy pre-v4 location: the reader falls back, then migrates the
+    // value into the vault and purges both synced/plaintext copies.
+    #[test]
+    fn test_load_nostr_nsec_migrates_legacy_setting_on_read() {
+        let (dir, path) = tmp_db_path("legacy");
+        let hex_nsec = "ab".repeat(32);
+        {
+            let db = Database::open(&path, None).unwrap();
+            db.conn()
+                .execute(
+                    "INSERT INTO user_settings (key, value) VALUES ('nostr_nsec', ?1)",
+                    [&hex_nsec],
+                )
+                .unwrap();
+        }
+        let db = Database::open(&path, None).unwrap();
+        assert_eq!(load_nostr_nsec(&db).as_deref(), Some(hex_nsec.as_str()));
+        assert_eq!(
+            greek_core::secret_get(&db, "nostr_nsec").unwrap().as_deref(),
+            Some(hex_nsec.as_str()),
+            "value must land in the secrets vault"
+        );
+        for table in ["user_settings", "settings_sync"] {
+            let n: i64 = db
+                .conn()
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM {table} WHERE key = 'nostr_nsec'"),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(n, 0, "{table} copy must be purged");
+        }
+        nostr_keys(&db).expect("identity must parse after migration");
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -13,6 +13,11 @@ name = "uniffi_bindings"
 uniffi = { version = "0.28", features = ["cli", "tokio"] }
 greek-core = { path = "../core" }
 sync-nostr = { path = "../sync-nostr" }
+# Progress sharing (DESIGN-progress-sharing.md). W9-C consumes the frozen
+# W9-B engine surface; crate lands as crates/share-nostr at merge time.
+# INTEGRATION-STEP: root workspace `members` must also gain "crates/share-nostr"
+# (root Cargo.toml is owned outside this wave's file set).
+share-nostr = { path = "../share-nostr" }
 sync-iroh = { path = "../sync-iroh" }
 nostr-sdk = { version = "0.43", default-features = false, features = ["nip44"] }
 serde_json = { workspace = true }

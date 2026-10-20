@@ -152,3 +152,33 @@ val syncAssets by tasks.registering {
 tasks.named("preBuild") {
     dependsOn(syncAssets)
 }
+
+// Wave-9 polytonic coverage audit (DESIGN-greek-keyboard.md Appendix R —
+// "Coverage audit (CI)"). Compares every Greek codepoint (U+0370-03FF,
+// U+1F00-1FFF) used by the NFC-normalized decks + morphology lexicon against
+// the emittable set declared in KeyboardVariants.kt, failing the build with
+// the uncovered list. Deliberately NOT on preBuild: default builds tolerate
+// a missing morphology.sqlite (gitignored 113MB artifact, skipped with a
+// warning), and the audit runs under `check`/CI or on demand via
+// `./gradlew :app:polytonicAudit`.
+val polytonicAudit by tasks.registering(Exec::class) {
+    description = "Verify every polytonic Greek codepoint in the decks and " +
+        "morphology lexicon is emittable by the in-app keyboard."
+    group = "verification"
+    val variantsFile = file("src/main/java/com/greekapp/ui/components/KeyboardVariants.kt")
+    val scriptFile = rootProject.file("gradle/polytonic_audit.py")
+    inputs.files(variantsFile, scriptFile)
+    inputs.dir(dataDir.resolve("cards")).withPropertyName("decks")
+    val dbFile = dataDir.resolve("morphology.sqlite")
+    if (dbFile.exists()) inputs.file(dbFile).withPropertyName("morphologyDb")
+    commandLine(
+        "python3", scriptFile.absolutePath,
+        "--variants", variantsFile.absolutePath,
+        "--data", dataDir.absolutePath
+    )
+}
+
+tasks.named("check") {
+    dependsOn(polytonicAudit)
+}
+

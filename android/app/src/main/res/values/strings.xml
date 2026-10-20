@@ -161,4 +161,76 @@
     <!-- Auto-sync -->
     <string name="sync_autolaunch_title">Sync on app launch</string>
     <string name="sync_autolaunch_desc">Runs one pull/push cycle once a transport is configured</string>
+
+    <!-- ==================== Wave 9: Share progress (nostr) ==================== -->
+
+    <!-- Settings card -->
+    <string name="settings_share_row_title">Share progress (nostr)</string>
+    <string name="settings_share_row_description">Public milestone notes — streaks, letters cleared — posted to relays you choose. Off by default.</string>
+    <string name="settings_share_manage">Manage sharing</string>
+    <string name="settings_share_manage_description">Relays, milestones, templates, and flush</string>
+    <string name="settings_share_pending_badge">%1$d waiting to post</string>
+
+    <!-- Consent dialog (first enable). Copy is binding per Appendix R. -->
+    <string name="share_consent_title">Share progress publicly?</string>
+    <string name="share_consent_permanence">Posts are public, timestamped, and cannot reliably be deleted. Anyone with this npub can enumerate every milestone this identity has ever posted.</string>
+    <string name="share_consent_example_label">Example post you might send:</string>
+    <string name="share_consent_example_unavailable">Preview unavailable until the app core is updated.</string>
+    <string name="share_consent_relays_label">Pick at least one relay — nothing is selected for you:</string>
+    <string name="share_relay_damus" translatable="false">relay.damus.io</string>
+    <string name="share_relay_noslol" translatable="false">nos.lol</string>
+    <string name="share_relay_nostr_band_label">relay.nostr.band — indexed/searchable (posts can appear in public search)</string>
+    <string name="share_relay_custom_hint" translatable="false">wss://your-relay.example</string>
+    <string name="share_relay_add">Add relay</string>
+    <string name="share_relay_invalid">Relay must be a wss:// URL (ws://127.0.0.1 allowed for local testing)</string>
+    <string name="share_consent_mixing_warning">You\u2019re mixing well-known public relays with a custom relay. Public posts flow to every relay on this list.</string>
+    <string name="share_consent_confirm">Turn on sharing with these relays</string>
+    <string name="share_consent_cancel">Not now</string>
+
+    <!-- Disable dialog -->
+    <string name="share_disable_title">Turn off sharing?</string>
+    <string name="share_disable_permanence_note">Past posts are permanent: turning off stops future posts only. Deletion requests (kind-5) are best-effort and not supported in this version.</string>
+    <string name="share_disable_keep">Stop posting (keep identity)</string>
+    <string name="share_disable_forget">Stop and forget sharing identity</string>
+    <string name="share_cancel">Cancel</string>
+
+    <!-- Share screen -->
+    <string name="share_title">Share progress</string>
+    <string name="share_back">Back</string>
+    <string name="share_unavailable">Sharing needs an updated app core; this build can\u2019t reach it.</string>
+    <string name="share_off_hint">Sharing is off. Turn it on from Settings to edit relays and milestones.</string>
+    <string name="share_server_card_title">Server &amp; identity</string>
+    <string name="share_pubkey">Public key: %1$s</string>
+    <string name="share_pubkey_none">Public key: not derived yet (created on first enable)</string>
+    <string name="share_relay_remove_desc">Remove %1$s</string>
+    <string name="share_relay_add_dialog_title">Add a relay</string>
+    <string name="share_milestones_card_title">Milestones</string>
+    <string name="share_milestone_toggle_desc">Enable %1$s</string>
+    <string name="share_last_posted">Last posted %1$s</string>
+    <string name="share_never_posted">Not posted yet</string>
+    <string name="share_status_card_title">Status</string>
+    <string name="share_status_counts">%1$d pending · %2$d deferred · %3$d failed</string>
+    <string name="share_flush_now">Flush now</string>
+    <string name="share_flush_report">Last flush: %1$d posted, %2$d deferred, %3$d duplicates, %4$d failed</string>
+    <string name="share_status_failures_label">Recent failures:</string>
+
+    <!-- One-shot messages -->
+    <string name="share_enabled_msg">Sharing is on</string>
+    <string name="share_disabled_msg">Sharing is off</string>
+    <string name="share_relays_saved">Relays saved</string>
+    <string name="share_template_saved">Saved</string>
+    <string name="share_error">Sharing failed: %1$s</string>
+
+    <!-- Milestone editor sheet -->
+    <string name="share_editor_locale_en" translatable="false">EN</string>
+    <string name="share_editor_locale_el" translatable="false">ΕΛ</string>
+    <string name="share_editor_preset_label">Preset:</string>
+    <string name="share_editor_preview_label">Will post:</string>
+    <string name="share_editor_field_label">Your sentence for this locale (optional)</string>
+    <string name="share_editor_counter" translatable="false">%1$d/420</string>
+    <string name="share_editor_save">Save</string>
+    <string name="share_editor_reset">Reset to default</string>
+    <string name="share_editor_close">Close</string>
+    <string name="share_history_label">Post history</string>
+    <string name="share_history_empty">No posts yet for this milestone</string>
 </resources>

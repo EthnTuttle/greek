@@ -181,6 +181,70 @@ interface GreekCoreApi {
 
     /** Run a one-shot iroh sync against currently reachable paired devices. */
     suspend fun syncIrohNow(): SyncStats
+
+    // ---- Wave-9 contract additions (Progress sharing over nostr) ----
+    // These UniFFI exports do NOT exist in the generated bindings yet — the
+    // Rust `share-nostr` crate lands at integration. RustCoreAdapter resolves
+    // them reflectively (see WAVE9-NOTES.md-style comments there) so the same
+    // APK keeps working pre- and post-regen; while the symbols are absent the
+    // feature reads as "off, nothing pending, no identity" and every action
+    // throws UnsupportedOperationException, which the UI renders verbatim.
+    // See DESIGN-progress-sharing.md + Appendix R for the binding decisions
+    // (consent copy, permanence honesty, milestone set) this surface serves.
+
+    /** Live share config: master switch, derived sharing identity, relay list. */
+    fun shareConfigGet(): ShareConfig = ShareConfig.DISABLED // WAVE9-WIRE
+
+    /**
+     * Turn sharing on with [relays] (wss:// URLs the user explicitly picked in
+     * the consent flow). Seeds posted-markers for already-crossed thresholds —
+     * zero retroactive posts — and lazily derives the sharing identity.
+     * Throws on invalid relay URLs or missing sync identity.
+     */
+    fun shareEnable(relays: List<String>) {} // WAVE9-WIRE
+
+    /**
+     * Turn sharing off: stops posting and clears the queue. When
+     * [forgetIdentity] is true, also drops the derived sharing identity
+     * (past posts are permanent — kind-5 deletion is off-table for v1).
+     */
+    fun shareDisable(forgetIdentity: Boolean) {} // WAVE9-WIRE
+
+    /** Replace the relay list wholesale (rows editor; never CSV). Throws on invalid URLs. */
+    fun shareRelaysSet(relays: List<String>) {} // WAVE9-WIRE
+
+    /** All milestones the engine ships, with per-locale templates + status. */
+    fun shareMilestones(): List<ShareMilestone> = emptyList() // WAVE9-WIRE
+
+    /** Save the per-locale user text for [slug]. Throws with the engine's own validation message. */
+    fun shareSetTemplate(slug: String, locale: String, text: String) {} // WAVE9-WIRE
+
+    /** Reset only the given locale slot of [slug] back to the shipped preset. */
+    fun shareResetTemplate(slug: String, locale: String) {} // WAVE9-WIRE
+
+    /** Per-milestone posting toggle (independent of the master switch). */
+    fun shareSetMilestoneEnabled(slug: String, enabled: Boolean) {} // WAVE9-WIRE
+
+    /**
+     * Render exactly what would post for [slug] with [suffix] appended.
+     * Throws (message = engine's verbatim reason) when [suffix] violates the
+     * content policy — the editor surfaces that string under the field.
+     */
+    fun sharePreview(slug: String, suffix: String): String =
+        throw UnsupportedOperationException("Share unavailable: stale native library") // WAVE9-WIRE
+
+    /**
+     * Synchronous one-shot outbox flush. The Rust side may regenerate this as
+     * `suspend fun shareFlushNow()` — if so, the adapter override must become
+     * a suspend wrapper (same call site shape as syncNostrPush).
+     */
+    fun shareFlushNow(): ShareFlushReport = ShareFlushReport.EMPTY // WAVE9-WIRE
+
+    /** Outbox rows still waiting to post (drives the Settings badge). */
+    fun sharePendingCount(): UInt = 0u // WAVE9-WIRE
+
+    /** Post/delivery history for one milestone slug, newest first. */
+    fun shareHistory(slug: String): List<ShareHistoryEntry> = emptyList() // WAVE9-WIRE
 }
 
 /**
@@ -294,4 +358,73 @@ data class PairedDevice(
 data class NostrConfig(
     val relaysCsv: String,
     val hasIdentity: Boolean
+)
+
+/**
+ * Kotlin-side mirror of the wave-9 `ShareConfigView` UniFFI record
+ * (`shareConfigGet`): master switch, the derived sharing pubkey (hex; ""
+ * until the identity exists), and the relay list the user opted in to.
+ */
+data class ShareConfig(
+    val enabled: Boolean,
+    val pubkeyHex: String,
+    val relays: List<String>
+) {
+    companion object {
+        /** Fail-soft default while the wave-9 bindings are absent. */
+        val DISABLED = ShareConfig(enabled = false, pubkeyHex = "", relays = emptyList())
+    }
+}
+
+/**
+ * Kotlin-side mirror of the wave-9 `ShareMilestoneView` UniFFI record.
+ * [customTemplateEn]/[customTemplateEl] are null while the shipped preset is
+ * in effect for that locale. [lastPostedMs] is epoch milliseconds, 0 = never.
+ * [lastState] is the engine's per-slug delivery state string ("", "queued",
+ * "posted", "deferred", "failed") — the UI maps it to an icon.
+ */
+data class ShareMilestone(
+    val slug: String,
+    val titleEn: String,
+    val titleEl: String,
+    val templateEn: String,
+    val templateEl: String,
+    val customTemplateEn: String?,
+    val customTemplateEl: String?,
+    val enabled: Boolean,
+    val lastPostedMs: Long,
+    val lastState: String
+) {
+    /** Effective text per locale: custom edit wins, preset otherwise. */
+    fun templateFor(locale: String): String =
+        (if (locale == "el") customTemplateEl else customTemplateEn)
+            ?: if (locale == "el") templateEl else templateEn
+}
+
+/**
+ * Kotlin-side mirror of the wave-9 `ShareFlushReportView` UniFFI record.
+ * [failed] carries the engine's per-relay failure strings verbatim
+ * (relay + reason) — rendered as-is per Appendix R's failure-honesty rule.
+ */
+data class ShareFlushReport(
+    val posted: UInt,
+    val deferred: UInt,
+    val duplicates: UInt,
+    val failed: List<String>
+) {
+    companion object {
+        val EMPTY = ShareFlushReport(0u, 0u, 0u, emptyList())
+    }
+}
+
+/**
+ * Kotlin-side mirror of the wave-9 `ShareHistoryEntryView` UniFFI record.
+ * [perRelayJson] is an opaque per-relay delivery-state JSON object; the UI
+ * pretty-prints it (org.json) and falls back to the raw string.
+ */
+data class ShareHistoryEntry(
+    val eventId: String,
+    val createdMs: Long,
+    val state: String,
+    val perRelayJson: String
 )

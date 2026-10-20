@@ -31,6 +31,8 @@ import com.greekapp.viewmodel.Section
 fun CurriculumScreen(
     /** Wave-5: navigate to the Alphabet Check destination. */
     onTakeAlphabetCheck: () -> Unit = {},
+    /** Wave-9: navigate to the typed_letter drill destination. */
+    onOpenLetterTyping: () -> Unit = {},
     viewModel: CurriculumViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -76,6 +78,20 @@ fun CurriculumScreen(
                 if (state.alphabetGateUnmet) {
                     item(key = "alphabet-gate") {
                         AlphabetGateRow(onTakeAlphabetCheck = onTakeAlphabetCheck)
+                    }
+                }
+                // Wave-9: letters-root row for the typed_letter drill. The
+                // letters track has no dedicated chapter screen (letters flow
+                // through Practice + this curriculum tab, which is the letters
+                // root), so the drill is a standalone pushed route entered here.
+                if (state.lettersAvailable) {
+                    item(key = "letter-typing-drill") {
+                        OutlinedButton(
+                            onClick = onOpenLetterTyping,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Type the letters (Ελληνικά)")
+                        }
                     }
                 }
                 state.sections.forEach { section ->

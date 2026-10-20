@@ -2903,6 +2903,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
+name = "hkdf"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b5f8eb2ad728638ea2c7d47a21db23b7b58a72ed6a38256b8a1849f15fbbdf7"
+dependencies = [
+ "hmac",
+]
+
+[[package]]
 name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6056,6 +6065,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "share-nostr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-wsocket",
+ "fsrs",
+ "futures-util",
+ "greek-core",
+ "hkdf",
+ "nostr-database",
+ "nostr-relay-builder",
+ "nostr-sdk",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tokio",
+ "unicode-normalization",
+ "unicode-segmentation",
+ "uuid",
+]
+
+[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7046,6 +7079,7 @@ dependencies = [
  "nostr-sdk",
  "rusqlite",
  "serde_json",
+ "share-nostr",
  "sync-iroh",
  "sync-nostr",
  "thiserror 2.0.18",

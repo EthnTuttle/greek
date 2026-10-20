@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.greekapp.R
 import com.greekapp.core.McqData
+import com.greekapp.ui.components.GreekKeyboardContainer
+import com.greekapp.ui.components.GreekTextField
 import com.greekapp.ui.theme.GreekFontFamily
 import com.greekapp.viewmodel.PracticeState
 import com.greekapp.viewmodel.PracticeViewModel
@@ -112,10 +114,13 @@ fun PracticeScreen(
         return
     }
 
+    // Wave-9: screen-level in-app Greek keyboard mounts here (device-local
+    // input mode decides panel/strip/none; the system IME still works in
+    // every mode). Only the live question surface is wrapped — loading /
+    // verdict / summary states above have no field and return early.
+    GreekKeyboardContainer { contentModifier ->
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = contentModifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         // Progress header
@@ -223,6 +228,7 @@ fun PracticeScreen(
             }
         }
     }
+    }
 }
 
 /** MCQ body: Greek choices as large buttons with immediate right/wrong tinting. */
@@ -288,7 +294,10 @@ private fun ColumnScope.TypedAnswer(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        OutlinedTextField(
+        // Wave-9: Greek-enabled field — owns TextFieldValue (selection +
+        // composition preserved) and receives commits from the on-screen
+        // polytonic keyboard while focused; system IME input still works.
+        GreekTextField(
             value = state.typedInput,
             onValueChange = onInputChange,
             enabled = feedback == null,

@@ -805,6 +805,38 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -876,6 +908,38 @@ internal interface UniffiLib : Library {
     ): Byte
     fun uniffi_uniffi_bindings_fn_method_greekcore_search_dictionary(`ptr`: Pointer,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_secret_delete(`ptr`: Pointer,`key`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_uniffi_bindings_fn_method_greekcore_secret_get(`ptr`: Pointer,`key`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_secret_has(`ptr`: Pointer,`key`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    fun uniffi_uniffi_bindings_fn_method_greekcore_secret_put(`ptr`: Pointer,`key`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_config_get(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_disable(`ptr`: Pointer,`forgetIdentity`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_enable(`ptr`: Pointer,`relays`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_flush_now(`ptr`: Pointer,
+    ): Long
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_history(`ptr`: Pointer,`slug`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_milestones(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_pending_count(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): Int
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_preview(`ptr`: Pointer,`slug`: RustBuffer.ByValue,`suffix`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_relays_set(`ptr`: Pointer,`relays`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_reset_template(`ptr`: Pointer,`slug`: RustBuffer.ByValue,`locale`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_set_milestone_enabled(`ptr`: Pointer,`slug`: RustBuffer.ByValue,`enabled`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_uniffi_bindings_fn_method_greekcore_share_set_template(`ptr`: Pointer,`slug`: RustBuffer.ByValue,`locale`: RustBuffer.ByValue,`text`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun uniffi_uniffi_bindings_fn_method_greekcore_submit_practice_result(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`correct`: Byte,`exact`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     fun uniffi_uniffi_bindings_fn_method_greekcore_submit_review(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`rating`: Byte,uniffi_out_err: UniffiRustCallStatus, 
@@ -1070,6 +1134,38 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_search_dictionary(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_secret_delete(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_secret_get(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_secret_has(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_secret_put(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_config_get(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_disable(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_enable(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_flush_now(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_history(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_milestones(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_pending_count(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_preview(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_relays_set(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_reset_template(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_set_milestone_enabled(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_share_set_template(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_submit_practice_result(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_submit_review(
@@ -1192,6 +1288,54 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_search_dictionary() != 42616.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_secret_delete() != 25729.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_secret_get() != 35173.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_secret_has() != 14303.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_secret_put() != 14746.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_config_get() != 17985.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_disable() != 43746.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_enable() != 41090.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_flush_now() != 26321.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_history() != 16325.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_milestones() != 48081.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_pending_count() != 13357.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_preview() != 31605.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_relays_set() != 40756.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_reset_template() != 961.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_set_milestone_enabled() != 47278.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_set_template() != 28128.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_submit_practice_result() != 35896.toShort()) {
@@ -1798,6 +1942,117 @@ public interface GreekCoreInterface {
     fun `searchDictionary`(`query`: kotlin.String, `limit`: kotlin.Int): List<SearchResultView>
     
     /**
+     * Remove a secret; no-op when absent.
+     */
+    fun `secretDelete`(`key`: kotlin.String)
+    
+    /**
+     * Read a secret (e.g. `nostr_nsec`); `None` when absent.
+     */
+    fun `secretGet`(`key`: kotlin.String): kotlin.String?
+    
+    /**
+     * `true` when the secret exists (no value read-out).
+     */
+    fun `secretHas`(`key`: kotlin.String): kotlin.Boolean
+    
+    /**
+     * Store a secret (upsert).
+     */
+    fun `secretPut`(`key`: kotlin.String, `value`: kotlin.String)
+    
+    /**
+     * Sharing config snapshot for the Settings screen.
+     */
+    fun `shareConfigGet`(): ShareConfigView
+    
+    /**
+     * Disable sharing: stops the publisher and clears queued outbox rows.
+     * When `forget_identity` is set the engine also drops any derived-key
+     * materialization cache it holds; HKDF derivation is stateless, so the
+     * next enable derives byte-identical keys again (i.e. "forget" does not
+     * and cannot retire the derived pubkey — deletion of already-posted
+     * notes is off-table for v1; see DESIGN Appendix R).
+     */
+    fun `shareDisable`(`forgetIdentity`: kotlin.Boolean)
+    
+    /**
+     * Enable sharing: validates + stores the relay list, derives the sharing
+     * identity, and seeds posted markers for already-crossed thresholds so
+     * NOTHING already achieved post-dates enable (zero retroactivity).
+     * The UI must show the Appendix-R disclosure screen before calling this.
+     */
+    fun `shareEnable`(`relays`: List<kotlin.String>)
+    
+    /**
+     * Manually flush the outbox NOW (Settings "retry"), bypassing the
+     * jittered daily window. REQ-B12 (integration constraint): the engine
+     * takes the SHARED `Mutex<Database>` and must lock it only for short
+     * db-critical sections — never across network awaits (a std MutexGuard
+     * is !Send, and uniffi requires exported futures to be Send; this is
+     * the same snapshot/relock discipline as sync_nostr_push). Engine flush
+     * is single-flight and rate-cap bounded; while in flight other bindings
+     * calls may block briefly on individual engine lock sections.
+     */
+    suspend fun `shareFlushNow`(): ShareFlushReportView
+    
+    /**
+     * Post history for one milestone (editor sheet): each posted/attempted
+     * event with its per-relay delivery state.
+     */
+    fun `shareHistory`(`slug`: kotlin.String): List<ShareHistoryEntryView>
+    
+    /**
+     * All milestones with titles/templates (shipped defaults + any custom
+     * overrides) and per-slug enable/state, for the Share settings section
+     * and the milestone editor sheet.
+     */
+    fun `shareMilestones`(): List<ShareMilestoneView>
+    
+    /**
+     * Outbox rows waiting for publish: source for the quiet persistent
+     * "deferred/failed" badge on the Share settings section.
+     */
+    fun `sharePendingCount`(): kotlin.UInt
+    
+    /**
+     * Render the full post text for the milestone editor's live preview.
+     * Render ONLY — never publishes — but runs all publish-time validation
+     * so exactly what the user sees is what would post. `suffix` is the
+     * milestone-gated personal note (OQ-5); pass "" when there is none.
+     */
+    fun `sharePreview`(`slug`: kotlin.String, `suffix`: kotlin.String): kotlin.String
+    
+    /**
+     * Replace the sharing relay list. Policy (engine-enforced): `wss://`
+     * only, at most 8, deduped. Loopback affordance used by the e2e harness:
+     * `ws://127.0.0.1…` / `ws://localhost…` IS accepted; plain `http(s)://`
+     * and non-loopback `ws://` are refused.
+     */
+    fun `shareRelaysSet`(`relays`: List<kotlin.String>)
+    
+    /**
+     * Restore the shipped preset for one milestone + locale ("reset to
+     * default" chip). Unknown slug/locale are ignored — reset is idempotent
+     * UI-side.
+     */
+    fun `shareResetTemplate`(`slug`: kotlin.String, `locale`: kotlin.String)
+    
+    /**
+     * Per-milestone on/off toggle (independent of the global enable).
+     */
+    fun `shareSetMilestoneEnabled`(`slug`: kotlin.String, `enabled`: kotlin.Boolean)
+    
+    /**
+     * Set a custom template override for one milestone + locale ("en"|"el").
+     * Engine validates: non-empty, <=1024 UTF-8 bytes + grapheme cap, NFC
+     * normalization, no URLs / image extensions / nostr:or-@ mentions /
+     * key material patterns. Empty text is REFUSED (use
+     * share_reset_template to restore the preset instead).
+     */
+    fun `shareSetTemplate`(`slug`: kotlin.String, `locale`: kotlin.String, `text`: kotlin.String)
+    
+    /**
      * Record a practice outcome as an SRS review tagged source="practice":
      * wrong -> 1 (Again), correct -> 3 (Good), correct + exact -> 4 (Easy).
      * Returns false on error.
@@ -2304,6 +2559,283 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     )
     }
+    
+
+    
+    /**
+     * Remove a secret; no-op when absent.
+     */override fun `secretDelete`(`key`: kotlin.String)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_secret_delete(
+        it, FfiConverterString.lower(`key`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Read a secret (e.g. `nostr_nsec`); `None` when absent.
+     */override fun `secretGet`(`key`: kotlin.String): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_secret_get(
+        it, FfiConverterString.lower(`key`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * `true` when the secret exists (no value read-out).
+     */override fun `secretHas`(`key`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_secret_has(
+        it, FfiConverterString.lower(`key`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Store a secret (upsert).
+     */
+    @Throws(GreekException::class)override fun `secretPut`(`key`: kotlin.String, `value`: kotlin.String)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_secret_put(
+        it, FfiConverterString.lower(`key`),FfiConverterString.lower(`value`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Sharing config snapshot for the Settings screen.
+     */override fun `shareConfigGet`(): ShareConfigView {
+            return FfiConverterTypeShareConfigView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_config_get(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Disable sharing: stops the publisher and clears queued outbox rows.
+     * When `forget_identity` is set the engine also drops any derived-key
+     * materialization cache it holds; HKDF derivation is stateless, so the
+     * next enable derives byte-identical keys again (i.e. "forget" does not
+     * and cannot retire the derived pubkey — deletion of already-posted
+     * notes is off-table for v1; see DESIGN Appendix R).
+     */override fun `shareDisable`(`forgetIdentity`: kotlin.Boolean)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_disable(
+        it, FfiConverterBoolean.lower(`forgetIdentity`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Enable sharing: validates + stores the relay list, derives the sharing
+     * identity, and seeds posted markers for already-crossed thresholds so
+     * NOTHING already achieved post-dates enable (zero retroactivity).
+     * The UI must show the Appendix-R disclosure screen before calling this.
+     */
+    @Throws(GreekException::class)override fun `shareEnable`(`relays`: List<kotlin.String>)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_enable(
+        it, FfiConverterSequenceString.lower(`relays`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Manually flush the outbox NOW (Settings "retry"), bypassing the
+     * jittered daily window. REQ-B12 (integration constraint): the engine
+     * takes the SHARED `Mutex<Database>` and must lock it only for short
+     * db-critical sections — never across network awaits (a std MutexGuard
+     * is !Send, and uniffi requires exported futures to be Send; this is
+     * the same snapshot/relock discipline as sync_nostr_push). Engine flush
+     * is single-flight and rate-cap bounded; while in flight other bindings
+     * calls may block briefly on individual engine lock sections.
+     */
+    @Throws(GreekException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `shareFlushNow`() : ShareFlushReportView {
+        return uniffiRustCallAsync(
+        callWithPointer { thisPtr ->
+            UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_flush_now(
+                thisPtr,
+                
+            )
+        },
+        { future, callback, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_poll_rust_buffer(future, callback, continuation) },
+        { future, continuation -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_complete_rust_buffer(future, continuation) },
+        { future -> UniffiLib.INSTANCE.ffi_uniffi_bindings_rust_future_free_rust_buffer(future) },
+        // lift function
+        { FfiConverterTypeShareFlushReportView.lift(it) },
+        // Error FFI converter
+        GreekException.ErrorHandler,
+    )
+    }
+
+    
+    /**
+     * Post history for one milestone (editor sheet): each posted/attempted
+     * event with its per-relay delivery state.
+     */override fun `shareHistory`(`slug`: kotlin.String): List<ShareHistoryEntryView> {
+            return FfiConverterSequenceTypeShareHistoryEntryView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_history(
+        it, FfiConverterString.lower(`slug`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * All milestones with titles/templates (shipped defaults + any custom
+     * overrides) and per-slug enable/state, for the Share settings section
+     * and the milestone editor sheet.
+     */override fun `shareMilestones`(): List<ShareMilestoneView> {
+            return FfiConverterSequenceTypeShareMilestoneView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_milestones(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Outbox rows waiting for publish: source for the quiet persistent
+     * "deferred/failed" badge on the Share settings section.
+     */override fun `sharePendingCount`(): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_pending_count(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Render the full post text for the milestone editor's live preview.
+     * Render ONLY — never publishes — but runs all publish-time validation
+     * so exactly what the user sees is what would post. `suffix` is the
+     * milestone-gated personal note (OQ-5); pass "" when there is none.
+     */
+    @Throws(GreekException::class)override fun `sharePreview`(`slug`: kotlin.String, `suffix`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_preview(
+        it, FfiConverterString.lower(`slug`),FfiConverterString.lower(`suffix`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Replace the sharing relay list. Policy (engine-enforced): `wss://`
+     * only, at most 8, deduped. Loopback affordance used by the e2e harness:
+     * `ws://127.0.0.1…` / `ws://localhost…` IS accepted; plain `http(s)://`
+     * and non-loopback `ws://` are refused.
+     */
+    @Throws(GreekException::class)override fun `shareRelaysSet`(`relays`: List<kotlin.String>)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_relays_set(
+        it, FfiConverterSequenceString.lower(`relays`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Restore the shipped preset for one milestone + locale ("reset to
+     * default" chip). Unknown slug/locale are ignored — reset is idempotent
+     * UI-side.
+     */override fun `shareResetTemplate`(`slug`: kotlin.String, `locale`: kotlin.String)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_reset_template(
+        it, FfiConverterString.lower(`slug`),FfiConverterString.lower(`locale`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Per-milestone on/off toggle (independent of the global enable).
+     */override fun `shareSetMilestoneEnabled`(`slug`: kotlin.String, `enabled`: kotlin.Boolean)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_set_milestone_enabled(
+        it, FfiConverterString.lower(`slug`),FfiConverterBoolean.lower(`enabled`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Set a custom template override for one milestone + locale ("en"|"el").
+     * Engine validates: non-empty, <=1024 UTF-8 bytes + grapheme cap, NFC
+     * normalization, no URLs / image extensions / nostr:or-@ mentions /
+     * key material patterns. Empty text is REFUSED (use
+     * share_reset_template to restore the preset instead).
+     */
+    @Throws(GreekException::class)override fun `shareSetTemplate`(`slug`: kotlin.String, `locale`: kotlin.String, `text`: kotlin.String)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_share_set_template(
+        it, FfiConverterString.lower(`slug`),FfiConverterString.lower(`locale`),FfiConverterString.lower(`text`),_status)
+}
+    }
+    
     
 
     
@@ -3290,6 +3822,210 @@ public object FfiConverterTypeSearchResultView: FfiConverterRustBuffer<SearchRes
 
 
 /**
+ * Sharing-config snapshot for the Settings screen. Field names camelCase in
+ * Kotlin via UniFFI.
+ */
+data class ShareConfigView (
+    var `enabled`: kotlin.Boolean, 
+    var `relays`: List<kotlin.String>, 
+    /**
+     * Empty string when sharing identity does not exist yet (never enabled).
+     */
+    var `sharePubkeyHex`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeShareConfigView: FfiConverterRustBuffer<ShareConfigView> {
+    override fun read(buf: ByteBuffer): ShareConfigView {
+        return ShareConfigView(
+            FfiConverterBoolean.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ShareConfigView) = (
+            FfiConverterBoolean.allocationSize(value.`enabled`) +
+            FfiConverterSequenceString.allocationSize(value.`relays`) +
+            FfiConverterString.allocationSize(value.`sharePubkeyHex`)
+    )
+
+    override fun write(value: ShareConfigView, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`enabled`, buf)
+            FfiConverterSequenceString.write(value.`relays`, buf)
+            FfiConverterString.write(value.`sharePubkeyHex`, buf)
+    }
+}
+
+
+
+/**
+ * Result of a manual flush (Settings "retry now"). `failed` entries are
+ * pre-formatted "<relay>: <reason>" strings for direct display.
+ */
+data class ShareFlushReportView (
+    var `posted`: kotlin.UInt, 
+    var `deferred`: kotlin.UInt, 
+    var `duplicates`: kotlin.UInt, 
+    var `failed`: List<kotlin.String>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeShareFlushReportView: FfiConverterRustBuffer<ShareFlushReportView> {
+    override fun read(buf: ByteBuffer): ShareFlushReportView {
+        return ShareFlushReportView(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterSequenceString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ShareFlushReportView) = (
+            FfiConverterUInt.allocationSize(value.`posted`) +
+            FfiConverterUInt.allocationSize(value.`deferred`) +
+            FfiConverterUInt.allocationSize(value.`duplicates`) +
+            FfiConverterSequenceString.allocationSize(value.`failed`)
+    )
+
+    override fun write(value: ShareFlushReportView, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`posted`, buf)
+            FfiConverterUInt.write(value.`deferred`, buf)
+            FfiConverterUInt.write(value.`duplicates`, buf)
+            FfiConverterSequenceString.write(value.`failed`, buf)
+    }
+}
+
+
+
+/**
+ * One post-history row for a milestone's editor sheet. `per_relay_json` is a
+ * serialized `{ "<relay>": {"state": ..., "reason": ...}, ... }` map — kept
+ * opaque across the FFI so the per-relay schema can evolve engine-side
+ * without a bindings regen.
+ */
+data class ShareHistoryEntryView (
+    var `eventId`: kotlin.String, 
+    var `createdMs`: kotlin.Long, 
+    var `state`: kotlin.String, 
+    var `perRelayJson`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeShareHistoryEntryView: FfiConverterRustBuffer<ShareHistoryEntryView> {
+    override fun read(buf: ByteBuffer): ShareHistoryEntryView {
+        return ShareHistoryEntryView(
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ShareHistoryEntryView) = (
+            FfiConverterString.allocationSize(value.`eventId`) +
+            FfiConverterLong.allocationSize(value.`createdMs`) +
+            FfiConverterString.allocationSize(value.`state`) +
+            FfiConverterString.allocationSize(value.`perRelayJson`)
+    )
+
+    override fun write(value: ShareHistoryEntryView, buf: ByteBuffer) {
+            FfiConverterString.write(value.`eventId`, buf)
+            FfiConverterLong.write(value.`createdMs`, buf)
+            FfiConverterString.write(value.`state`, buf)
+            FfiConverterString.write(value.`perRelayJson`, buf)
+    }
+}
+
+
+
+/**
+ * One milestone's editor/row state (see DESIGN-progress-sharing.md §10/OQ-3).
+ */
+data class ShareMilestoneView (
+    var `slug`: kotlin.String, 
+    var `titleEn`: kotlin.String, 
+    var `titleEl`: kotlin.String, 
+    var `templateEn`: kotlin.String, 
+    var `templateEl`: kotlin.String, 
+    var `customTemplateEn`: kotlin.String?, 
+    var `customTemplateEl`: kotlin.String?, 
+    var `enabled`: kotlin.Boolean, 
+    var `lastPostedMs`: kotlin.Long?, 
+    /**
+     * Engine outbox/posted state for the last attempt ("", "queued",
+     * "posted", "deferred", "failed:<reason>", ...).
+     */
+    var `lastState`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeShareMilestoneView: FfiConverterRustBuffer<ShareMilestoneView> {
+    override fun read(buf: ByteBuffer): ShareMilestoneView {
+        return ShareMilestoneView(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalLong.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ShareMilestoneView) = (
+            FfiConverterString.allocationSize(value.`slug`) +
+            FfiConverterString.allocationSize(value.`titleEn`) +
+            FfiConverterString.allocationSize(value.`titleEl`) +
+            FfiConverterString.allocationSize(value.`templateEn`) +
+            FfiConverterString.allocationSize(value.`templateEl`) +
+            FfiConverterOptionalString.allocationSize(value.`customTemplateEn`) +
+            FfiConverterOptionalString.allocationSize(value.`customTemplateEl`) +
+            FfiConverterBoolean.allocationSize(value.`enabled`) +
+            FfiConverterOptionalLong.allocationSize(value.`lastPostedMs`) +
+            FfiConverterString.allocationSize(value.`lastState`)
+    )
+
+    override fun write(value: ShareMilestoneView, buf: ByteBuffer) {
+            FfiConverterString.write(value.`slug`, buf)
+            FfiConverterString.write(value.`titleEn`, buf)
+            FfiConverterString.write(value.`titleEl`, buf)
+            FfiConverterString.write(value.`templateEn`, buf)
+            FfiConverterString.write(value.`templateEl`, buf)
+            FfiConverterOptionalString.write(value.`customTemplateEn`, buf)
+            FfiConverterOptionalString.write(value.`customTemplateEl`, buf)
+            FfiConverterBoolean.write(value.`enabled`, buf)
+            FfiConverterOptionalLong.write(value.`lastPostedMs`, buf)
+            FfiConverterString.write(value.`lastState`, buf)
+    }
+}
+
+
+
+/**
  * Stats returned by every sync operation.
  */
 data class SyncStatsView (
@@ -3488,6 +4224,38 @@ public object FfiConverterTypeGreekError : FfiConverterRustBuffer<GreekException
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalLong: FfiConverterRustBuffer<kotlin.Long?> {
+    override fun read(buf: ByteBuffer): kotlin.Long? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterLong.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.Long?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterLong.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.Long?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterLong.write(value, buf)
+        }
+    }
 }
 
 
@@ -3830,6 +4598,62 @@ public object FfiConverterSequenceTypeSearchResultView: FfiConverterRustBuffer<L
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeSearchResultView.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeShareHistoryEntryView: FfiConverterRustBuffer<List<ShareHistoryEntryView>> {
+    override fun read(buf: ByteBuffer): List<ShareHistoryEntryView> {
+        val len = buf.getInt()
+        return List<ShareHistoryEntryView>(len) {
+            FfiConverterTypeShareHistoryEntryView.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ShareHistoryEntryView>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeShareHistoryEntryView.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ShareHistoryEntryView>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeShareHistoryEntryView.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeShareMilestoneView: FfiConverterRustBuffer<List<ShareMilestoneView>> {
+    override fun read(buf: ByteBuffer): List<ShareMilestoneView> {
+        val len = buf.getInt()
+        return List<ShareMilestoneView>(len) {
+            FfiConverterTypeShareMilestoneView.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ShareMilestoneView>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeShareMilestoneView.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ShareMilestoneView>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeShareMilestoneView.write(it, buf)
         }
     }
 }

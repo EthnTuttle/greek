@@ -17,21 +17,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.greekapp.R
+import com.greekapp.ui.components.GreekKeyboardContainer
+import com.greekapp.ui.components.GreekTextField
 import com.greekapp.ui.theme.GreekFontFamily
 import com.greekapp.viewmodel.DictionaryEntry
 import com.greekapp.viewmodel.DictionaryViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+// Wave-9: dictionary lookup normalization lives in the Rust core — it is
+// deliberately the LOOSE one (NFD → strip ALL diacritics incl. breathings →
+// case-fold), distinct from typed-answer grading on purpose. The in-app
+// keyboard commits raw text and the core's lookup fallback normalizes it;
+// see report notes for the sigma caveat.
 @Composable
 fun DictionaryScreen(
     viewModel: DictionaryViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
 
+    GreekKeyboardContainer { contentModifier ->
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
+        modifier = contentModifier.fillMaxSize().padding(16.dp)
     ) {
         Text(
             text = "Dictionary",
@@ -45,13 +50,10 @@ fun DictionaryScreen(
         )
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Search bar
-        SearchBar(
-            query = state.query,
-            onQueryChange = { viewModel.onQueryChanged(it) },
-            onSearch = { viewModel.onQueryChanged(it) },
-            active = false,
-            onActiveChange = { },
+        // Search bar (Greek-enabled: panel types here like the IME does).
+        GreekTextField(
+            value = state.query,
+            onValueChange = { viewModel.onQueryChanged(it) },
             placeholder = { Text("Search dictionary…") },
             leadingIcon = {
                 Icon(
@@ -69,8 +71,9 @@ fun DictionaryScreen(
                     }
                 }
             },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
-        ) {}
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -106,6 +109,7 @@ fun DictionaryScreen(
                 }
             }
         }
+    }
     }
 }
 

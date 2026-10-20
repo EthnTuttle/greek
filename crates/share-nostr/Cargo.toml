@@ -1,0 +1,38 @@
+[package]
+name = "share-nostr"
+version = "0.1.0"
+edition = "2021"
+
+# Progress sharing over nostr (DESIGN-progress-sharing.md, Appendix R).
+# Pure, unit-testable crate: milestone detection over greek-core state,
+# template validation, signed-event outbox, rate caps, publisher with its own
+# nostr-sdk Client pool (NEVER shared with the sync client).
+
+[dependencies]
+greek-core = { path = "../core" }
+nostr-sdk = { version = "0.43", default-features = false } # same line as sync-nostr
+rusqlite = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
+anyhow = { workspace = true }
+hkdf = "0.12" # matches the hmac 0.12 line already in the workspace
+sha2 = "0.10"
+unicode-normalization = "0.1"
+unicode-segmentation = "1.11"
+fsrs = "2" # same version requirement as greek-core (streak replay fold)
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+# Same 0.43 line as sync-nostr's dev-deps so types unify.
+nostr-relay-builder = "0.43"
+nostr-database = "0.43"
+# async-wsocket is nostr-relay-builder's own wire stack; used by the scripted
+# fake-relay fixture to emit arbitrary OK-false prefixes and mid-publish
+# socket closes (relay-builder WritePolicy rejections are always wrapped as
+# "blocked:", so the honest-prefix fixtures need a rawer fixture).
+async-wsocket = "0.13"
+futures-util = "0.3"

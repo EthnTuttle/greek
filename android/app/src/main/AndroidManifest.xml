@@ -5,9 +5,16 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Secrets at rest: the app database holds nostr secret keys (schema
+         v4 `secrets` table). The app ships its own export/import path
+         (sync_export_backup_json, which scrubs secrets), so the whole app
+         opts OUT of platform cloud backup/device-transfer extraction; the
+         XML rules below are belt-and-braces if backup is ever re-enabled. -->
     <application
         android:name=".GreekApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.Greek"

@@ -16,7 +16,11 @@ pub struct Database {
 ///   (existing rows backfilled with random v4 uuids, the local device id, and
 ///   an HLC derived from the row timestamp), plus `settings_sync` and
 ///   `sync_devices` tables and a unique index on `review_logs.uuid`
-const SCHEMA_VERSION: i64 = 3;
+/// - 4: `secrets` table — never synced, never in backup exports. The
+///   migration MOVES any `nostr_nsec` rows out of `user_settings` /
+///   `settings_sync` into `secrets` and deletes the synced/plaintext copies
+///   (DESIGN-progress-sharing.md, Appendix R "Secrets").
+const SCHEMA_VERSION: i64 = 4;
 
 impl Database {
     /// Open or create the main app database. Creates tables if they don't exist.
@@ -179,6 +183,26 @@ fn migrate(conn: &Connection) -> Result<()> {
             )?;
         }
 
+        if version < 4 {
+            // Secrets vault: values that must never ride settings sync or
+            // backup exports. Move any pre-v4 `nostr_nsec` copies out of
+            // BOTH settings tables into it. INSERT OR IGNORE keeps an
+            // existing secrets row (user_settings wins over settings_sync
+            // on first run), so the step is safely re-runnable.
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS secrets(
+                     key TEXT PRIMARY KEY,
+                     value TEXT NOT NULL
+                 );
+                 INSERT OR IGNORE INTO secrets (key, value)
+                     SELECT key, value FROM user_settings WHERE key = 'nostr_nsec';
+                 INSERT OR IGNORE INTO secrets (key, value)
+                     SELECT key, value FROM settings_sync WHERE key = 'nostr_nsec';
+                 DELETE FROM user_settings WHERE key = 'nostr_nsec';
+                 DELETE FROM settings_sync WHERE key = 'nostr_nsec';",
+            )?;
+        }
+
         conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
     }
 
@@ -286,6 +310,103 @@ mod tests {
             )
             .unwrap();
         assert_eq!(source, "flashcard");
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_migrate_v3_to_v4_moves_nostr_nsec_into_secrets() {
+        // Build a v3-shaped database by hand: user_settings + settings_sync
+        // holding a nostr_nsec (and an ordinary setting), user_version = 3.
+        let dir = std::env::temp_dir().join(format!("greek-v3-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("v3.db");
+        let path_str = path.to_string_lossy().into_owned();
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE review_logs(
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     card_id TEXT NOT NULL,
+                     timestamp TEXT NOT NULL,
+                     rating INTEGER NOT NULL,
+                     elapsed_days REAL NOT NULL,
+                     scheduled_days REAL NOT NULL,
+                     source TEXT NOT NULL DEFAULT 'flashcard',
+                     uuid TEXT,
+                     device_id TEXT,
+                     hlc TEXT
+                 );
+                 CREATE TABLE user_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 CREATE TABLE settings_sync(key TEXT PRIMARY KEY, value TEXT NOT NULL, hlc TEXT NOT NULL);
+                 CREATE TABLE sync_devices(
+                     device_id TEXT PRIMARY KEY,
+                     label TEXT NOT NULL DEFAULT '',
+                     paired_at TEXT NOT NULL,
+                     last_sync_hlc TEXT
+                 );
+                 CREATE UNIQUE INDEX idx_review_logs_uuid ON review_logs(uuid);
+                 INSERT INTO user_settings (key, value)
+                     VALUES ('nostr_nsec', 'deadbeefdeadbeef'),
+                            ('theme', 'dark');
+                 INSERT INTO settings_sync (key, value, hlc)
+                     VALUES ('nostr_nsec', 'deadbeefdeadbeef', '0000000000001-0000-aabbccdd'),
+                            ('theme', 'dark', '0000000000001-0000-aabbccdd');
+                 PRAGMA user_version = 3;",
+            )
+            .unwrap();
+        }
+
+        // Opening must upgrade to v4: secret moved, settings purged, the
+        // ordinary setting untouched.
+        let db = Database::open(&path_str, None).unwrap();
+        let version: i64 = db
+            .conn()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+
+        let secret: String = db
+            .conn()
+            .query_row("SELECT value FROM secrets WHERE key = 'nostr_nsec'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(secret, "deadbeefdeadbeef");
+
+        for table in ["user_settings", "settings_sync"] {
+            let n: i64 = db
+                .conn()
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM {table} WHERE key = 'nostr_nsec'"),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(n, 0, "{table} must not retain the secret");
+            let theme: String = db
+                .conn()
+                .query_row(
+                    &format!("SELECT value FROM {table} WHERE key = 'theme'"),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(theme, "dark", "{table} must keep non-secret rows");
+        }
+
+        // Fresh databases get the secrets table too.
+        let fresh = Database::open(":memory:", None).unwrap();
+        let n: i64 = fresh
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='secrets'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
 
         drop(db);
         let _ = std::fs::remove_dir_all(&dir);
