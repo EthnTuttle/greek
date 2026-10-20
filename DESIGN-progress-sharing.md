@@ -2,11 +2,10 @@
 
 Status: **owner decisions received (2026-10-19), ready to build as Wave 9**.
 Default posture: **opt-in only, off by default, never retroactive**.
-Default posture: **opt-in only, off by default, never retroactive**.
 
 ## 1. Goal
 
-Publish coarse, self-flattering learning signals ("7-day streak", "alphabet
+Publish coarse, *measured-attainment* learning signals ("7-day streak", "alphabet
 mastered") to nostr relays the *learner* trusts — accountability, family study
 groups, communities of practice — without exposing what was studied, when
 (fine-grained), or anything about specific cards.
@@ -87,7 +86,7 @@ masteredCount — no new pedagogy logic.)
   residual race (both devices cross a milestone inside one sync window) is
   documented as acceptable (worst case: one duplicate note).
 - Hard rate caps regardless of triggers: max 2 posts/day, min 6h between
-  posts; NIP-38 status excluded from caps (it's ephemeral).
+  posts.
 
 ## 7. Architecture
 
@@ -144,3 +143,23 @@ rendered preview (template live-updates), text field for custom suffix
 (cap 420), EN/EL preset toggle, post history for that slug (timestamps +
 relays accepted), "test post" button disabled unless sharing is ON
 (no shadow-posting from the editor).
+
+## Appendix R — Review consolidation (2026-10-19; GLM 5.3 / DeepSeek V4.1 / Nemotron 3 Ultra panel). Binding decisions, superseding conflicts above.
+
+**Milestone set revised (vanity/honesty):** v1 set = `gate.passed`, `chapter.mastered`, `streak.{7,30,100}` **redefined as "cleared every due review N consecutive days"** (retention-aligned, not activity). `reviews.*` dropped. `gate.passed` is **lane-aware**: check lane → "...passed the 24-letter alphabet check"; organic lane → "...reached measured accuracy on Greek letters"; the `declared-known` lane **never posts** (self-declaration is not evidence). Templates never name the textbook or chapter ("24/24" also dropped) — shipped presets audited to contain no curriculum proper nouns (unit test enforces).
+
+**Consent & permanence:** enable flow = disclosure screen ("public, timestamped, cannot reliably be deleted; anyone with this npub can enumerate every milestone ever posted") + relay picker starting EMPTY with curated suggestions (relay.damus.io, nos.lol checked-optional; relay.nostr.band only as opt-in labeled "indexed/searchable"), per-relay first-post confirmation, no public test post (editor "test" = local preview render). NIP-11 health probe shown per relay at enable. Public vs private-relay presets are mutually exclusive with a loud mixing warning. No permanence claims anywhere in copy.
+
+**Secrets (hard prerequisite, supersedes "reuses user_settings"):** a new `secrets` table — never synced, never in `sync_export_backup_json`; plus a blocklist inside `setting_put`/`setting_merge` rejecting keys matching `*nsec*` or values matching the nsec bech32 pattern; Android `allowBackup`/`fullBackupContent` exclude the DB. Sharing key = **HKDF-SHA256(sync_secret, "greek/share-nostr/v1")** so paired devices derive the same pubkey with no new secret at rest (documented tradeoff: sync-secret compromise deanonymizes past shares; sync-identity regeneration requires an explicit "changes your public sharing identity" confirm). `SyncKeys`/`ShareKeys` newtypes + start-up assertion `share_pk != sync_pk`; share-nostr asserts it only ever signs kind 1. Import path accepts **nsec1 bech32 only** (never hex), rejects pubkeys equal to sync/sharing key, warns when the pasted key has public history; field is no-autofill/no-clipboard.
+
+**Delivery correctness:** outbox persists the **fully-signed event verbatim** (id/sig/created_at) and re-sends identical bytes; per-relay delivery state (`accepted`/`failed(reason)`); `OK false` prefix classification — `duplicate:` = delivered, `rate-limited:` = backoff, `blocked:/invalid:/pow:/restricted:` = permanent stop for that relay, `auth-required:` = unsupported v1. Write-ahead `posting` marker + pre-publish REQ read-back (`{authors:[share_pk], kinds:[1], since:7d}` + content match) makes the multi-device/crash race self-healing. `share_enable()` seeds markers for all already-crossed thresholds — **zero retroactive posts**. Queue rows older than 24h expire; caps derive from synced posted-markers (multi-device budget: 1/day/device when >1 device). Flush is jittered (5–15 min delay inside a daily window), which also creates a cancel affordance; `created_at` documented as "that day", not the crossing second — §3's "no fine-grained timing" claim corrected accordingly.
+
+**Network identity separation:** share-nostr uses its own `Client` pool, reads only `share.relays` (never `nostr_relays`); sync and share never flush in the same burst (jittered apart). No `client` tag, no `t` tags/hashtags, no NIP-36 CW. Disable = stop + clear queue + optional "forget sharing identity" (deletion caveat: kind-5 is best-effort and off-table for v1).
+
+**Template/content policy:** total content ≤1024 UTF-8 bytes + grapheme-cap via `unicode-segmentation` (Rust) / `BreakIterator` (Kotlin) — never `String.length`; strip Cc/Cf/bidi controls; refuse URLs, image extensions, `nostr:`/`@` mentions, `nsec1...` patterns, empty content — validated at save AND publish; all string handling NFC-normalized on input AND render. Same-content cooldown for repeated chapter posts. Relay list: `wss://` only, ≤8, deduped, structured row editor (no CSV).
+
+**Failure honesty:** quiet persistent badge on the Share section when anything is deferred/failed; per-slug history shows per-relay state+reason (never claims per-relay ACK beyond OK results); `share_flush_now()` returns `{posted, deferred, failed:[{relay, reason}], duplicate}`.
+
+**Multi-device without sync:** documented — posting is per-device and milestones will duplicate; nothing else is promised.
+
+**Testing additions (wave-8 harness):** scripted-policy local relay fixture emitting each `OK false` prefix + mid-publish socket close + max_message_length cap; enable-on-existing-state ⇒ zero posts; identical re-publish ⇒ delivered-not-duplicate; 1-of-3 relay accept ⇒ convergent per-relay retry; disabled ⇒ zero network activity; NFC/NFD identical content ⇒ identical dedupe decision.
