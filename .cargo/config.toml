@@ -1,3 +1,17 @@
+# Cargo config for the greek workspace.
+#
+# Convention: all agents/builds share one target dir via
+#   CARGO_TARGET_DIR=/home/ethan/code/greek/target
+# Parallel-agent builds (plus Android ABIs, examples, incremental) ballooned
+# this dir to ~85 GB; it was wiped 2026-10-20. `cargo clean` here is SAFE
+# anytime — everything under target/ regenerates from a full rebuild.
+#
+# Host quirk: rustup-managed cargo would otherwise prune the registry cache;
+# export CARGO_CACHE_AUTO_CLEAN_FREQUENCY=never in build/test shells.
+#
+# Cleanup SOP: cargo clean (repo root) + rm -rf desktop/src-tauri/target
+# spikes/*/target android/.gradle android/app/build android/build.
+
 # 16 KB page-size alignment for Android 15+ (Play requirement since Nov 2025;
 # our Pixel on Android 17 warns otherwise). Applies only to Android targets.
 [target.aarch64-linux-android]
@@ -5,3 +19,11 @@ rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
 
 [target.x86_64-linux-android]
 rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[profile.dev]
+# Line tables only: real backtraces, ~half the deps' debug bulk gone.
+debug = 1
+
+[profile.dev.package."*"]
+# Third-party deps: no debug info at all (we debug OUR code, not theirs).
+debug = 0
