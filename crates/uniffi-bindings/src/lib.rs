@@ -387,6 +387,12 @@ impl GreekCore {
         Ok(result)
     }
 
+    /// DEPRECATED for session construction (C3): each per-chapter call
+    /// re-consults the daily new-card budget independently, so a caller
+    /// looping chapters can admit several caps' worth of new cards in one
+    /// session (observed: 7 Letters + 10 Athenaze + 3 JACT under a 10/day
+    /// cap). Session building MUST go through [`Self::build_review_session`];
+    /// this entry point stays for chapter-scoped browsing compatibility.
     pub fn get_new_cards(&self, textbook: String, chapter: i32, limit: i32) -> Vec<CardView> {
         let db = self.db.lock().unwrap();
 
@@ -394,9 +400,7 @@ impl GreekCore {
         // the learner proves alphabet fluency. (Due reviews via
         // get_due_cards are never gated.) The refusal lives here in the core
         // so every current and future UI path is capped consistently.
-        if textbook != "letters"
-            && !Curriculum::alphabet_gate_state(&db, &self.cards).satisfied
-        {
+        if textbook != "letters" && !Curriculum::alphabet_gate_state(&db, &self.cards).satisfied {
             return Vec::new();
         }
 
@@ -411,9 +415,7 @@ impl GreekCore {
         let chapter_cards: Vec<&Card> = self
             .cards
             .iter()
-            .filter(|c| {
-                c.chapter == chapter && greek_core::card_in_textbook(c, &textbook)
-            })
+            .filter(|c| c.chapter == chapter && greek_core::card_in_textbook(c, &textbook))
             .collect();
 
         let has_state: std::collections::HashSet<String> = db
@@ -434,6 +436,108 @@ impl GreekCore {
             .take(effective_limit)
             .map(|c| card_to_view(c))
             .collect()
+    }
+
+    /// Build a full review session in ONE pass (C3 fix).
+    ///
+    /// Replaces the Android-side `get_due_cards` + per-chapter `get_new_cards`
+    /// loop, in which every chapter call re-saw the full unspent daily budget.
+    /// UI-visible ordering matches the old semantics: due cards first (most
+    /// overdue first, never gated, never counting toward the new-card cap),
+    /// then new cards in curriculum order (letters → athenaze → jact → dcc),
+    /// chapter order within a curriculum, deck order within a chapter —
+    /// consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`]),
+    /// so one session introduces at most the day's true remaining allowance.
+    pub fn build_review_session(
+        &self,
+        session_size: u32,
+    ) -> Result<Vec<CardWithStateView>, GreekError> {
+        let db = self.db.lock().unwrap();
+        let srs = self.srs.lock().unwrap();
+        let size = session_size as usize;
+
+        let mut result: Vec<CardWithStateView> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        // 1. Due cards first — never alphabet-gated, never budget-capped.
+        //    (Same content enrichment as get_due_cards: in-memory deck first,
+        //    then the reader's lookup_cards table.)
+        for cws in srs.get_due_cards(&db, size)? {
+            let mut view = card_with_state_to_view(&cws);
+            if let Some(&idx) = self.card_index.get(&cws.card.id) {
+                view.card = card_to_view(&self.cards[idx]);
+            } else if let Ok((front, back)) = db.conn().query_row(
+                "SELECT front, back FROM lookup_cards WHERE card_id = ?1",
+                [&cws.card.id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            ) {
+                view.card.front = front;
+                view.card.back = back;
+            }
+            seen.insert(cws.card.id.clone());
+            result.push(view);
+        }
+        if result.len() >= size {
+            result.truncate(size);
+            return Ok(result);
+        }
+
+        // 2. New cards across curricula from ONE budget snapshot (C3): the
+        //    daily allowance is consulted once here and decremented per
+        //    admitted card, so spanning chapters/curricula cannot re-arm it.
+        let mut budget = greek_core::srs::SessionBudget::open(&db);
+
+        let has_state: std::collections::HashSet<String> = db
+            .conn()
+            .prepare("SELECT card_id FROM memory_states")
+            .ok()
+            .map(|mut stmt| {
+                stmt.query_map([], |row| row.get::<_, String>(0))
+                    .ok()
+                    .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+
+        'chapters: for textbook in Curriculum::get_textbooks() {
+            let name = textbook.textbook;
+            // Alphabet gate per track (same rule as get_new_cards).
+            if name != "letters" && !Curriculum::alphabet_gate_state(&db, &self.cards).satisfied {
+                continue;
+            }
+            for ch in Curriculum::get_chapters(&db, &name, &self.cards) {
+                if !ch.unlocked || !ch.available {
+                    continue;
+                }
+                for card in self
+                    .cards
+                    .iter()
+                    .filter(|c| c.chapter == ch.chapter && greek_core::card_in_textbook(c, &name))
+                {
+                    if result.len() >= size
+                        || has_state.contains(&card.id)
+                        || seen.contains(&card.id)
+                    {
+                        if result.len() >= size {
+                            break 'chapters;
+                        }
+                        continue;
+                    }
+                    if !budget.try_admit() {
+                        // Daily new-card budget spent: no later chapter can
+                        // admit either — stop the whole build.
+                        return Ok(result);
+                    }
+                    result.push(card_with_state_to_view(&CardWithState {
+                        card: card.clone(),
+                        memory: None,
+                    }));
+                    seen.insert(card.id.clone());
+                }
+            }
+        }
+
+        Ok(result)
     }
 
     pub fn submit_review(&self, card_id: String, rating: u8) -> bool {
@@ -500,7 +604,11 @@ impl GreekCore {
     pub fn preview_intervals(&self, card_id: String) -> Option<IntervalPreviewView> {
         let db = self.db.lock().unwrap();
         let srs = self.srs.lock().unwrap();
+        // Core now propagates SQL/decode errors; the UniFFI surface keeps
+        // its Option shape, mapping any error to None.
         srs.preview_intervals(&db, &card_id)
+            .ok()
+            .flatten()
             .map(|p| IntervalPreviewView {
                 again_secs: p.again_secs,
                 hard_secs: p.hard_secs,
@@ -524,12 +632,30 @@ impl GreekCore {
     // --- Practice questions (measured assessment) ---
 
     /// Generate up to `limit` EN→GR multiple-choice questions from the
-    /// in-memory deck. Cards that already have a memory state are offered
-    /// first (the memory-state ids are queried once and the slice is ordered
-    /// reviewed-then-unseen); within those tiers the seeded shuffle decides.
-    /// The seed is unix-epoch minutes, so question sets vary per session.
+    /// in-memory deck, honoring the alphabet-gate practice policy (C4):
+    /// letters-track cards are always eligible, vocabulary cards only once
+    /// the gate is satisfied. Within the eligible pool, cards that already
+    /// have a memory state are offered first; each tier is generated by a
+    /// SEPARATE seeded call whose shuffle sees the FULL tier (C5), so
+    /// question sets are no longer pinned to the first `limit` cards in
+    /// deck order. The seed is unix-epoch minutes, so question sets vary
+    /// per session.
     pub fn generate_practice_mcq(&self, limit: u32) -> Vec<McqView> {
         let db = self.db.lock().unwrap();
+        let limit = limit as usize;
+        if limit == 0 {
+            return Vec::new();
+        }
+
+        // C4: one shared policy for the draw pool — letters always,
+        // vocabulary only with the gate satisfied (fails open when the
+        // letters track is not loaded). The Alphabet Check keeps its own
+        // separate letters-only generator.
+        let eligible: Vec<&Card> = self
+            .cards
+            .iter()
+            .filter(|c| greek_core::curriculum::practice_eligible(&db, &self.cards, c))
+            .collect();
 
         let have_state: std::collections::HashSet<String> = db
             .conn()
@@ -543,28 +669,38 @@ impl GreekCore {
             })
             .unwrap_or_default();
 
-        // Reviewed cards first (deck order preserved within each tier).
-        let mut ordered: Vec<Card> = Vec::with_capacity(self.cards.len());
-        ordered.extend(
-            self.cards
-                .iter()
-                .filter(|c| have_state.contains(&c.id))
-                .cloned(),
-        );
-        ordered.extend(
-            self.cards
-                .iter()
-                .filter(|c| !have_state.contains(&c.id))
-                .cloned(),
-        );
+        // Reviewed cards first, then unseen — one generator call per tier
+        // (C5) over a SHARED distractor pool: prompts come only from the
+        // tier, distractors from the whole eligible set, so a small
+        // reviewed tier never starves its own distractors.
+        let pool: Vec<Card> = eligible.iter().map(|c| (*c).clone()).collect();
+        let reviewed: Vec<Card> = eligible
+            .iter()
+            .filter(|c| have_state.contains(&c.id))
+            .map(|c| (*c).clone())
+            .collect();
+        let unseen: Vec<Card> = eligible
+            .iter()
+            .filter(|c| !have_state.contains(&c.id))
+            .map(|c| (*c).clone())
+            .collect();
 
         let seed = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() / 60)
             .unwrap_or(0);
 
-        greek_core::questions::generate_mcq_set(&ordered, limit as usize, seed)
-            .into_iter()
+        let mut mcqs =
+            greek_core::questions::generate_mcq_set_with_pool(&reviewed, &pool, limit, seed);
+        if mcqs.len() < limit {
+            mcqs.extend(greek_core::questions::generate_mcq_set_with_pool(
+                &unseen,
+                &pool,
+                limit - mcqs.len(),
+                seed,
+            ));
+        }
+        mcqs.into_iter()
             .map(|m| McqView {
                 card_id: m.card_id,
                 prompt_gloss: m.prompt_gloss,
@@ -600,7 +736,11 @@ impl GreekCore {
 
     /// Record a practice outcome as an SRS review tagged source="practice":
     /// wrong -> 1 (Again), correct -> 3 (Good), correct + exact -> 4 (Easy).
-    /// Returns false on error.
+    /// Returns false on error, or when the card fails the alphabet-gate
+    /// practice policy (C4 belt): a practice-source memory state for an
+    /// ineligible vocabulary card would fabricate "vocab history" and
+    /// falsely trip the gate's Lane-C grandfather. Card ids outside the
+    /// loaded deck keep legacy behavior (no policy data to judge them).
     pub fn submit_practice_result(&self, card_id: String, correct: bool, exact: bool) -> bool {
         let rating: u8 = if !correct {
             1
@@ -611,6 +751,11 @@ impl GreekCore {
         };
         let db = self.db.lock().unwrap();
         let srs = self.srs.lock().unwrap();
+        if let Some(&i) = self.card_index.get(&card_id) {
+            if !greek_core::curriculum::practice_eligible(&db, &self.cards, &self.cards[i]) {
+                return false;
+            }
+        }
         srs.submit_review_with_source(&db, &card_id, rating, "practice")
             .is_ok()
     }
@@ -665,9 +810,7 @@ impl GreekCore {
         let db = self.db.lock().unwrap();
         // Alphabet gate: manual unlocks on vocabulary tracks are refused
         // while the gate is unmet.
-        if textbook != "letters"
-            && !Curriculum::alphabet_gate_state(&db, &self.cards).satisfied
-        {
+        if textbook != "letters" && !Curriculum::alphabet_gate_state(&db, &self.cards).satisfied {
             return false;
         }
         Curriculum::unlock_chapter(&db, &textbook, chapter).is_ok()
@@ -685,21 +828,16 @@ impl GreekCore {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() / 60)
             .unwrap_or(0);
-        greek_core::questions::generate_alphabet_check(
-            &self.cards,
-            ALPHABET_CHECK_N as usize,
-            seed,
-        )
-        .into_iter()
-        .map(|q| AlphabetQuestionView {
-            card_id: q.card_id,
-            glyph_to_name: q.direction
-                == greek_core::questions::AlphabetDirection::GlyphToName,
-            prompt: q.prompt,
-            choices: q.choices,
-            correct_index: q.correct_index as u8,
-        })
-        .collect()
+        greek_core::questions::generate_alphabet_check(&self.cards, ALPHABET_CHECK_N as usize, seed)
+            .into_iter()
+            .map(|q| AlphabetQuestionView {
+                card_id: q.card_id,
+                glyph_to_name: q.direction == greek_core::questions::AlphabetDirection::GlyphToName,
+                prompt: q.prompt,
+                choices: q.choices,
+                correct_index: q.correct_index as u8,
+            })
+            .collect()
     }
 
     /// Record an Alphabet Check verdict: on a pass (>=22 of >=24) the gate
@@ -781,9 +919,17 @@ impl GreekCore {
 
     // --- Add card from reader lookup ---
 
-    /// Create a new SRS card + initial (immediately-due) memory_state for a word
-    /// looked up in the reader. The card id is derived from the lemma so repeated
-    /// lookups of the same word are idempotent (no-op if it already exists).
+    /// Create a new SRS card for a word looked up in the reader. The card id
+    /// is derived from the lemma so repeated lookups of the same word are
+    /// idempotent (the content row upserts, nothing else is written).
+    ///
+    /// C2: NO `memory_states` row is created here. A row's *presence* means
+    /// "this card has a learned FSRS state replayable from `review_logs`";
+    /// the old zero-state row (stability/difficulty 0.0, reps 0) made every
+    /// initial preview a bogus fixed interval and made the first real review
+    /// diverge from `sync::rebuild_memory_states` replay. Scheduling state
+    /// appears with the first review (`SrsEngine::submit_review` upserts it);
+    /// until then the card behaves exactly like any never-reviewed new card.
     pub fn add_card_from_lookup(
         &self,
         lemma: String,
@@ -792,16 +938,6 @@ impl GreekCore {
     ) -> Result<String, GreekError> {
         let card_id = format!("lookup-{}", lemma);
         let db = self.db.lock().unwrap();
-
-        // If a memory_state already exists for this card, treat as a no-op.
-        let exists: bool = db
-            .conn()
-            .query_row(
-                "SELECT 1 FROM memory_states WHERE card_id = ?1",
-                [&card_id],
-                |_| Ok(true),
-            )
-            .unwrap_or(false);
 
         // Persist the card content (front = the Greek word, back = definition)
         // so it survives restarts and can be shown when the card is studied.
@@ -813,16 +949,6 @@ impl GreekCore {
              ON CONFLICT(card_id) DO UPDATE SET front = excluded.front, back = excluded.back",
             rusqlite::params![card_id, front, definition],
         )?;
-
-        if !exists {
-            let now = now_iso8601();
-            // Initial state: neutral FSRS-ish values, due immediately.
-            db.conn().execute(
-                "INSERT INTO memory_states (card_id, stability, difficulty, last_review, due_date, reps, lapses)
-                 VALUES (?1, ?2, ?3, NULL, ?4, 0, 0)",
-                rusqlite::params![card_id, 0.0_f32, 0.0_f32, now],
-            )?;
-        }
 
         Ok(card_id)
     }
@@ -861,7 +987,10 @@ const DEFAULT_NOSTR_RELAYS: &str = "wss://chat.virginiafreedom.tech";
 /// and must NOT ride settings_sync (LWW across devices with drifting clocks
 /// could rewind a cursor so far that events are skipped forever, or advance
 /// it past unsent local events), so they upsert `user_settings` directly —
-/// mirroring how `hlc_now` persists its own state.
+/// mirroring how `hlc_now` persists its own state. Push cursors are
+/// additionally DESTINATION-scoped as `{prefix}@{fingerprint}` keys managed
+/// by `greek_core::sync::push_cursor_*` (S7); only the pull cursor
+/// (`nostr_last_pull_hlc`) still uses these helpers directly.
 fn user_setting_get(db: &Database, key: &str) -> Option<String> {
     db.conn()
         .query_row(
@@ -881,21 +1010,29 @@ fn user_setting_put_local(db: &Database, key: &str, value: &str) -> Result<(), G
     Ok(())
 }
 
-/// Build a v1 SyncBatch from local state after `since` (None = everything).
-fn build_batch(
-    db: &Database,
-    since: Option<&str>,
-) -> Result<greek_core::SyncBatch, GreekError> {
+/// Build a v2 SyncBatch from local state after `since` (None = everything)
+/// for the HLC-tracked collections (`reviews`, `settings`). The v2 content
+/// collections (`known_words`, `lookup_cards`, `chapter_unlocks`) have no
+/// HLC columns, so EVERY batch ships their full row sets — the tables are
+/// small and ingress is dedup'ing (known-words LWW on updated_at, PK-dedup
+/// inserts for the other two), so convergence needs no cursor (S1).
+fn build_batch(db: &Database, since: Option<&str>) -> Result<greek_core::SyncBatch, GreekError> {
     let device_id = greek_core::device_id(db);
     let reviews = greek_core::events_since(db, since)?;
     let settings = greek_core::settings_since(db, since)?;
+    let known_words = greek_core::sync::known_words_all(db)?;
+    let lookup_cards = greek_core::sync::lookup_cards_all(db)?;
+    let chapter_unlocks = greek_core::sync::chapter_unlocks_all(db)?;
     Ok(greek_core::SyncBatch {
-        v: 1,
+        v: greek_core::sync::SYNC_WIRE_VERSION_MAX,
         device_id,
         from_hlc: since.unwrap_or_default().to_string(),
         to_hlc: greek_core::hlc_now(db).to_string(),
         reviews,
         settings,
+        known_words,
+        lookup_cards,
+        chapter_unlocks,
     })
 }
 
@@ -941,6 +1078,26 @@ fn nostr_relays(db: &Database) -> Vec<String> {
         .collect()
 }
 
+/// S7 destination fingerprint for the nostr spool: FNV-1a over (1) the
+/// NORMALIZED relay set — lowercased, trimmed, sorted, deduped, so order or
+/// case/whitespace variance in the stored CSV doesn't split the scope — and
+/// (2) the identity pubkey hex. Changing either yields a new cursor scope,
+/// hence a full push to the new destination (the old scope's cursor is kept
+/// for a possible switch-back; see `greek_core::sync::push_cursor_get`).
+fn nostr_destination_fingerprint(keys: &nostr_sdk::prelude::Keys, relays: &[String]) -> String {
+    let mut normalized: Vec<String> = relays
+        .iter()
+        .map(|r| r.trim().to_lowercase())
+        .filter(|r| !r.is_empty())
+        .collect();
+    normalized.sort();
+    normalized.dedup();
+    greek_core::sync::destination_fingerprint(&[
+        &normalized.join(","),
+        &keys.public_key().to_hex(),
+    ])
+}
+
 fn sync_err(e: impl std::fmt::Display) -> GreekError {
     GreekError::Sync(e.to_string())
 }
@@ -977,8 +1134,9 @@ impl GreekCore {
             .unwrap_or_default()
     }
 
-    /// Full backup: a complete v1 SyncBatch (`v`, all events, all settings)
-    /// as JSON — the "export backup" / paired-file payload.
+    /// Full backup: a complete v2 SyncBatch (`v`, all events, all settings,
+    /// all known-words, lookup-card content rows, and chapter unlocks) as
+    /// JSON — the "export backup" / paired-file payload.
     pub fn sync_export_backup_json(&self) -> String {
         let db = self.db.lock().unwrap();
         build_batch(&db, None)
@@ -986,21 +1144,54 @@ impl GreekCore {
             .unwrap_or_else(|e| format!("{{\"error\":\"{}\"}}", e))
     }
 
-    /// Import a backup produced by `sync_export_backup_json`. STRICT: only
-    /// wire version v==1 is accepted. Applies review events (uuid-dedup)
-    /// and settings (HLC-LWW), then folds memory state.
+    /// Import a backup produced by `sync_export_backup_json`. Wire versions
+    /// 1 (reviews+settings only) and 2 (+ known_words / lookup_cards /
+    /// chapter_unlocks) are accepted through ONE shared gate
+    /// (`greek_core::sync::validate_batch`); anything newer is rejected
+    /// whole. Applies review events (uuid-dedup, Unicode/NFC card-id gate),
+    /// settings (HLC-LWW), and the v2 content collections (dedup/LWW), then
+    /// folds memory state.
+    ///
+    /// ATOMIC (S5): ALL collections apply inside ONE `with_tx` transaction
+    /// on the shared connection — a late error (a setting row with a
+    /// malformed HLC, a fold failure anywhere in the batch) rolls back the
+    /// ENTIRE import, never leaving earlier inserts committed behind an
+    /// `Err` return. On `Err` the database holds nothing from this payload.
     pub fn sync_import_backup_json(&self, json: String) -> Result<SyncStatsView, GreekError> {
         let batch: greek_core::SyncBatch =
             serde_json::from_str(&json).map_err(|e| sync_err(format!("bad backup JSON: {e}")))?;
-        if batch.v != 1 {
-            return Err(GreekError::Sync(format!(
-                "unsupported sync wire version {} (this app speaks v1)",
-                batch.v
-            )));
-        }
+        greek_core::sync::validate_batch(&batch).map_err(|e| sync_err(e.to_string()))?;
         let db = self.db.lock().unwrap();
-        let reviews_received = greek_core::apply_review_events(&db, &batch.reviews)?;
-        let settings_applied = greek_core::apply_settings(&db, &batch.settings)?;
+        // All five collections, same envelope: `with_tx` is nesting-aware,
+        // so each applier's own internal transaction joins this one and any
+        // error discards the whole import.
+        let (reviews_received, settings_applied) = db.with_tx(|_| {
+            let reviews_received = greek_core::apply_review_events(&db, &batch.reviews)?;
+            let settings_applied = greek_core::apply_settings(&db, &batch.settings)?;
+            // v2 content collections — EMPTY on a v1 payload (serde
+            // defaults), so a v1 import is exactly the legacy behavior.
+            greek_core::sync::apply_lookup_cards(&db, &batch.lookup_cards)?;
+            greek_core::sync::apply_known_words(&db, &batch.known_words)?;
+            greek_core::sync::apply_chapter_unlocks(&db, &batch.chapter_unlocks)?;
+            // S7: rows merged from a backup can PREDATE a transport's push
+            // cursor — that destination never saw them (they arrived via
+            // file, not the wire). Rewind any cursor at-or-above the merged
+            // minimum HLC so the next push to it re-ships this history;
+            // receivers uuid-dedup, so resend is safe. Pull cursors and
+            // non-merged (empty) payloads are untouched.
+            let merged_min = batch
+                .reviews
+                .iter()
+                .map(|r| r.hlc.as_str())
+                .chain(batch.settings.iter().map(|(_, _, h)| h.as_str()))
+                .filter(|h| !h.is_empty())
+                .min()
+                .map(str::to_string);
+            if let Some(min_hlc) = merged_min {
+                greek_core::sync::rewind_push_cursors_below(&db, &min_hlc)?;
+            }
+            Ok((reviews_received, settings_applied))
+        })?;
         Ok(SyncStatsView {
             reviews_sent: 0,
             reviews_received,
@@ -1015,11 +1206,27 @@ impl GreekCore {
             relays_csv: user_setting_get(&db, "nostr_relays")
                 .filter(|s| !s.trim().is_empty())
                 .unwrap_or_else(|| DEFAULT_NOSTR_RELAYS.to_string()),
-            // Identity now lives in the secrets vault; the legacy
-            // user_settings check only exists for not-yet-migrated reads.
-            has_identity: greek_core::secret_has(&db, "nostr_nsec")
-                || user_setting_get(&db, "nostr_nsec").is_some(),
+            // Routing through `load_nostr_nsec` (the same legacy-migration-
+            // aware accessor as the push/pull paths) means this snapshot
+            // also MIGRATES a pre-v4 `user_settings.nostr_nsec` into the
+            // vault on first contact instead of leaving it orphaned.
+            has_identity: load_nostr_nsec(&db).is_some(),
         }
+    }
+
+    /// Public key (lowercase hex) of the sync nostr identity; `None` when no
+    /// identity is configured yet or the stored secret is invalid.
+    ///
+    /// Derived through the SAME code path as identity load (`nostr_keys` →
+    /// `load_nostr_nsec`), so this getter is legacy-migration-aware: calling
+    /// it on a pre-v4 database migrates `user_settings.nostr_nsec` into the
+    /// secrets vault (it does NOT generate a fresh identity — generation
+    /// stays an explicit `sync_generate_nostr_identity` decision). Desktop
+    /// uses this to display/verify the identity without linking nostr-sdk
+    /// itself (previously it had to `Keys::parse` the secret).
+    pub fn sync_nostr_pubkey(&self) -> Option<String> {
+        let db = self.db.lock().unwrap();
+        nostr_keys(&db).ok().map(|k| k.public_key().to_hex())
     }
 
     /// Set the relay list (comma-separated `wss://…` URLs).
@@ -1126,13 +1333,24 @@ impl GreekCore {
 impl GreekCore {
     /// Push all local events/settings since the last push cursor to the
     /// configured nostr relays, then advance the (device-local) cursor.
+    ///
+    /// The cursor is scoped to the CURRENT destination (relays + identity
+    /// fingerprint — S7): relay/identity changes therefore start the new
+    /// destination with a FULL push, and switching back resumes the old
+    /// destination's cursor instead of resending.
     pub async fn sync_nostr_push(&self) -> Result<SyncStatsView, GreekError> {
-        let (keys, relays, batch) = {
+        let (keys, relays, batch, cursor_fp) = {
             let db = self.db.lock().unwrap();
             let keys = nostr_keys(&db)?;
-            let cursor = user_setting_get(&db, "nostr_last_push_hlc");
+            let relays = nostr_relays(&db);
+            let fp = nostr_destination_fingerprint(&keys, &relays);
+            let cursor = greek_core::sync::push_cursor_get(
+                &db,
+                greek_core::sync::NOSTR_PUSH_CURSOR_PREFIX,
+                &fp,
+            );
             let batch = build_batch(&db, cursor.as_deref())?;
-            (keys, nostr_relays(&db), batch)
+            (keys, relays, batch, fp)
         };
         let to_hlc = batch.to_hlc.clone();
         if batch.reviews.is_empty() && batch.settings.is_empty() {
@@ -1151,7 +1369,12 @@ impl GreekCore {
             .map_err(sync_err)?;
         transport.push(&batch).await.map_err(sync_err)?;
         let db = self.db.lock().unwrap();
-        user_setting_put_local(&db, "nostr_last_push_hlc", &to_hlc)?;
+        greek_core::sync::push_cursor_put(
+            &db,
+            greek_core::sync::NOSTR_PUSH_CURSOR_PREFIX,
+            &cursor_fp,
+            &to_hlc,
+        )?;
         Ok(SyncStatsView {
             reviews_sent,
             reviews_received: 0,
@@ -1159,41 +1382,80 @@ impl GreekCore {
         })
     }
 
-    /// Pull all batches after the pull cursor from the nostr relays, apply
-    /// them, and advance the (device-local) cursor.
+    /// Pull every complete batch from the nostr relays and apply the ones
+    /// whose wire batch UUID is not yet in the `sync_applied_batches`
+    /// ledger (S6). Admission is per-batch UUID at ANY HLC position — the
+    /// `nostr_last_pull_hlc` cursor no longer filters (it is updated as an
+    /// observability-only high-water mark afterwards) — so a batch whose
+    /// chunks completed late, or which was pushed from a lagging clock,
+    /// still merges instead of being permanently skipped. Each admitted
+    /// batch applies and marks in ONE transaction, so a crash mid-apply
+    /// leaves the UUID unmarked and the whole batch safely retry-able.
+    /// Incomplete batches are simply not returned by the transport
+    /// (unmarked — a later fetch completes them); complete-but-corrupt
+    /// ones are never surfaced either, so they can never be marked.
     pub async fn sync_nostr_pull(&self) -> Result<SyncStatsView, GreekError> {
-        let (keys, relays, cursor) = {
+        let (keys, relays) = {
             let db = self.db.lock().unwrap();
-            (
-                nostr_keys(&db)?,
-                nostr_relays(&db),
-                user_setting_get(&db, "nostr_last_pull_hlc"),
-            )
+            (nostr_keys(&db)?, nostr_relays(&db))
         };
         let relay_refs: Vec<&str> = relays.iter().map(|s| s.as_str()).collect();
         let transport = sync_nostr::NostrSpoolTransport::connect(keys, &relay_refs)
             .await
             .map_err(sync_err)?;
-        let batches = transport
-            .fetch_since(cursor.as_deref())
-            .await
-            .map_err(sync_err)?;
+        let fetched = transport.fetch_all().await.map_err(sync_err)?;
         let mut stats = SyncStatsView {
             reviews_sent: 0,
             reviews_received: 0,
             settings_applied: 0,
         };
         let db = self.db.lock().unwrap();
+        // Observability high-water mark is decided over ALL fetched
+        // batches (applied or already-marked): it is metadata reporting
+        // what the device has physically SEEN, never an admission gate.
         let mut max_hlc: Option<String> = None;
-        for batch in &batches {
-            stats.reviews_received += greek_core::apply_review_events(&db, &batch.reviews)?;
-            stats.settings_applied += greek_core::apply_settings(&db, &batch.settings)?;
-            if max_hlc.as_deref() < Some(batch.to_hlc.as_str()) {
-                max_hlc = Some(batch.to_hlc.clone());
+        for fb in &fetched {
+            if max_hlc.as_deref() < Some(fb.batch.to_hlc.as_str()) {
+                max_hlc = Some(fb.batch.to_hlc.clone());
             }
         }
+        for fb in &fetched {
+            let batch = &fb.batch;
+            // S6 admission: batch identity, not HLC position. Replay of an
+            // applied batch is also uuid-safe inside apply_review_events,
+            // but skipping here avoids a pointless full re-fold.
+            if greek_core::sync::batch_is_applied(&db, &fb.batch_uuid) {
+                continue;
+            }
+            // Apply + mark in ONE transaction: both, or neither.
+            let (rev, set) = db.with_tx(|_conn| -> anyhow::Result<(u32, u32)> {
+                let rev = greek_core::apply_review_events(&db, &batch.reviews)?;
+                let set = greek_core::apply_settings(&db, &batch.settings)?;
+                // v2 content collections (empty for v1 batches — no-op).
+                // Codec-level reassembly already rejected unknown versions,
+                // so every batch here passed the shared version gate.
+                greek_core::sync::apply_lookup_cards(&db, &batch.lookup_cards)?;
+                greek_core::sync::apply_known_words(&db, &batch.known_words)?;
+                greek_core::sync::apply_chapter_unlocks(&db, &batch.chapter_unlocks)?;
+                // S4: `to_hlc` is the SENDER's clock stamp — it is not
+                // routed through apply_review_events/apply_settings (an
+                // empty batch carries no rows at all), so observe it here
+                // or a later local review could sort before everything
+                // this batch reports.
+                greek_core::sync::hlc_observe(&db, &batch.to_hlc)?;
+                greek_core::sync::mark_batch_applied(&db, &fb.batch_uuid)?;
+                Ok((rev, set))
+            })?;
+            stats.reviews_received += rev;
+            stats.settings_applied += set;
+        }
         if let Some(h) = max_hlc {
-            user_setting_put_local(&db, "nostr_last_pull_hlc", &h)?;
+            // Advance-only: a re-imported/old batch must never rewind the
+            // mark below what an earlier pull already reported.
+            let cur = user_setting_get(&db, "nostr_last_pull_hlc");
+            if cur.as_deref().map_or(true, |c| h.as_str() > c) {
+                user_setting_put_local(&db, "nostr_last_pull_hlc", &h)?;
+            }
         }
         Ok(stats)
     }
@@ -1216,13 +1478,28 @@ impl GreekCore {
     }
 
     /// One full sync round over iroh: push the local delta, sync with known
-    /// peers (tolerates everyone being offline), pull every doc entry back,
-    /// and merge (reviews uuid-dedup, settings HLC-LWW, then the FSRS fold).
+    /// peers, pull every doc entry back, and merge (reviews uuid-dedup,
+    /// settings HLC-LWW, then the FSRS fold).
+    ///
+    /// Round semantics (S8): a fresh device that never paired is a clean
+    /// no-op. Once paired, a round that FAILS against every known peer (or
+    /// finds none to dial) is surfaced as an error — degraded, not silently
+    /// "synced". A round that produced no peer signal at all (deadline) stays
+    /// tolerated as Ok; sync is opportunistic.
+    ///
+    /// The push cursor is scoped to the CURRENT notebook namespace (S7):
+    /// creating or joining a different notebook starts it with a FULL push
+    /// while the previous namespace's cursor is preserved.
     pub async fn sync_iroh_now(&self) -> Result<SyncStatsView, GreekError> {
         let t = self.open_iroh().await?;
+        let namespace = t.doc_namespace_id().await.map_err(sync_err)?;
         let (reviews, settings, new_cursor) = {
             let db = self.db.lock().unwrap();
-            let cursor = user_setting_get(&db, "iroh_last_push_hlc");
+            let cursor = greek_core::sync::push_cursor_get(
+                &db,
+                greek_core::sync::IROH_PUSH_CURSOR_PREFIX,
+                &namespace,
+            );
             let reviews = greek_core::events_since(&db, cursor.as_deref())?;
             let settings = greek_core::settings_since(&db, cursor.as_deref())?;
             let new_cursor = greek_core::hlc_now(&db).to_string();
@@ -1232,7 +1509,12 @@ impl GreekCore {
         t.push_local(&reviews, &settings).await.map_err(sync_err)?;
         {
             let db = self.db.lock().unwrap();
-            user_setting_put_local(&db, "iroh_last_push_hlc", &new_cursor)?;
+            greek_core::sync::push_cursor_put(
+                &db,
+                greek_core::sync::IROH_PUSH_CURSOR_PREFIX,
+                &namespace,
+                &new_cursor,
+            )?;
         }
         t.sync_once().await.map_err(sync_err)?;
         let (remote_reviews, remote_settings) = t.pull_remote().await.map_err(sync_err)?;
@@ -1670,6 +1952,239 @@ mod tests {
         (dir, path.to_string_lossy().into_owned())
     }
 
+    // --- C2: lookup cards carry NO memory_states row until first review ---
+
+    /// The full stored row, for exact incremental-vs-replay comparison.
+    fn memory_state_snapshot(
+        db: &Database,
+        card_id: &str,
+    ) -> Option<(f32, f32, Option<String>, String, i32, i32)> {
+        db.conn()
+            .query_row(
+                "SELECT stability, difficulty, last_review, due_date, reps, lapses
+                 FROM memory_states WHERE card_id = ?1",
+                [card_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .ok()
+    }
+
+    // C2 regression: adding a lookup card must NOT create a zero-state
+    // memory_states row, and its rating previews must be EXACTLY those of a
+    // never-present new card (the old row gave a bogus fixed 864s-ish).
+    #[test]
+    fn test_lookup_card_preview_matches_never_present_new_card() {
+        let (dir, path) = tmp_db_path("c2-preview");
+        let core = GreekCore::new(path, None).unwrap();
+
+        let lookup_id = core
+            .add_card_from_lookup("λόγος".to_string(), "".to_string(), "word".to_string())
+            .unwrap();
+        assert_eq!(lookup_id, "lookup-λόγος");
+
+        // No memory_states row until the first review.
+        {
+            let db = core.db.lock().unwrap();
+            assert_eq!(
+                memory_state_snapshot(&db, &lookup_id),
+                None,
+                "an unreviewed lookup card must have no memory_states row"
+            );
+        }
+
+        let lookup_preview = core
+            .preview_intervals(lookup_id.clone())
+            .expect("a lookup card must yield a new-card preview");
+        let fresh_preview = core
+            .preview_intervals("never-present-anywhere".to_string())
+            .expect("a never-present card must yield a new-card preview");
+        assert_eq!(lookup_preview.again_secs, fresh_preview.again_secs);
+        assert_eq!(lookup_preview.hard_secs, fresh_preview.hard_secs);
+        assert_eq!(lookup_preview.good_secs, fresh_preview.good_secs);
+        assert_eq!(lookup_preview.easy_secs, fresh_preview.easy_secs);
+        // Sanity: the C6 learning-step ladder applies (a brand-new card is
+        // in learning, so Good shows the 10-minute step, never the old
+        // bogus fixed ~864s of the zero-state row).
+        assert_eq!(fresh_preview.again_secs, 60);
+        assert_eq!(fresh_preview.hard_secs, 300);
+        assert_eq!(fresh_preview.good_secs, 600);
+
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // C2 regression: after one Good review, the incrementally-upserted row
+    // must be byte-identical to replay-from-history (`rebuild_memory_states`
+    // recomputes every card's state from its review_logs). With the old
+    // zero-state row this diverged (stability 0.01 incremental vs ~3.17
+    // replay) without any network fault.
+    #[test]
+    fn test_lookup_card_incremental_state_matches_replay() {
+        let (dir, path) = tmp_db_path("c2-replay");
+        let core = GreekCore::new(path, None).unwrap();
+
+        let lookup_id = core
+            .add_card_from_lookup("λόγος".to_string(), "".to_string(), "word".to_string())
+            .unwrap();
+        assert!(
+            core.submit_review(lookup_id.clone(), 3),
+            "Good review lands"
+        );
+
+        let db = core.db.lock().unwrap();
+        let incremental = memory_state_snapshot(&db, &lookup_id)
+            .expect("first review must create the memory_states row");
+        assert_eq!(incremental.4, 1, "exactly one repetition");
+
+        let rewritten = greek_core::sync::rebuild_memory_states(&db).unwrap();
+        assert_eq!(rewritten, 1, "exactly the one reviewed card is folded");
+
+        let replayed = memory_state_snapshot(&db, &lookup_id).unwrap();
+        assert_eq!(
+            incremental, replayed,
+            "incremental submit state MUST equal replay-from-history: {incremental:?} vs {replayed:?}"
+        );
+        drop(db);
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // C2 migration: a database carrying the legacy zero-state rows is
+    // upgraded to schema v5, which purges them — but ONLY those rows. `loose
+    // ends` guard: a lookup row with review history (torn-write protection)
+    // and any non-lookup row must survive, and the card itself must stay
+    // schedulable (new-card preview + first review land normally).
+    #[test]
+    fn test_v5_migration_purges_zero_state_lookup_rows() {
+        let (dir, path) = tmp_db_path("c2-migrate");
+
+        // Hand-build a v4-era database: memory_states/review_logs/lookup_cards
+        // at their current shape, stamped at user_version 4 so the v5
+        // contents cleanup runs on open.
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE memory_states(
+                     card_id TEXT PRIMARY KEY,
+                     stability REAL NOT NULL,
+                     difficulty REAL NOT NULL,
+                     last_review TEXT,
+                     due_date TEXT NOT NULL,
+                     reps INTEGER NOT NULL DEFAULT 0,
+                     lapses INTEGER NOT NULL DEFAULT 0
+                 );
+                 CREATE TABLE review_logs(
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     card_id TEXT NOT NULL,
+                     timestamp TEXT NOT NULL,
+                     rating INTEGER NOT NULL,
+                     elapsed_days REAL NOT NULL,
+                     scheduled_days REAL NOT NULL,
+                     source TEXT NOT NULL DEFAULT 'flashcard',
+                     uuid TEXT,
+                     device_id TEXT,
+                     hlc TEXT
+                 );
+                 CREATE TABLE lookup_cards(
+                     card_id TEXT PRIMARY KEY,
+                     front TEXT NOT NULL,
+                     back TEXT NOT NULL
+                 );
+                 -- The legacy bug row: never reviewed, all zeros.
+                 INSERT INTO memory_states VALUES
+                     ('lookup-legacy', 0.0, 0.0, NULL, '2026-01-01T00:00:00Z', 0, 0);
+                 INSERT INTO lookup_cards VALUES ('lookup-legacy', 'λόγος', 'word');
+                 -- Torn-write guard: zero-shaped row but WITH a review log;
+                 -- must survive (its history is real).
+                 INSERT INTO memory_states VALUES
+                     ('lookup-torn', 0.0, 0.0, NULL, '2026-01-01T00:00:00Z', 0, 0);
+                 INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days)
+                     VALUES ('lookup-torn', '2026-01-01T00:00:00Z', 3, 0.0, 1.0);
+                 -- Prefix guard: a non-lookup zero-shaped row must survive.
+                 INSERT INTO memory_states VALUES
+                     ('ath1-001', 0.0, 0.0, NULL, '2026-01-01T00:00:00Z', 0, 0);
+                 PRAGMA user_version = 4;",
+            )
+            .unwrap();
+        }
+
+        // Opening upgrades through v5/v6 (the purge runs at v5, inside the
+        // migration tx).
+        let db = Database::open(&path, None).unwrap();
+        let version: i64 = db
+            .conn()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 6, "schema must advance to v6");
+
+        assert_eq!(
+            memory_state_snapshot(&db, "lookup-legacy"),
+            None,
+            "the legacy zero-state row must be purged"
+        );
+        assert!(
+            memory_state_snapshot(&db, "lookup-torn").is_some(),
+            "a lookup row WITH review history must survive"
+        );
+        assert!(
+            memory_state_snapshot(&db, "ath1-001").is_some(),
+            "non-lookup rows must never be touched by the lookup purge"
+        );
+        let card_present: i64 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM lookup_cards WHERE card_id = 'lookup-legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(card_present, 1, "the card content row must survive");
+
+        // The purged card schedules like any brand-new card: preview byte-
+        // identical to a never-reviewed card, and a normal first review that
+        // creates a genuine row.
+        let engine = SrsEngine::new();
+        let preview = engine
+            .preview_intervals(&db, "lookup-legacy")
+            .unwrap()
+            .expect("purged lookup card must yield a new-card preview");
+        let fresh = engine
+            .preview_intervals(&db, "never-reviewed-at-all")
+            .unwrap()
+            .expect("a never-reviewed card must yield a new-card preview");
+        assert_eq!(
+            (
+                preview.again_secs,
+                preview.hard_secs,
+                preview.good_secs,
+                preview.easy_secs
+            ),
+            (
+                fresh.again_secs,
+                fresh.hard_secs,
+                fresh.good_secs,
+                fresh.easy_secs
+            ),
+            "purged lookup card must preview exactly like a never-present new card"
+        );
+        engine.submit_review(&db, "lookup-legacy", 3).unwrap();
+        let state = memory_state_snapshot(&db, "lookup-legacy").unwrap();
+        assert_eq!(state.4, 1);
+        assert!(state.0 > 0.0);
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     // Backup export must contain neither the secret's key nor its value,
     // even when one is stashed (secrets live outside the sync projection).
     #[test]
@@ -1745,6 +2260,318 @@ mod tests {
         nostr_keys(&db).expect("identity must parse after migration");
 
         drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // S5 REGRESSION: a backup import that fails LATE — the review applies
+    // cleanly but a settings row carries a malformed HLC — returns Err AND
+    // rolls back the WHOLE import: no review_logs row, no folded
+    // memory_state, no `theme` in either settings table (the probe case was
+    // exactly "error returned, yet review + theme were both retained").
+    #[test]
+    fn test_import_backup_error_rolls_back_reviews_and_settings() {
+        let (dir, path) = tmp_db_path("import-rollback");
+        let core = GreekCore::new(path.clone(), None).unwrap();
+
+        let json = serde_json::json!({
+            "v": 1,
+            "device_id": "feedface-0000-0000-0000-000000000000",
+            "from_hlc": "0000000000000-0000-feedface",
+            "to_hlc": "1762000000000-0000-feedface",
+            "reviews": [{
+                "uuid": "11111111-2222-3333-4444-555555555555",
+                "card_id": "card-rollback-1",
+                "timestamp": "2025-10-09T12:00:00Z",
+                "rating": 3,
+                "elapsed_days": 0.0,
+                "scheduled_days": 1.0,
+                "source": "flashcard",
+                "device_id": "feedface-0000-0000-0000-000000000000",
+                "hlc": "1760000000000-0000-feedface"
+            }],
+            // Late failure: the review inserts fine, THEN this setting's
+            // malformed HLC aborts the import.
+            "settings": [["theme", "dark", "not-an-hlc"]]
+        })
+        .to_string();
+
+        let err = core
+            .sync_import_backup_json(json)
+            .expect_err("the malformed settings HLC must fail the import");
+
+        match err {
+            // anyhow-sourced core errors surface as Database; either variant
+            // proves the import failed — the ASSERTIONS below are the point.
+            GreekError::Sync(_) | GreekError::Database { .. } => {}
+            other => panic!("expected a Sync/Database error, got {other:?}"),
+        }
+
+        // Nothing survived: inspect the same database file directly.
+        drop(core);
+        let db = Database::open(&path, None).unwrap();
+        let reviews: i64 = db
+            .conn()
+            .query_row("SELECT COUNT(*) FROM review_logs", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(reviews, 0, "the failed import must not retain reviews");
+        let folded: i64 = db
+            .conn()
+            .query_row("SELECT COUNT(*) FROM memory_states", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(folded, 0, "the aborted fold must leave no memory state");
+        for table in ["user_settings", "settings_sync"] {
+            let n: i64 = db
+                .conn()
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM {table} WHERE key = 'theme'"),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(n, 0, "{table} must not retain 'theme' from a failed import");
+        }
+
+        // A later GOOD import of the same payload (fixed HLC) must apply
+        // cleanly: the failed attempt left no uuid-dedup or LWW residue.
+        let fixed = serde_json::json!({
+            "v": 1,
+            "device_id": "feedface-0000-0000-0000-000000000000",
+            "from_hlc": "0000000000000-0000-feedface",
+            "to_hlc": "1762000000000-0000-feedface",
+            "reviews": [{
+                "uuid": "11111111-2222-3333-4444-555555555555",
+                "card_id": "card-rollback-1",
+                "timestamp": "2025-10-09T12:00:00Z",
+                "rating": 3,
+                "elapsed_days": 0.0,
+                "scheduled_days": 1.0,
+                "source": "flashcard",
+                "device_id": "feedface-0000-0000-0000-000000000000",
+                "hlc": "1760000000000-0000-feedface"
+            }],
+            "settings": [["theme", "dark", "1760000000001-0000-feedface"]]
+        })
+        .to_string();
+        drop(db);
+        let core = GreekCore::new(path, None).unwrap();
+        let stats = core.sync_import_backup_json(fixed).unwrap();
+        assert_eq!(
+            (stats.reviews_received, stats.settings_applied),
+            (1, 1),
+            "retry after a rolled-back import must apply in full"
+        );
+
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // --- S1: SyncBatch v2 — the app round-trips its OWN created data ---
+
+    /// S1 HEADLINE (the audit probe as a regression test): fresh core A
+    /// adds a real Greek lookup card (id `lookup-λόγος`), reviews it once,
+    /// marks the lemma known, and manually unlocks a chapter; export →
+    /// import into fresh core B must restore ALL of it: the review (counted
+    /// + folded to the byte-identical memory_state), the `lookup_cards`
+    /// content row, the known word, and the chapter unlock.
+    #[test]
+    fn test_s1_greek_lookup_backup_roundtrip() {
+        let (dir_a, path_a) = tmp_db_path("s1-a");
+        let (dir_b, path_b) = tmp_db_path("s1-b");
+        let letters = include_str!("../../../data/cards/letters.json").to_string();
+
+        let a = GreekCore::new_with_cards(path_a, None, letters.clone()).unwrap();
+        let card_id = a
+            .add_card_from_lookup(
+                "λόγος".to_string(),
+                "".to_string(),
+                "word; reason".to_string(),
+            )
+            .unwrap();
+        assert_eq!(card_id, "lookup-λόγος");
+        assert!(a.submit_review(card_id.clone(), 3), "one review lands");
+        a.mark_word_known("λόγος".to_string(), true).unwrap();
+        assert!(a.unlock_chapter("letters".to_string(), 2), "manual unlock");
+
+        let state_a = {
+            let db = a.db.lock().unwrap();
+            memory_state_snapshot(&db, &card_id).expect("one review must fold a memory row")
+        };
+
+        let json = a.sync_export_backup_json();
+        assert!(json.contains("\"v\":2"), "export must be wire v2: {json}");
+        assert!(
+            json.contains("lookup-λόγος"),
+            "export must carry the Greek id"
+        );
+
+        let b = GreekCore::new_with_cards(path_b, None, letters).unwrap();
+        let stats = b.sync_import_backup_json(json).unwrap();
+        assert_eq!(
+            stats.reviews_received, 1,
+            "the Greek lookup review must APPLY (the S1 bug dropped it): {stats:?}"
+        );
+
+        // 1. Review counted AND folded byte-identically to A.
+        let state_b = {
+            let db = b.db.lock().unwrap();
+            memory_state_snapshot(&db, &card_id).expect("imported review must fold a memory row")
+        };
+        assert_eq!(state_a, state_b, "memory_states must converge");
+
+        // 2. lookup_cards content row restored (an unreviewed lookup card
+        //    needs nothing else — schema v5 stores no memory row for it).
+        {
+            let db = b.db.lock().unwrap();
+            let (front, back): (String, String) = db
+                .conn()
+                .query_row(
+                    "SELECT front, back FROM lookup_cards WHERE card_id = ?1",
+                    [&card_id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .expect("lookup_cards content row must be restored");
+            assert_eq!(
+                (front, back),
+                ("λόγος".to_string(), "word; reason".to_string())
+            );
+        }
+
+        // 3. Known word restored.
+        assert!(b.is_word_known("λόγος".to_string()));
+        assert!(b.get_known_words().iter().any(|w| w == "λόγος"));
+
+        // 4. Manual chapter unlock restored (letters ch.2 is locked by
+        //    default on a fresh install and the alphabet gate does not
+        //    guard the letters track).
+        let ch2 = b
+            .get_chapters("letters".to_string())
+            .into_iter()
+            .find(|c| c.chapter == 2)
+            .expect("letters ch.2 exists");
+        assert!(ch2.unlocked, "manual chapter unlock must be restored");
+
+        // Idempotent replay of the whole v2 payload.
+        let stats = b
+            .sync_import_backup_json(b.sync_export_backup_json())
+            .unwrap();
+        assert_eq!(stats.reviews_received, 0);
+
+        drop(a);
+        drop(b);
+        let _ = std::fs::remove_dir_all(&dir_a);
+        let _ = std::fs::remove_dir_all(&dir_b);
+    }
+
+    // S1 NFC: a card created from an NFD lemma spelling exports with that
+    // id, and the import normalizes BOTH the review's card_id and the
+    // lookup_cards key to the NFC form — so the restored content row and
+    // the folded memory state key off the SAME id.
+    #[test]
+    fn test_s1_nfc_variant_roundtrips_through_id_gate() {
+        let (dir_a, path_a) = tmp_db_path("s1-nfd-a");
+        let (dir_b, path_b) = tmp_db_path("s1-nfd-b");
+
+        // NFD spelling of λόγος: bare omicron + COMBINING TONOS (U+0301).
+        let lemma_nfd = "λο\u{0301}γος".to_string();
+        assert_ne!(lemma_nfd, "λόγος", "fixture must be NFD");
+        let a = GreekCore::new(path_a, None).unwrap();
+        let id_nfd = a
+            .add_card_from_lookup(lemma_nfd, String::new(), "word".to_string())
+            .unwrap();
+        assert!(a.submit_review(id_nfd.clone(), 4));
+
+        let b = GreekCore::new(path_b, None).unwrap();
+        let stats = b
+            .sync_import_backup_json(a.sync_export_backup_json())
+            .unwrap();
+        assert_eq!(stats.reviews_received, 1);
+
+        let nfc_id = "lookup-λόγος";
+        let db = b.db.lock().unwrap();
+        let review_id: String = db
+            .conn()
+            .query_row("SELECT card_id FROM review_logs", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(review_id, nfc_id, "review ingress must NFC-normalize");
+        let content_id: String = db
+            .conn()
+            .query_row("SELECT card_id FROM lookup_cards", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(content_id, nfc_id, "content ingress must NFC-normalize");
+        // And the folded state hangs off the same single id.
+        assert!(memory_state_snapshot(&db, nfc_id).is_some());
+        let distinct: i64 = db
+            .conn()
+            .query_row("SELECT COUNT(DISTINCT card_id) FROM review_logs", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(distinct, 1, "NFC/NFD spellings converge to one card");
+        drop(db);
+
+        drop(a);
+        drop(b);
+        let _ = std::fs::remove_dir_all(&dir_a);
+        let _ = std::fs::remove_dir_all(&dir_b);
+    }
+
+    // S1 VERSION POLICY (file path): a v1-shaped payload (reviews+settings
+    // only — and its review targets a GREEK lookup id, the S1 poison case
+    // replayed as legacy data) imports cleanly; a future version is
+    // rejected whole, identically to the codec-level gate.
+    #[test]
+    fn test_import_v1_shape_ok_v99_rejected() {
+        let (dir, path) = tmp_db_path("s1-versions");
+        let core = GreekCore::new(path, None).unwrap();
+
+        let v1_json = serde_json::json!({
+            "v": 1,
+            "device_id": "feedface-0000-0000-0000-000000000000",
+            "from_hlc": "0000000000000-0000-feedface",
+            "to_hlc": "1762000000000-0000-feedface",
+            "reviews": [{
+                "uuid": "99999999-2222-3333-4444-555555555555",
+                "card_id": "lookup-λόγος",
+                "timestamp": "2025-10-09T12:00:00Z",
+                "rating": 3,
+                "elapsed_days": 0.0,
+                "scheduled_days": 1.0,
+                "source": "flashcard",
+                "device_id": "feedface-0000-0000-0000-000000000000",
+                "hlc": "1760000000000-0000-feedface"
+            }],
+            "settings": [["theme", "dark", "1760000000001-0000-feedface"]]
+        })
+        .to_string();
+        let stats = core.sync_import_backup_json(v1_json).unwrap();
+        assert_eq!(
+            (stats.reviews_received, stats.settings_applied),
+            (1, 1),
+            "a v1 batch with a Greek lookup id must import cleanly: {stats:?}"
+        );
+        // And it folded (the v1 payload carried no v2 collections and no
+        // content row — the memory row alone proves the review landed).
+        {
+            let db = core.db.lock().unwrap();
+            assert!(memory_state_snapshot(&db, "lookup-λόγος").is_some());
+        }
+
+        // version 99: rejected whole, nothing applied.
+        let mut v99: serde_json::Value =
+            serde_json::from_str(&core.sync_export_backup_json()).unwrap();
+        *v99.get_mut("v").unwrap() = serde_json::json!(99);
+        let err = core
+            .sync_import_backup_json(v99.to_string())
+            .expect_err("wire version 99 must be rejected");
+        match err {
+            GreekError::Sync(msg) => assert!(
+                msg.contains("unsupported sync wire version 99"),
+                "message must name the version: {msg}"
+            ),
+            other => panic!("expected GreekError::Sync, got {other:?}"),
+        }
+
+        drop(core);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

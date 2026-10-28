@@ -1,6 +1,6 @@
 //! Integration test for the exported sync surface of GreekCore:
 //!  - backup export → fresh instance import → identical due/memory state
-//!  - strict wire-version validation on import
+//!  - shared wire-version policy on import (v1+v2 accepted, future rejected)
 //!  - nostr push/pull with an unconfigured identity → clear error, no panic
 //!
 //! Runs against the crate's rlib (host-side); Kotlin sees the same methods
@@ -29,7 +29,7 @@ fn backup_export_import_roundtrip_converges_state() {
     assert!(a.declare_alphabet_known());
 
     let json = a.sync_export_backup_json();
-    assert!(json.contains("\"v\":1"), "backup must be wire v1: {json}");
+    assert!(json.contains("\"v\":2"), "backup must be wire v2: {json}");
 
     let b = GreekCore::new(db_b, None).unwrap();
     let stats = b.sync_import_backup_json(json).unwrap();
@@ -68,8 +68,10 @@ fn backup_export_import_roundtrip_converges_state() {
 fn import_rejects_unsupported_wire_version() {
     let (dir, db) = tmp_db_path("ver");
     let core = GreekCore::new(db, None).unwrap();
+    // v3 (a FUTURE version this build cannot interpret) is rejected whole;
+    // v1 and v2 are accepted (see the lib-level version-policy tests).
     let err = core
-        .sync_import_backup_json(r#"{"v":2,"device_id":"x","from_hlc":"","to_hlc":"","reviews":[],"settings":[]}"#.into())
+        .sync_import_backup_json(r#"{"v":3,"device_id":"x","from_hlc":"","to_hlc":"","reviews":[],"settings":[]}"#.into())
         .unwrap_err();
     let msg = err.to_string();
     assert!(msg.contains("version"), "expected version error, got: {msg}");

@@ -64,7 +64,16 @@ pub fn share_pubkey_hex(db: &Database) -> Option<String> {
 
 /// The sharing key HKDF-derives from the sync secret; enabling must ensure
 /// one exists. Fresh keys land in the v4 secrets vault (never synced/exported).
+///
+/// The existence check is preceded by a [`ShareKeys::from_db`] call purely
+/// for its legacy-migration side effect: on a pre-v4 database a
+/// `user_settings.nostr_nsec` is moved into the vault FIRST, so the
+/// presence check below finds it and the old identity is REUSED — never
+/// shadowed by a fresh one (which would orphan the old sync history's
+/// decryptability). Presence semantics otherwise unchanged (an unparseable
+/// stored value is still kept, exactly as before).
 fn ensure_sync_identity(db: &Database) -> Result<()> {
+    let _ = ShareKeys::from_db(db); // legacy → vault migration trigger
     match greek_core::secret_get(db, "nostr_nsec") {
         Ok(Some(_)) => Ok(()),
         _ => {

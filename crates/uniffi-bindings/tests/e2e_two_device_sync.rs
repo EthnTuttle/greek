@@ -51,11 +51,11 @@ fn core_with_letters(db_path: String) -> Arc<GreekCore> {
     GreekCore::new_with_cards(db_path, None, letters_json()).unwrap()
 }
 
-/// Parse a `sync_export_backup_json` payload back into the canonical v1
+/// Parse a `sync_export_backup_json` payload back into the canonical v2
 /// wire batch (proves the export is well-formed as well as uses it).
 fn export_batch(core: &GreekCore) -> greek_core::SyncBatch {
     let json = core.sync_export_backup_json();
-    serde_json::from_str(&json).unwrap_or_else(|e| panic!("export did not parse as SyncBatch v1: {e}\n{json}"))
+    serde_json::from_str(&json).unwrap_or_else(|e| panic!("export did not parse as SyncBatch v2: {e}\n{json}"))
 }
 
 fn uuid_set(batch: &greek_core::SyncBatch) -> BTreeSet<String> {
@@ -234,7 +234,7 @@ fn e2e_backup_file_roundtrip() {
 
     let json = a.sync_export_backup_json();
     let batch: greek_core::SyncBatch = serde_json::from_str(&json).unwrap();
-    assert_eq!(batch.v, 1);
+    assert_eq!(batch.v, 2);
     assert_eq!(batch.reviews.len(), 4);
     assert_eq!(batch.device_id, a.sync_device_id());
 

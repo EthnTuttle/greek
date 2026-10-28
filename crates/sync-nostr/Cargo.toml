@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 greek-core = { path = "../core" }
-nostr-sdk = { version = "0.43", default-features = false, features = ["nip44"] }
+nostr-sdk = { version = "0.44.1", default-features = false, features = ["nip44"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 uuid = { workspace = true }
@@ -18,6 +18,6 @@ hex = "0.4"
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
 # Local relay for E2E tests (examples/local_relay.rs). Pinned to the same
-# 0.43 line as the nostr-sdk/nostr stack above so types unify.
-nostr-relay-builder = "0.43"
-nostr-database = "0.43"
+# 0.44 line as the nostr-sdk/nostr stack above so types unify.
+nostr-relay-builder = "0.44.1"
+nostr-database = "0.44"

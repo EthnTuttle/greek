@@ -1,8 +1,25 @@
-# Sync Wire Format v1
+# Sync Wire Format
+
+Current wire version: **2** (supersedes v1, which is still ACCEPTED on every
+ingress — see §2.1 "Version policy").
 
 This file is the canonical specification of how sync batches leave the device,
 travel, and are reassembled. It is shared with the Android client later — write
 implementations against these sections, not against any one codebase.
+
+## History
+
+- **v1** (frozen 2026-10): `reviews` + `settings` only. S1 bug: the card-id
+  ingress gate admitted ASCII `[A-Za-z0-9._-]` only, so app-created Greek
+  lookup ids (`lookup-λόγος`) round-tripped as REJECTED — a lookup card's
+  review, its `lookup_cards` content row, known-words, and manual chapter
+  unlocks all vanished on backup/restore.
+- **v2** (2026-10-22, S1 fix): adds `known_words`, `lookup_cards`,
+  `chapter_unlocks` collections; the card-id gate accepts Unicode and
+  NFC-canonicalizes at ingress; a single shared version policy (`v ∈ {1,2}`
+  accepted, anything else rejected whole) is enforced identically at the
+  file-import boundary and the nostr reassembly boundary
+  (`greek_core::sync::validate_batch`).
 
 ## 2. Nostr spool encoding
 
@@ -92,12 +109,76 @@ stored, and all content is NIP-44 ciphertext anyway (§2.2).
 
 ```rust
 pub struct ReviewEvent { pub uuid: String, pub card_id: String, pub timestamp: String, pub rating: u32, pub elapsed_days: f64, pub scheduled_days: f64, pub source: String, pub device_id: String, pub hlc: String }
-pub struct SyncBatch { pub v: u32 /*1*/, pub device_id: String, pub from_hlc: String, pub to_hlc: String, pub reviews: Vec<ReviewEvent>, pub settings: Vec<(String,String,String)> /*key,value,hlc*/ }
+pub struct KnownWordEntry { pub word: String, pub known: bool, pub updated_at: String }   // updated_at: canonical RFC3339 UTC
+pub struct LookupCardEntry { pub card_id: String, pub front: String, pub back: String }
+pub struct ChapterUnlock { pub textbook: String, pub chapter: i32 }
+pub struct SyncBatch {
+    pub v: u32,                       // 1 = legacy (reviews+settings only), 2 = full
+    pub device_id: String,
+    pub from_hlc: String, pub to_hlc: String,
+    pub reviews: Vec<ReviewEvent>,
+    pub settings: Vec<(String,String,String)>,    // key,value,hlc
+    #[serde(default)] pub known_words: Vec<KnownWordEntry>,     // v2
+    #[serde(default)] pub lookup_cards: Vec<LookupCardEntry>,   // v2
+    #[serde(default)] pub chapter_unlocks: Vec<ChapterUnlock>,  // v2
+}
 ```
 
 Serialized with `serde_json` (UTF-8, field order as declared, floats via
 shortest-round-trip). `settings` is a JSON array of 3-element arrays
 (`["key","value","hlc"]`) because serde serializes Rust tuples as arrays.
+
+**Version policy (one shared gate, `greek_core::sync::validate_batch`):**
+
+- `"v": 1`, or `"v"` ABSENT (read as 1): legacy batch. The three v2
+  collections deserialize as EMPTY (`serde(default)`), so ingress applies
+  reviews + settings only — byte-identical to the old behavior.
+- `"v": 2`: full batch; all five collections apply.
+- Any other value (0, or anything `> 2`): the batch is REJECTED WHOLE — at
+  the backup-file import boundary (`sync_import_backup_json` → typed
+  `GreekError::Sync("unsupported sync wire version N …")`) and at the nostr
+  reassembly boundary (`reassemble_chunks` → `SyncNostrError::UnsupportedVersion(N)`,
+  counted/dropped like a corrupt batch). Never partially applied.
+- Producers (this build) always emit `"v": 2` (`v` = `SYNC_WIRE_VERSION_MAX`).
+
+**v2 collections (S1):** `known_words` carries every `known_words` row —
+`{word, known, updated_at}` — merged per-word LWW on the canonical
+`updated_at` string. `lookup_cards` carries every user-created card's
+content row `{card_id, front, back}` (an unreviewed lookup card has NO
+`memory_states` row since schema v5 — the content row alone IS its
+existence), merged by PK-dedup insert (first writer wins; equal lookups
+regenerate equal content). `chapter_unlocks` carries every manually
+unlocked `(textbook, chapter)` (`unlocked = 1` rows of
+`curriculum_progress`), a grow-only set merged by PK-dedup insert — locking
+never travels because the app has no relock path. All three tables carry
+**no HLC column**, so batches (incremental pushes included) always ship the
+FULL row sets; the tables are small and the merges are idempotent, so
+convergence needs no cursor.
+
+**Card-id ingress gate (S1, `greek_core::sync::normalize_card_id`)** —
+applies to `ReviewEvent.card_id` and `LookupCardEntry.card_id` at EVERY
+ingress (backup import and both transport pulls, which all run
+`apply_review_events` / `apply_lookup_cards`); rejected rows are
+skip-and-count DROPPED, never partially stored:
+
+- REJECT empty; over 256 Unicode scalar values (measured before and after
+  normalization); any ASCII control char (`0x00–0x1F`, `0x7F`); any of the
+  identifier-breaking bytes `'`, `"`, `\`.
+- ACCEPT everything else, including all Unicode — genuine app ids contain
+  Greek (`lookup-λόγος`).
+- NORMALIZE to NFC at ingress: a sender whose spelling is NFD and one in
+  NFC converge to ONE card id on the receiving device. (The write path
+  emits NFC already — morphology lookups NFC-normalize input lemmas — but
+  ingress may not rely on sender behavior.)
+
+### 2.1a iroh note
+
+The iroh-docs transport (§3) is **event-level**: it carries one
+`ReviewEvent` / one settings triple per doc entry, no `SyncBatch` envelope,
+so the batch-version policy does not apply to it (per-event screening —
+the card-id gate, rating/timestamp/HLC validation — still runs, inside
+`apply_review_events`). The v2 content collections do NOT yet ride iroh
+entries; they converge via the nostr spool (§2) and the backup file path.
 
 ### 2.2 Nostr envelope
 
@@ -107,8 +188,8 @@ derived with our own pubkey, `nip44::v2::ConversationKey::derive(sk, own_pk)`).
 
 **Publish pipeline (one batch):**
 
-1. `batch_json = serde_json::to_vec(&SyncBatch)` — v1 is uncompressed
-   (ciphertext size ≈ plaintext size; reviews are tiny).
+1. `batch_json = serde_json::to_vec(&SyncBatch)` — uncompressed
+   (ciphertext size ≈ plaintext size; payloads are tiny).
 2. Chunk `batch_json` at **≤ 48 KiB (49152 bytes)** plaintext per chunk
    (chunk on byte boundaries; reassembly is byte concatenation).
 3. Per chunk index `i` of count `n`: NIP-44-v2 encrypt the chunk to self
@@ -131,21 +212,31 @@ derived with our own pubkey, `nip44::v2::ConversationKey::derive(sk, own_pk)`).
    - `content` = NIP-44(self) of JSON `{"device_id","last_to_hlc","batch"}`
      (`batch` = the batch uuid from step 4).
 
-**Fetch pipeline `fetch_since(since_hlc)`:**
+**Fetch pipeline `fetch_all()` (S6):**
 
 1. REQ filter `{authors: [self_pubkey], kinds: [1078, 30078],
    "#t": ["greek-sync"]}`, collect until EOSE (timeout 8s).
 2. nostr-sdk verifies event signatures.
 3. Keep kind-1078 events; regroup by `b` tag; within a group sort by `i`;
-   require every index `0..n` present (else count as partial batch, skip).
+   require every index `0..n` present (else count as partial batch — it is
+   tolerated, NOT returned, so a later fetch can complete it once the
+   missing chunks arrive).
 4. Decrypt each event's content (NIP-44 v2 to self). Events that fail
    decrypt or JSON parse are **dropped and counted**
    (`SyncNostrError::DecryptFailed{count}` if nothing usable remains).
-5. Byte-concat the decrypted chunks, `serde_json::from_slice` → `SyncBatch`.
-6. Filter to batches with `to_hlc > since_hlc` (string compare, HLCs are
-   UUID-padded ISO-8601 so lexicographic == causal order), return sorted by
-   `to_hlc` ascending. The kind-30078 checkpoint is fetched with the same
-   REQ and used by higher layers; decode via the blinded d-tag.
+5. Byte-concat the decrypted chunks, `serde_json::from_slice` → `SyncBatch`;
+   the shared version policy applies HERE at the reassembly boundary
+   (`reassemble_chunks` rejects unknown versions — §2.1 "Version policy").
+   Complete-but-corrupt batches are thus logged/skipped, never surfaced.
+6. Return every complete batch as `(batch_uuid = "b" tag, SyncBatch)`,
+   sorted by `to_hlc` ascending — at ANY HLC position. **There is no HLC
+   filter** (S6): pull admission is the caller's per-batch decision via the
+   `sync_applied_batches` UUID ledger (apply + mark in ONE transaction);
+   `nostr_last_pull_hlc` survives only as an advance-only observability
+   high-water mark, so a batch completed late (or pushed from a lagging
+   clock) below that mark still merges. The kind-30078 checkpoint is
+   fetched with the same REQ and used by higher layers; decode via the
+   blinded d-tag.
 
 ### 2.3 Relay policy notes
 
@@ -159,8 +250,8 @@ derived with our own pubkey, `nip44::v2::ConversationKey::derive(sk, own_pk)`).
   content at 64 KiB.
 - Never log plaintext; the only cleartext visible to relays is: pubkey,
   event count/size/timing, `device_id` in the `d` tag of chunk events, and
-  the `greek-sync` topic tag. (Metadata leak accepted in v1; topic tag could
-  be blinded in v2.)
+  the `greek-sync` topic tag. (Metadata leak accepted for now; the topic tag
+  could be blinded in a future envelope revision.)
 
 ### 2.4 Live-relay evidence (`#[ignore]` test `live_damus_roundtrip`, run 2026-10-18)
 

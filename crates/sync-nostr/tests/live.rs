@@ -133,21 +133,26 @@ async fn live_damus_roundtrip() {
     push_paced(&t, &synthetic_batch("dev-live-1", 1)).await;
 
     let start = Instant::now();
-    let all = t.fetch_since(None).await.expect("fetch all");
+    let all = t.fetch_all().await.expect("fetch all");
     println!(
         "fetched {} batch(es) in {:?}",
         all.len(),
         start.elapsed()
     );
-    assert!(all.contains(&b1), "small batch missing");
-    assert!(all.contains(&b2), "big batch missing");
+    assert!(
+        all.iter().any(|f| f.batch == b1 && !f.batch_uuid.is_empty()),
+        "small batch missing"
+    );
+    assert!(
+        all.iter().any(|f| f.batch == b2),
+        "big batch missing"
+    );
 
-    // since filter: b1.to_hlc sorts before b2... they share hlc pattern from
-    // synthetic_batch; filter using b1.to_hlc should yield only batches with
-    // strictly greater to_hlc (none here unless to_hlc differs).
-    let filtered = t.fetch_since(Some(&b1.to_hlc)).await.expect("fetch since");
-    assert!(filtered.iter().all(|b| b.to_hlc > b1.to_hlc));
-    println!("fetch_since filter OK: {} batch(es) after", filtered.len());
+    // S6: no HLC filter on the pull path — every complete batch surfaces
+    // regardless of to_hlc vs any cursor; admission dedups by batch UUID.
+    let again = t.fetch_all().await.expect("fetch again");
+    assert_eq!(again.len(), all.len());
+    println!("fetch_all stable OK: {} batch(es)", again.len());
 
     t.client.disconnect().await;
 }

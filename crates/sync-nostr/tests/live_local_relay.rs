@@ -125,16 +125,20 @@ async fn live_local_relay_push_pull_roundtrip() {
     let small = synthetic_batch("dev-e2e-b", 5);
     t.push(&small).await.expect("push small batch");
 
-    // Roundtrip equality for both batches.
-    let fetched = t.fetch_since(None).await.expect("fetch all");
-    assert!(fetched.contains(&big), "multi-chunk batch missing after pull");
-    assert!(fetched.contains(&small), "small batch missing after pull");
+    // Roundtrip equality for both batches (S6: fetch_all returns
+    // UUID-tagged batches, no HLC filter — admission is per-batch UUID).
+    let fetched = t.fetch_all().await.expect("fetch all");
+    assert!(
+        fetched.iter().any(|f| f.batch == big && !f.batch_uuid.is_empty()),
+        "multi-chunk batch missing after pull"
+    );
+    assert!(
+        fetched.iter().any(|f| f.batch == small),
+        "small batch missing after pull"
+    );
+    // Both batches carry their wire "b" tag UUIDs for S6 pull admission.
+    assert!(fetched.iter().all(|f| !f.batch_uuid.is_empty()));
     println!("pull roundtrip equality OK ({} batches)", fetched.len());
-
-    // since_hlc filter still works.
-    let filtered = t.fetch_since(Some(&small.to_hlc)).await.expect("fetch since");
-    assert!(filtered.iter().all(|b| b.to_hlc > small.to_hlc));
-    assert!(!filtered.contains(&small));
 
     // Checkpoint visibility: exactly ONE kind-30078 exists (both pushes used
     // the same blinded d-tag, so the parameterized-replaceable event must

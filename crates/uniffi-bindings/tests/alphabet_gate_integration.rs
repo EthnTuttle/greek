@@ -133,17 +133,45 @@ fn due_review_debt_is_never_gated() {
     // even on a day-one install. (Any due vocab card implies vocab history,
     // which also grandfathers the gate — asserted here to pin both halves
     // of the legacy-user story.)
-    let core = open_core("debt");
+    let db_path = temp_db_path("debt");
+    let core = GreekCore::new_with_cards(db_path.clone(), None, gate_cards_json()).unwrap();
     assert!(!core.get_alphabet_gate_state().satisfied);
-    // The reader's "Add to SRS" lookup flow creates an immediately-due card.
+
+    // C2: the reader's "Add to SRS" lookup flow now writes NO memory_states
+    // row — an unreviewed lookup card is neither due nor vocab history.
     let lookup_id = core
         .add_card_from_lookup("λόγος".to_string(), "".to_string(), "word".to_string())
         .unwrap();
-    let due = core.get_due_cards(10).unwrap();
     assert!(
-        due.iter().any(|c| c.card.id == lookup_id),
-        "due review debt must never be gated"
+        core.get_due_cards(10)
+            .unwrap()
+            .iter()
+            .all(|c| c.card.id != lookup_id),
+        "an unreviewed lookup card must not appear as due"
     );
+    assert!(
+        !core.get_alphabet_gate_state().satisfied,
+        "merely adding a lookup card is not a vocabulary habit"
+    );
+
+    // Genuine pre-gate review debt: plant a REAL reviewed vocab row due in
+    // the past (what a pre-gate install's database actually carries). The
+    // public API can't backdate a due date, so plant it on a second
+    // connection (WAL mode allows the concurrent reader/writer pair).
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    conn.execute(
+        "INSERT INTO memory_states (card_id, stability, difficulty, last_review, due_date, reps, lapses)
+         VALUES ('ath1-001', 3.0, 5.0, '2020-01-01T00:00:00Z', '2020-01-02T00:00:00Z', 1, 0)",
+        [],
+    )
+    .unwrap();
+
+    let due = core.get_due_cards(10).unwrap();
+    let debt = due
+        .iter()
+        .find(|c| c.card.id == "ath1-001")
+        .expect("due review debt must never be gated");
+    assert!(debt.card.front.contains("λόγος"), "deck content flows");
     let state = core.get_alphabet_gate_state();
     assert!(state.satisfied);
     assert_eq!(state.method, "vocab_history");

@@ -10,7 +10,7 @@ edition = "2021"
 
 [dependencies]
 greek-core = { path = "../core" }
-nostr-sdk = { version = "0.43", default-features = false } # same line as sync-nostr
+nostr-sdk = { version = "0.44.1", default-features = false } # same line as sync-nostr
 rusqlite = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -27,9 +27,9 @@ fsrs = "2" # same version requirement as greek-core (streak replay fold)
 tokio = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }
 uuid = { workspace = true }
-# Same 0.43 line as sync-nostr's dev-deps so types unify.
-nostr-relay-builder = "0.43"
-nostr-database = "0.43"
+# Same 0.44 line as sync-nostr's dev-deps so types unify.
+nostr-relay-builder = "0.44.1"
+nostr-database = "0.44"
 # async-wsocket is nostr-relay-builder's own wire stack; used by the scripted
 # fake-relay fixture to emit arbitrary OK-false prefixes and mid-publish
 # socket closes (relay-builder WritePolicy rejections are always wrapped as

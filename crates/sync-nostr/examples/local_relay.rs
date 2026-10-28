@@ -1,8 +1,8 @@
 //! Minimal LOCAL nostr relay for cross-device sync E2E.
 //!
 //! Speaks NIP-01 over cleartext ws://127.0.0.1:<port> using rust-nostr's
-//! official `nostr-relay-builder` 0.43 (same line as the workspace's pinned
-//! `nostr-sdk 0.43`). Backed by an in-memory database that enforces standard
+//! official `nostr-relay-builder` 0.44 (same line as the workspace's pinned
+//! `nostr-sdk 0.44.1`). Backed by an in-memory database that enforces standard
 //! relay semantics: event id+signature verification, and keep-newest
 //! replacement for replaceable/parameterized-replaceable events (so the
 //! kind-30078 blinded checkpoints collapse to one per (pubkey, kind, d-tag)).
@@ -115,10 +115,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // `run` binds the TCP listener before returning, so this line is only
     // printed once the relay is genuinely accepting connections.
-    let relay = LocalRelay::run(builder).await?;
+    // (nostr-relay-builder 0.44: construct-then-run; the relay must stay
+    // alive in scope — clones dropping shut it down.)
+    let relay = LocalRelay::new(builder);
+    relay.run().await?;
     println!(
         "RELAY_READY {}",
-        relay.url().trim_start_matches("ws://")
+        relay.url().await.to_string().trim_start_matches("ws://")
     );
 
     // Watch for the --once-events admission quota (parked future if unset).

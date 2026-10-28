@@ -2,14 +2,15 @@
 //!
 //! One human identity = one nostr keypair. Relays are untrusted storage:
 //! every batch is NIP-44-encrypted to self and published as kind-1078
-//! events (chunked at 48 KiB), plus a kind-30078 blinded checkpoint.
+//! events (chunked at 32 KiB, splits on UTF-8 char boundaries; S10), plus
+//! a kind-30078 blinded checkpoint.
 //! See SYNC-WIRE.md §2 for the wire format.
 
 pub mod codec;
 pub mod transport;
 
 pub use codec::{chunk_batch, reassemble_chunks, CHUNK_SIZE};
-pub use transport::NostrSpoolTransport;
+pub use transport::{FetchedBatch, NostrSpoolTransport};
 
 // Canonical wire types live in greek-core (SYNC-WIRE.md §2.1); re-exported
 // here so existing sync-nostr call sites keep working unchanged.
@@ -28,6 +29,8 @@ pub enum SyncNostrError {
     DecryptFailed { count: usize },
     #[error("incomplete batch: {missing} chunk(s) missing")]
     PartialBatch { missing: usize },
+    #[error("unsupported sync wire version: {0}")]
+    UnsupportedVersion(u32),
     #[error("serde error: {0}")]
     Serde(#[from] serde_json::Error),
     #[error("nostr error: {0}")]

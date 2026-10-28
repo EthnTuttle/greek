@@ -192,6 +192,9 @@ impl Publisher {
         // OK-false is a PERMANENT per-relay stop (class UnsupportedAuth),
         // so the client must not hang waiting for AUTH challenges.
         let options = ClientOptions::new().automatic_authentication(false);
+        // SEMANTIC PIN (kept across the 0.43 → 0.44.1 upgrade): NIP-42
+        // auto-auth stays DISABLED for the sharing pool; `auth-required:`
+        // remains a permanent per-relay stop.
         let client = Client::builder().signer(keys.keys().clone()).opts(options).build();
         for url in relay_urls {
             client
@@ -270,6 +273,11 @@ impl Publisher {
     /// content-match after NFC sanitization on both sides. `true` ⇒ at least
     /// one connected relay already serves this exact content ⇒ treat the
     /// milestone as delivered WITHOUT re-sending.
+    ///
+    /// Read-back validates AUTHOR and KIND of every fetched event against
+    /// this publisher's key and kind 1 (security audit): the REQ filter asks
+    /// for exactly that, but a misbehaving or buggy relay could still send
+    /// unfiltered events — content alone must never be trusted.
     pub async fn content_already_posted(&self, content: &str) -> Result<bool> {
         let filter = Filter::new()
             .author(self.pubkey)
@@ -283,9 +291,11 @@ impl Publisher {
         .map_err(|_| ShareError::Nostr("read-back fetch timed out".to_string()))?
         .map_err(|e| ShareError::Nostr(format!("read-back fetch failed: {e}")))?;
         let target = crate::templates::sanitize(content);
-        let found = events
-            .iter()
-            .any(|ev| crate::templates::sanitize(&ev.content) == target);
+        let found = events.iter().any(|ev| {
+            ev.pubkey == self.pubkey
+                && ev.kind == Kind::TextNote
+                && crate::templates::sanitize(&ev.content) == target
+        });
         Ok(found)
     }
 }

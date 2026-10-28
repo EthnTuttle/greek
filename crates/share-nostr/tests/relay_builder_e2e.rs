@@ -13,14 +13,14 @@ fn keys() -> ShareKeys {
 }
 
 async fn start_relay() -> LocalRelay {
-    // RelayBuilder::port(0) binds an ephemeral listener but reports
-    // `ws://127.0.0.1:0` from url() — reserve a port first instead.
+    // Reserving the port first keeps the fixture deterministic; url() is
+    // async in nostr-relay-builder 0.44 and reports the bound address.
     let port = std::net::TcpListener::bind("127.0.0.1:0")
         .expect("reserve ephemeral port")
         .local_addr()
         .unwrap()
         .port();
-    LocalRelay::run(
+    let relay = LocalRelay::new(
         RelayBuilder::default()
             .addr(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST))
             .port(port)
@@ -28,15 +28,15 @@ async fn start_relay() -> LocalRelay {
                 max_reqs: 1000,
                 notes_per_minute: 1_000_000,
             }),
-    )
-    .await
-    .expect("start local relay")
+    );
+    relay.run().await.expect("start local relay");
+    relay
 }
 
 #[tokio::test]
 async fn real_relay_accepts_then_answers_duplicate_on_identical_resend() {
     let relay = start_relay().await;
-    let url = relay.url().to_string();
+    let url = relay.url().await.to_string();
     let keys = keys();
     let publisher = Publisher::connect(&keys, std::slice::from_ref(&url))
         .await
@@ -82,7 +82,7 @@ async fn real_relay_accepts_then_answers_duplicate_on_identical_resend() {
 #[tokio::test]
 async fn real_relay_signature_gate_passes_for_share_events() {
     let relay = start_relay().await;
-    let url = relay.url().to_string();
+    let url = relay.url().await.to_string();
     let keys = keys();
     let publisher = Publisher::connect(&keys, std::slice::from_ref(&url))
         .await

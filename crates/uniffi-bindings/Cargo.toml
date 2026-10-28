@@ -19,7 +19,9 @@ sync-nostr = { path = "../sync-nostr" }
 # (root Cargo.toml is owned outside this wave's file set).
 share-nostr = { path = "../share-nostr" }
 sync-iroh = { path = "../sync-iroh" }
-nostr-sdk = { version = "0.43", default-features = false, features = ["nip44"] }
+# Same 0.44 line as sync-nostr / share-nostr so Keys/Event types unify and
+# the RUSTSEC-2026-0216..0232 exposure is closed workspace-wide.
+nostr-sdk = { version = "0.44.1", default-features = false, features = ["nip44"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 rusqlite = { workspace = true }
@@ -31,6 +33,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { workspace = true }
 tokio = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# In-process local relay for the S7 nostr cursor tests (same 0.44 line as
+# sync-nostr so `LocalRelay` speaks exactly what NostrSpoolTransport does).
+nostr-relay-builder = "0.44.1"
 
 [[bin]]
 name = "uniffi-bindgen"

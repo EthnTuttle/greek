@@ -62,25 +62,49 @@ impl ShareKeys {
         Ok(Self(Keys::new(sk)))
     }
 
-    /// Load the sync secret (`nostr_nsec`, hex) from the database, derive the
-    /// sharing keypair from it, and assert `share_pk != sync_pk` (Appendix R
+    /// Load the sync secret (`nostr_nsec`) from the database and derive the
+    /// sharing keypair, asserting `share_pk != sync_pk` (Appendix R
     /// separation invariant — an equality here would identify a derivation
     /// bug, not something to paper over).
+    ///
+    /// The secret is read vault-FIRST (`secrets` table, schema v4), falling
+    /// back to the legacy `user_settings.nostr_nsec` location — and a legacy
+    /// hit is MIGRATED on read (into `secrets`, out of both settings tables),
+    /// the same policy as the core's `load_nostr_nsec`. A pre-v4 database is
+    /// therefore upgraded in place instead of being silently ignored (which
+    /// would have let `ensure` shadow the old identity with a fresh one).
     pub fn from_db(db: &greek_core::Database) -> Result<Self> {
-        let hex = db
-            .conn()
-            .query_row(
-                "SELECT value FROM user_settings WHERE key = 'nostr_nsec'",
-                [],
-                |row| row.get::<_, String>(0),
+        fn identity_err() -> ShareError {
+            ShareError::Identity(
+                "nostr sync identity not configured; sharing identity derives \
+                 from it — call sync_generate_nostr_identity first"
+                    .to_string(),
             )
-            .map_err(|_| {
-                ShareError::Identity(
-                    "nostr sync identity not configured; sharing identity derives \
-                     from it — call sync_generate_nostr_identity first"
-                        .to_string(),
-                )
-            })?;
+        }
+        let hex = match greek_core::secret_get(db, "nostr_nsec") {
+            Ok(Some(v)) => v,
+            _ => {
+                let legacy = db
+                    .conn()
+                    .query_row(
+                        "SELECT value FROM user_settings WHERE key = 'nostr_nsec'",
+                        [],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .map_err(|_| identity_err())?;
+                // Migrate on read; failures to move/delete are non-fatal
+                // (the legacy copy is still authoritative for this read).
+                if greek_core::secret_put(db, "nostr_nsec", &legacy).is_ok() {
+                    let _ = db
+                        .conn()
+                        .execute("DELETE FROM user_settings WHERE key = 'nostr_nsec'", []);
+                    let _ = db
+                        .conn()
+                        .execute("DELETE FROM settings_sync WHERE key = 'nostr_nsec'", []);
+                }
+                legacy
+            }
+        };
         let sync_keys = Keys::parse(hex.trim()).map_err(|e| {
             ShareError::Identity(format!("stored nostr key is invalid: {e}"))
         })?;
