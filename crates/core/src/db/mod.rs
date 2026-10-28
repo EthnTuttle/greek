@@ -20,7 +20,17 @@ pub struct Database {
 ///   migration MOVES any `nostr_nsec` rows out of `user_settings` /
 ///   `settings_sync` into `secrets` and deletes the synced/plaintext copies
 ///   (DESIGN-progress-sharing.md, Appendix R "Secrets").
-const SCHEMA_VERSION: i64 = 4;
+/// - 5: C2 contents cleanup — delete legacy zero-state `memory_states` rows
+///   written by the old `add_card_from_lookup` (stability/difficulty 0.0,
+///   reps=0, last_review NULL, no review history). Such a row masqueraded as
+///   a learned FSRS state: bogus fixed previews and incremental-vs-replay
+///   divergence. An unreviewed lookup card must have NO row at all.
+/// - 6: S6 `sync_applied_batches(batch_uuid, applied_at)` — nostr pull
+///   admission dedups per wire batch UUID (the chunk "b" tag) instead of a
+///   single global HLC cursor, so a previously-incomplete or lagging-clock
+///   batch whose HLCs sit below the pull high-water mark can still apply
+///   when it later completes (see `sync::mark_batch_applied`).
+const SCHEMA_VERSION: i64 = 6;
 
 impl Database {
     /// Open or create the main app database. Creates tables if they don't exist.
@@ -100,6 +110,41 @@ impl Database {
     pub fn conn(&self) -> &Connection {
         &self.conn
     }
+
+    /// Run `f` inside a single IMMEDIATE transaction: commit on success,
+    /// roll back and propagate the error on failure. [`Database`] only
+    /// exposes `&Connection` (no `&mut`, so rusqlite's `transaction()` is
+    /// unavailable), hence explicit BEGIN/COMMIT — `f` receives this same
+    /// connection handle, and any other statement issued on it while the
+    /// transaction is open (e.g. the HLC advance in `sync::hlc_now`) joins
+    /// the transaction and rolls back together.
+    pub fn with_tx<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+        run_in_tx(&self.conn, f)
+    }
+}
+
+/// Run `f` inside a single IMMEDIATE transaction on `conn`: commit on
+/// success, roll back and propagate the error on failure. Nesting-aware:
+/// when `conn` is already inside a transaction (an enclosing `with_tx`
+/// composed this call, e.g. the backup-import wrapper enveloping
+/// `apply_review_events` + `apply_settings`), `f` just runs against the
+/// open transaction — the OUTER envelope keeps sole commit/rollback
+/// authority, so a late error anywhere still rolls back the whole unit.
+fn run_in_tx<T>(conn: &Connection, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+    if !conn.is_autocommit() {
+        return f(conn);
+    }
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    match f(conn) {
+        Ok(result) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(result)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
 }
 
 /// Apply pending schema migrations and record the current schema version in
@@ -113,7 +158,15 @@ fn migrate(conn: &Connection) -> Result<()> {
         // (see the v2 step below for the pattern), then bump SCHEMA_VERSION
         // to the highest applied step. The stamp below records it. Keep the
         // steps idempotent where possible.
-
+        //
+        // ATOMICITY (S5): ALL pending steps PLUS the `user_version` stamp
+        // run inside ONE IMMEDIATE transaction — a crash or error mid-way
+        // rolls everything back instead of leaving half-applied ALTERs
+        // behind an unbumped version stamp (which would make the next open
+        // retry already-committed column additions and wedge on
+        // "duplicate column name"). `PRAGMA user_version = N` is
+        // transactional in SQLite and rides the same envelope.
+        run_in_tx(conn, |conn| {
         if version < 2 {
             // The baseline CREATE TABLE above deliberately omits `source` so
             // that fresh (v0) and legacy (v1) databases converge through this
@@ -203,10 +256,45 @@ fn migrate(conn: &Connection) -> Result<()> {
             )?;
         }
 
-        conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
-    }
+        if version < 5 {
+            // C2: purge legacy zero-state lookup rows. The signature is a
+            // never-reviewed placeholder: reps=0, last_review NULL, AND no
+            // review_logs row for the card (the log guard makes the step
+            // safe even against a torn first-review write). The `lookup-%`
+            // prefix guard means genuine deck cards can never match: the
+            // only writer of reps=0/NULL rows was the old
+            // add_card_from_lookup. `lookup-%` contains no LIKE wildcards
+            // itself, so no escape clause is needed.
+            conn.execute_batch(
+                "DELETE FROM memory_states
+                 WHERE card_id LIKE 'lookup-%'
+                   AND reps = 0
+                   AND last_review IS NULL
+                   AND card_id NOT IN (SELECT DISTINCT card_id FROM review_logs);",
+            )?;
+        }
 
-    Ok(())
+        if version < 6 {
+            // S6 pull admission ledger: one row per APPLIED wire batch UUID.
+            // Rows are inserted by `sync::mark_batch_applied` in the SAME
+            // transaction as the batch's application, so a crash can never
+            // record an unapplied batch (it is simply retried next pull).
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS sync_applied_batches(
+                     batch_uuid TEXT PRIMARY KEY,
+                     applied_at TEXT NOT NULL
+                 );",
+            )?;
+        }
+
+        // Stamp last, INSIDE the envelope: the version only ever advances
+        // together with the schema changes it describes.
+        conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
+        Ok(())
+        })
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -248,6 +336,86 @@ mod tests {
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
         assert_eq!(v2, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_migrate_v5_to_v6_creates_sync_applied_batches() {
+        // Build a v5-shaped database by hand: pre-existing data rows,
+        // user_version stamped at 5, no sync_applied_batches table.
+        let dir = std::env::temp_dir().join(format!("greek-v5-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("v5.db");
+        let path_str = path.to_string_lossy().into_owned();
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE user_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 CREATE TABLE review_logs(
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     card_id TEXT NOT NULL,
+                     timestamp TEXT NOT NULL,
+                     rating INTEGER NOT NULL,
+                     elapsed_days REAL NOT NULL,
+                     scheduled_days REAL NOT NULL,
+                     source TEXT NOT NULL DEFAULT 'flashcard',
+                     uuid TEXT,
+                     device_id TEXT,
+                     hlc TEXT
+                 );
+                 INSERT INTO user_settings (key, value) VALUES ('device_id', 'dev-v5');
+                 INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days, uuid, device_id, hlc)
+                     VALUES ('old-card', '2024-01-01T00:00:00Z', 3, 0.0, 1.0,
+                             'row-uuid-1', 'dev-v5', '0000000000001-0000-abcd1234');
+                 PRAGMA user_version = 5;",
+            )
+            .unwrap();
+        }
+
+        // Opening upgrades to v6: the ledger table appears, data intact.
+        let db = Database::open(&path_str, None).unwrap();
+        let version: i64 = db
+            .conn()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        let n: i64 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sync_applied_batches'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1, "sync_applied_batches must be created by the v6 step");
+        let device_id: String = db
+            .conn()
+            .query_row("SELECT value FROM user_settings WHERE key = 'device_id'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(device_id, "dev-v5", "v5 data must survive the migration");
+        let rating: i64 = db
+            .conn()
+            .query_row("SELECT rating FROM review_logs WHERE uuid = 'row-uuid-1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rating, 3);
+        // The ledger starts EMPTY: pre-v6 databases may have pushed batches
+        // already; those are uuid-deduped by apply_review_events on their
+        // first post-upgrade (re)apply and then marked.
+        let ledger: i64 = db
+            .conn()
+            .query_row("SELECT COUNT(*) FROM sync_applied_batches", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(ledger, 0);
+        drop(db);
+
+        // Idempotent reopen: version stays, no re-run, table still there.
+        let db2 = Database::open(&path_str, None).unwrap();
+        let v2: i64 = db2
+            .conn()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(v2, SCHEMA_VERSION);
+        drop(db2);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -407,6 +575,88 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 1);
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // S5: a migration interrupted mid-flight must roll back EVERYTHING —
+    // after the failed open, the version stamp is unchanged and none of the
+    // midway ALTERs exist, so a later open (obstruction removed) retries the
+    // whole migration cleanly instead of wedging on duplicate columns.
+    // Simulated via a tripwire trigger that ABORTs the v3 step's first
+    // user_settings INSERT.
+    #[test]
+    fn test_interrupted_migration_rolls_back_and_retries_cleanly() {
+        let dir = std::env::temp_dir().join(format!("greek-tx-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("interrupted.db");
+        let path_str = path.to_string_lossy().into_owned();
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE review_logs(
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     card_id TEXT NOT NULL,
+                     timestamp TEXT NOT NULL,
+                     rating INTEGER NOT NULL,
+                     elapsed_days REAL NOT NULL,
+                     scheduled_days REAL NOT NULL,
+                     source TEXT NOT NULL DEFAULT 'flashcard'
+                 );
+                 CREATE TABLE user_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days)
+                     VALUES ('c1', '2024-01-01T00:00:00Z', 3, 0.0, 1.0);
+                 CREATE TRIGGER tripwire BEFORE INSERT ON user_settings
+                     BEGIN SELECT RAISE(ABORT, 'simulated interruption'); END;
+                 PRAGMA user_version = 2;",
+            )
+            .unwrap();
+        }
+
+        // First open: migration hits the tripwire mid-v3-step and fails.
+        assert!(
+            Database::open(&path_str, None).is_err(),
+            "the tripwire must abort the migration"
+        );
+
+        // Nothing half-applied survives: version still 2, no `uuid` column.
+        {
+            let conn = Connection::open(&path).unwrap();
+            let v: i64 = conn
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(v, 2, "an aborted migration must not advance the stamp");
+            let cols: Vec<String> = {
+                let mut stmt = conn.prepare("PRAGMA table_info(review_logs)").unwrap();
+                stmt.query_map([], |row| row.get(1))
+                    .unwrap()
+                    .collect::<std::result::Result<Vec<String>, _>>()
+                    .unwrap()
+            };
+            assert!(
+                !cols.iter().any(|c| c == "uuid"),
+                "interrupted ALTERs must roll back, found columns: {cols:?}"
+            );
+            // Remove the obstruction; the retry below must see a pristine v2.
+            conn.execute_batch("DROP TRIGGER tripwire;").unwrap();
+        }
+
+        // Retry: the FULL migration runs from scratch and converges to the
+        // current schema — no "duplicate column name" wedge.
+        let db = Database::open(&path_str, None).unwrap();
+        let v: i64 = db
+            .conn()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA_VERSION);
+        let backfilled: Option<String> = db
+            .conn()
+            .query_row("SELECT uuid FROM review_logs WHERE card_id = 'c1'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert!(backfilled.is_some(), "retry must run the v3 backfill");
 
         drop(db);
         let _ = std::fs::remove_dir_all(&dir);

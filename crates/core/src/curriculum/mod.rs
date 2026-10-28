@@ -125,12 +125,34 @@ pub fn card_in_textbook(card: &Card, textbook: &str) -> bool {
         .any(|t| t == textbook || t.starts_with(&prefix))
 }
 
+/// Shared practice-eligibility policy (C4): a letters-track card is ALWAYS
+/// practice-eligible; a vocabulary card only once the alphabet gate is
+/// satisfied. (`Curriculum::alphabet_gate_state` fails open when the letters
+/// track is not loaded, so letters-less builds are never bricked.)
+///
+/// One policy, applied by every practice surface: the bindings'
+/// `generate_practice_mcq` filters its draw pool with it, and
+/// `submit_practice_result` refuses to create practice-source state for
+/// loaded-deck cards failing it — otherwise a stray practice answer's
+/// `memory_states` row would fabricate "vocab history" and trip the Lane-C
+/// grandfather. The Alphabet Check generator keeps its OWN letters-only
+/// eligibility rules and does not route through the gate.
+pub fn practice_eligible(db: &Database, deck: &[Card], card: &Card) -> bool {
+    card_in_textbook(card, "letters") || Curriculum::alphabet_gate_state(db, deck).satisfied
+}
+
 /// Card ids from `memory_states` matching a simple `WHERE <sql> < ?1` filter
 /// (e.g. `"stability >= ?1"` for mastery, `"reps >= ?1"` for letters
 /// familiarity). Returns an empty set on any query error.
-fn memory_ids_where(db: &Database, where_sql: &str, threshold: f64) -> std::collections::HashSet<String> {
+fn memory_ids_where(
+    db: &Database,
+    where_sql: &str,
+    threshold: f64,
+) -> std::collections::HashSet<String> {
     db.conn()
-        .prepare(&format!("SELECT card_id FROM memory_states WHERE {where_sql}"))
+        .prepare(&format!(
+            "SELECT card_id FROM memory_states WHERE {where_sql}"
+        ))
         .ok()
         .and_then(|mut stmt| {
             stmt.query_map([threshold], |row| row.get::<_, String>(0))
@@ -236,14 +258,17 @@ impl Curriculum {
             cards
                 .iter()
                 .filter(|c| card_in_textbook(c, "letters"))
-                .fold(std::collections::BTreeMap::<i32, (u32, u32)>::new(), |mut acc, c| {
-                    let entry = acc.entry(c.chapter).or_default();
-                    entry.0 += 1;
-                    if reps2_ids.contains(&c.id) {
-                        entry.1 += 1;
-                    }
-                    acc
-                })
+                .fold(
+                    std::collections::BTreeMap::<i32, (u32, u32)>::new(),
+                    |mut acc, c| {
+                        let entry = acc.entry(c.chapter).or_default();
+                        entry.0 += 1;
+                        if reps2_ids.contains(&c.id) {
+                            entry.1 += 1;
+                        }
+                        acc
+                    },
+                )
                 .values()
                 .filter(|&&(total, met)| {
                     total > 0 && (met as i32) >= needed_for_unlock(total as i32)
@@ -311,12 +336,19 @@ impl Curriculum {
             };
         }
 
-        // 4. Lane B organic.
+        // 4. Lane B organic. Reached only when NO latch row exists; when the
+        //    lane recomputes satisfied, persist the latch immediately (C12) so
+        //    every reader sees a latched gate and later accuracy dips below
+        //    the bar can never flip it back off. Best-effort: a failed write
+        //    must not flip this evaluation.
         let organic = letters_introduced >= letters_total
             && letters_practice_total >= ORGANIC_MIN_PRACTICE
             && (letters_practice_correct as f64)
                 >= ORGANIC_MIN_ACCURACY * letters_practice_total as f64
             && letters_active_days >= ORGANIC_MIN_DAYS;
+        if organic {
+            let _ = Self::record_alphabet_gate(db, AlphabetGateMethod::Organic);
+        }
         let method = organic.then_some(AlphabetGateMethod::Organic);
 
         AlphabetGateState {
@@ -349,7 +381,6 @@ impl Curriculum {
         correct >= ALPHABET_CHECK_PASS_MIN && total >= ALPHABET_CHECK_N
     }
 
-
     ///
     /// `cards` is the full set of loaded flashcards; per-chapter `card_count`
     /// and `mastered_count` are computed from it (mastered = has a
@@ -377,12 +408,13 @@ impl Curriculum {
 
         // Alphabet gate: while unmet, vocabulary tracks are presented fully
         // locked regardless of the stored progress rows.
-        let gate_locked =
-            textbook != "letters" && !Self::alphabet_gate_state(db, cards).satisfied;
+        let gate_locked = textbook != "letters" && !Self::alphabet_gate_state(db, cards).satisfied;
 
         // Cards belonging to this textbook, so we only scan them once per chapter.
-        let textbook_cards: Vec<&Card> =
-            cards.iter().filter(|c| card_in_textbook(c, textbook)).collect();
+        let textbook_cards: Vec<&Card> = cards
+            .iter()
+            .filter(|c| card_in_textbook(c, textbook))
+            .collect();
 
         let mut chapters = Vec::new();
 
@@ -407,8 +439,8 @@ impl Curriculum {
                     |row| row.get::<_, i32>(0).map(|v| v != 0),
                 )
                 .unwrap_or(chapter <= 1); // Chapter 1 (and the DCC chapter 0) unlocked by default
-            // The alphabet gate overrides: vocabulary chapters report locked
-            // until the gate is satisfied.
+                                          // The alphabet gate overrides: vocabulary chapters report locked
+                                          // until the gate is satisfied.
             let unlocked = unlocked && !gate_locked;
 
             let chapter_cards: Vec<&&Card> = textbook_cards
@@ -433,14 +465,10 @@ impl Curriculum {
             let unlock_hint = if unlocked {
                 String::new()
             } else if gate_locked && chapter == default_chapter {
-                "Finish 'The Alphabet & Pronunciation' — or pass the Alphabet Check."
-                    .to_string()
+                "Finish 'The Alphabet & Pronunciation' — or pass the Alphabet Check.".to_string()
             } else {
                 let prev = chapter - 1;
-                let prev_count = textbook_cards
-                    .iter()
-                    .filter(|c| c.chapter == prev)
-                    .count() as i32;
+                let prev_count = textbook_cards.iter().filter(|c| c.chapter == prev).count() as i32;
                 let prev_mastered = textbook_cards
                     .iter()
                     .filter(|c| c.chapter == prev && mastered_ids.contains(&c.id))
@@ -770,7 +798,10 @@ mod tests {
         assert!(!card_in_textbook(&card, "jact"));
         assert!(!card_in_textbook(&card, "dcc"));
         // Vocabulary cards do not leak into the letters track either.
-        assert!(!card_in_textbook(&sample_card("ath1-001", 1, "athenaze-i"), "letters"));
+        assert!(!card_in_textbook(
+            &sample_card("ath1-001", 1, "athenaze-i"),
+            "letters"
+        ));
     }
 
     #[test]
@@ -975,6 +1006,89 @@ mod tests {
     }
 
     #[test]
+    fn gate_organic_lane_latches_on_first_satisfied_read() {
+        // C12: reaching the organic thresholds must persist the latch on the
+        // evaluating read itself — later accuracy dips can never un-satisfy.
+        let db = Database::open(":memory:", None).unwrap();
+        seed_organic_lane(&db, &["2026-10-15", "2026-10-16"], 18, 2);
+
+        // No latch row before the first evaluation.
+        let before: Option<String> = db
+            .conn()
+            .query_row(
+                "SELECT value FROM user_settings WHERE key = 'alphabet_gate'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        assert_eq!(before, None);
+
+        let state = Curriculum::alphabet_gate_state(&db, &letters_deck());
+        assert!(state.satisfied);
+        assert_eq!(state.method, Some(AlphabetGateMethod::Organic));
+
+        // The latch row now exists, written by the organic lane itself.
+        let latched: String = db
+            .conn()
+            .query_row(
+                "SELECT value FROM user_settings WHERE key = 'alphabet_gate'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("organic lane must latch on first satisfied read");
+        assert_eq!(latched, "organic");
+
+        // Degrade accuracy far below the 85% bar (18 correct of 40 = 45%)
+        // with 20 later wrong practice attempts: the gate STILL reads
+        // satisfied, still via the Organic latch.
+        for k in 0..20 {
+            let ts = format!("2026-10-{:02}T11:{:02}:00Z", 17 + (k % 2), k % 60);
+            db.conn()
+                .execute(
+                    "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days, source, uuid, device_id, hlc)
+                     VALUES (?1, ?2, 1, 0.0, 0.0, 'practice', ?3, ?4, ?5)",
+                    rusqlite::params![
+                        format!("letters-{:03}", (k % 43) + 1),
+                        ts,
+                        uuid::Uuid::new_v4().to_string(),
+                        crate::sync::device_id(&db),
+                        crate::sync::hlc_now(&db).to_string(),
+                    ],
+                )
+                .unwrap();
+        }
+        let state = Curriculum::alphabet_gate_state(&db, &letters_deck());
+        assert!(
+            state.satisfied,
+            "the organic latch must survive later accuracy dips: {state:?}"
+        );
+        assert_eq!(state.method, Some(AlphabetGateMethod::Organic));
+        assert_eq!(state.letters_practice_total, 40);
+        assert_eq!(state.letters_practice_correct, 18);
+    }
+
+    #[test]
+    fn practice_eligible_policy() {
+        // Fresh core with the letters deck loaded, gate unsatisfied:
+        // letters eligible, vocabulary not.
+        let db = Database::open(":memory:", None).unwrap();
+        let mut deck = letters_deck();
+        let vocab = sample_card("ath1-001", 1, "athenaze-i");
+        deck.push(vocab.clone());
+        assert!(practice_eligible(&db, &deck, &deck[0]));
+        assert!(!practice_eligible(&db, &deck, &vocab));
+
+        // After the latch, vocabulary becomes eligible too.
+        Curriculum::record_alphabet_gate(&db, AlphabetGateMethod::DeclaredKnown).unwrap();
+        assert!(practice_eligible(&db, &deck, &vocab));
+
+        // No letters deck loaded at all: the gate fails open, so vocabulary
+        // is eligible (letters-less builds must never be bricked).
+        let bare = Database::open(":memory:", None).unwrap();
+        assert!(practice_eligible(&bare, &[vocab.clone()], &vocab));
+    }
+
+    #[test]
     fn gate_latch_persists() {
         let db = Database::open(":memory:", None).unwrap();
         // Some letters activity first, then the check-pass latch.
@@ -996,7 +1110,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(at.len() >= 20 && at.contains('T'), "ISO-8601 timestamp: {at}");
+        assert!(
+            at.len() >= 20 && at.contains('T'),
+            "ISO-8601 timestamp: {at}"
+        );
     }
 
     #[test]
@@ -1019,7 +1136,10 @@ mod tests {
         ] {
             assert_eq!(method.name(), name);
             // The persisted name is exactly the serde snake-case form.
-            assert_eq!(serde_json::to_string(&method).unwrap(), format!("\"{name}\""));
+            assert_eq!(
+                serde_json::to_string(&method).unwrap(),
+                format!("\"{name}\"")
+            );
             assert_eq!(AlphabetGateMethod::from_name(name), Some(method));
         }
         assert_eq!(AlphabetGateMethod::from_name("nonsense"), None);
@@ -1053,7 +1173,13 @@ mod tests {
             .collect();
         letters.push(letters_card("letters-008", 2));
         let vocab: Vec<Card> = (1..=10)
-            .map(|i| sample_card(&format!("ath1-{i:03}"), if i <= 5 { 1 } else { 2 }, "athenaze-i"))
+            .map(|i| {
+                sample_card(
+                    &format!("ath1-{i:03}"),
+                    if i <= 5 { 1 } else { 2 },
+                    "athenaze-i",
+                )
+            })
             .collect();
 
         // Letters: reps >= 2 counts — all 7 ch.1 cards "met", requirement
@@ -1082,7 +1208,13 @@ mod tests {
     fn gate_locks_vocab_chapters_with_hint() {
         let db = Database::open(":memory:", None).unwrap();
         let vocab: Vec<Card> = (1..=10)
-            .map(|i| sample_card(&format!("ath1-{i:03}"), if i <= 5 { 1 } else { 2 }, "athenaze-i"))
+            .map(|i| {
+                sample_card(
+                    &format!("ath1-{i:03}"),
+                    if i <= 5 { 1 } else { 2 },
+                    "athenaze-i",
+                )
+            })
             .collect();
         // Letters deck loaded (so the gate is live) but no progress at all.
         let mut cards = letters_deck();

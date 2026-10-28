@@ -42,12 +42,13 @@ pub enum TypedGrade {
 /// shuffles consume the stream in index order, so the same seed always
 /// reproduces the identical question set on any platform.
 ///
-/// Prompt selection walks the slice in seeded-random order while respecting
-/// caller priority: eligible cards (non-empty trimmed front AND back) are
-/// processed in caller-ordered windows of `limit` cards; each window is
-/// shuffled with the seeded RNG and fully consumed before the next window
-/// starts. Callers that want a preference (e.g. reviewed cards first)
-/// simply pass an ordered slice.
+/// Prompt selection (C5): the FULL eligible set is shuffled once with the
+/// seeded RNG and the first `limit` positions that yield a well-formed MCQ
+/// are taken. There are deliberately NO caller-ordered windows: shuffling a
+/// leading window of `limit` cards pinned every seed to the same first
+/// `limit` cards of the slice. Callers with tier priorities (e.g. reviewed
+/// cards first) call [`generate_mcq_set_with_pool`] once per tier in
+/// priority order and concatenate.
 ///
 /// Distractor selection per prompt card follows a strict widening policy:
 ///   1. same `pos` AND same chapter
@@ -59,31 +60,45 @@ pub enum TypedGrade {
 /// front), and a card is omitted from the set entirely when even policy 4
 /// cannot yield 3 distinct distractors.
 pub fn generate_mcq_set(cards: &[Card], limit: usize, seed: u64) -> Vec<Mcq> {
+    generate_mcq_set_with_pool(cards, cards, limit, seed)
+}
+
+/// Like [`generate_mcq_set`], but prompts are drawn only from `prompts`
+/// while distractors come from the full `pool`. This lets a caller with
+/// tier priorities (e.g. reviewed cards first, then unseen) generate each
+/// tier separately over one shared distractor pool, instead of concatenating
+/// tiers into a single slice (which used to pin every seed to the first
+/// `limit` cards — C5).
+pub fn generate_mcq_set_with_pool(
+    prompts: &[Card],
+    pool: &[Card],
+    limit: usize,
+    seed: u64,
+) -> Vec<Mcq> {
     if limit == 0 {
         return Vec::new();
     }
     let mut rng = Xorshift64::new(seed);
 
     // Eligible = usable as a prompt AND as a distractor (skipped entirely).
-    let eligible: Vec<usize> = (0..cards.len())
-        .filter(|&i| !cards[i].front.trim().is_empty() && !cards[i].back.trim().is_empty())
+    let well_formed = |c: &Card| !c.front.trim().is_empty() && !c.back.trim().is_empty();
+    let prompt_eligible: Vec<usize> = (0..prompts.len())
+        .filter(|&i| well_formed(&prompts[i]))
         .collect();
+    let pool_eligible: Vec<usize> = (0..pool.len()).filter(|&i| well_formed(&pool[i])).collect();
 
     let mut out = Vec::new();
-    let mut start = 0;
-    while start < eligible.len() && out.len() < limit {
-        let end = (start + limit).min(eligible.len());
-        // Sample without replacement within this window.
-        for w in shuffled_indices(end - start, &mut rng) {
-            if out.len() >= limit {
-                break;
-            }
-            let target = eligible[start + w];
-            if let Some(mcq) = build_mcq(cards, &eligible, target, &mut rng) {
-                out.push(mcq);
-            }
+    // C5: one shuffle of the ENTIRE eligible prompt set, then take prompts
+    // in that order until `limit` well-formed MCQs exist. (The previous
+    // windowed walk shuffled only the first caller-ordered `limit` cards,
+    // so a deck-ordered slice pinned every seed to the same question set.)
+    for w in shuffled_indices(prompt_eligible.len(), &mut rng) {
+        if out.len() >= limit {
+            break;
         }
-        start = end;
+        if let Some(mcq) = build_mcq(&prompts[prompt_eligible[w]], pool, &pool_eligible, &mut rng) {
+            out.push(mcq);
+        }
     }
     out
 }
@@ -117,7 +132,11 @@ struct Xorshift64(u64);
 impl Xorshift64 {
     fn new(seed: u64) -> Self {
         // xorshift's state must be non-zero; remap 0 to a fixed constant.
-        Self(if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed })
+        Self(if seed == 0 {
+            0x9E37_79B9_7F4A_7C15
+        } else {
+            seed
+        })
     }
 
     fn next_u64(&mut self) -> u64 {
@@ -145,17 +164,19 @@ fn shuffled_indices(len: usize, rng: &mut Xorshift64) -> Vec<usize> {
     idx
 }
 
-/// Build one MCQ for `target`, or `None` when even the widest distractor
-/// policy cannot produce 3 distinct distractor fronts.
+/// Build one MCQ for `target`, drawing distractors from `pool` (restricted
+/// to `pool_eligible` indices), or `None` when even the widest distractor
+/// policy cannot produce 3 distinct distractor fronts. The target can never
+/// appear among its own distractors: its front is pre-seeded in `used`, so
+/// the front-text dedup excludes it (and any duplicate-front twin).
 fn build_mcq(
-    cards: &[Card],
-    eligible: &[usize],
-    target: usize,
+    target: &Card,
+    pool: &[Card],
+    pool_eligible: &[usize],
     rng: &mut Xorshift64,
 ) -> Option<Mcq> {
-    let t = &cards[target];
     let mut used: HashSet<&str> = HashSet::new();
-    used.insert(t.front.as_str());
+    used.insert(target.front.as_str());
     let mut distractors: Vec<String> = Vec::new();
 
     // The four distractor policies in strict widening order.
@@ -169,18 +190,16 @@ fn build_mcq(
         if distractors.len() == 3 {
             break;
         }
-        let pool: Vec<usize> = eligible
+        let matching: Vec<usize> = pool_eligible
             .iter()
             .copied()
-            .filter(|&i| {
-                i != target && matches(&cards[i], t) && !used.contains(cards[i].front.as_str())
-            })
+            .filter(|&i| matches(&pool[i], target) && !used.contains(pool[i].front.as_str()))
             .collect();
-        for pi in shuffled_indices(pool.len(), rng) {
+        for pi in shuffled_indices(matching.len(), rng) {
             if distractors.len() == 3 {
                 break;
             }
-            let front = cards[pool[pi]].front.as_str();
+            let front = pool[matching[pi]].front.as_str();
             if used.insert(front) {
                 distractors.push(front.to_string());
             }
@@ -196,14 +215,14 @@ fn build_mcq(
     let mut rest = distractors.into_iter();
     for slot in 0..4 {
         if slot == correct_index {
-            choices.push(t.front.clone());
+            choices.push(target.front.clone());
         } else {
             choices.push(rest.next().expect("3 distractors fill 3 non-correct slots"));
         }
     }
     Some(Mcq {
-        card_id: t.id.clone(),
-        prompt_gloss: t.back.clone(),
+        card_id: target.id.clone(),
+        prompt_gloss: target.back.clone(),
         choices,
         correct_index,
     })
@@ -338,11 +357,7 @@ fn eligible_alphabet_cards(cards: &[Card]) -> Vec<(&Card, String)> {
 /// decides who goes first). Distractors reuse `build_mcq`'s widening policy
 /// (same-chapter → same-tag → same-pos → any) over the eligible pools —
 /// names for name-space questions, glyphs for glyph-space questions.
-pub fn generate_alphabet_check(
-    cards: &[Card],
-    n: usize,
-    seed: u64,
-) -> Vec<AlphabetQuestion> {
+pub fn generate_alphabet_check(cards: &[Card], n: usize, seed: u64) -> Vec<AlphabetQuestion> {
     if n == 0 {
         return Vec::new();
     }
@@ -424,12 +439,10 @@ pub fn generate_alphabet_check(
         };
         let (card, label) = &eligible[ti];
         let (prompt, pool): (String, &[Card]) = match direction {
-            AlphabetDirection::GlyphToName => {
-                (card.front.trim().to_string(), &label_cards)
-            }
+            AlphabetDirection::GlyphToName => (card.front.trim().to_string(), &label_cards),
             AlphabetDirection::NameToGlyph => (label.clone(), &glyph_cards),
         };
-        let mcq = build_mcq(pool, &all_eligible, ti, &mut rng);
+        let mcq = build_mcq(&pool[ti], pool, &all_eligible, &mut rng);
         let Some(mcq) = mcq else {
             continue; // fewer than 3 distinct distractors; skip this pick
         };
@@ -474,7 +487,9 @@ mod tests {
     #[test]
     fn test_distractors_prefer_same_pos_same_chapter() {
         // Policy-1 pool has 3 peers, so decoys from wider pools (same-tag
-        // other chapter, other pos, other tag) must stay unused.
+        // other chapter, other pos, other tag) must stay unused. The prompt
+        // is pinned to "t" via a single-card prompt slice (the distractor
+        // pool is the full deck).
         let cards = vec![
             card("t", "λόγος", "word", 1, "noun", &["athenaze"]),
             card("a", "ἄνθρωπος", "man", 1, "noun", &["athenaze"]),
@@ -485,7 +500,7 @@ mod tests {
             card("f", "πόλις", "city", 9, "noun", &["other"]),
         ];
         for seed in [1u64, 7, 99] {
-            let set = generate_mcq_set(&cards, 1, seed);
+            let set = generate_mcq_set_with_pool(&cards[..1], &cards, 1, seed);
             assert_eq!(set.len(), 1);
             assert_eq!(set[0].card_id, "t");
             assert_eq!(set[0].prompt_gloss, "word");
@@ -504,6 +519,7 @@ mod tests {
     fn test_distractor_fallback_widens_in_strict_order() {
         // Exactly one candidate per policy level 1..3, so the picks are
         // forced regardless of the seed: widening fills 1 -> 2 -> 3.
+        // (Prompt pinned to "t" via a single-card prompt slice.)
         let cards = vec![
             card("t", "λόγος", "word", 1, "noun", &["athenaze"]),
             card("p1", "ἄνθρωπος", "man", 1, "noun", &["athenaze"]), // policy 1
@@ -513,7 +529,7 @@ mod tests {
             card("p5", "γράφω", "I write", 1, "verb", &["athenaze"]), // policy 4
         ];
         for seed in [1u64, 42, 1000] {
-            let set = generate_mcq_set(&cards, 1, seed);
+            let set = generate_mcq_set_with_pool(&cards[..1], &cards, 1, seed);
             assert_eq!(set.len(), 1);
             let ds = distractor_fronts(&set[0]);
             assert!(ds.contains(&"ἄνθρωπος"), "policy-1 peer first: {ds:?}");
@@ -529,18 +545,22 @@ mod tests {
     #[test]
     fn test_distractor_fallback_reaches_any_card() {
         // No policy-1/2/3 candidates at all: three verbs must fill in.
+        // (Prompt pinned to "t" via a single-card prompt slice.)
         let cards = vec![
             card("t", "λόγος", "word", 1, "noun", &["athenaze"]),
             card("v1", "λύω", "I loose", 2, "verb", &["other"]),
             card("v2", "γράφω", "I write", 2, "verb", &["other"]),
             card("v3", "λέγω", "I say", 2, "verb", &["other"]),
         ];
-        let set = generate_mcq_set(&cards, 1, 5);
+        let set = generate_mcq_set_with_pool(&cards[..1], &cards, 1, 5);
         assert_eq!(set.len(), 1);
         let ds = distractor_fronts(&set[0]);
         assert_eq!(ds.len(), 3);
         for d in &ds {
-            assert!(["λύω", "γράφω", "λέγω"].contains(d), "policy-4 fallback: {d}");
+            assert!(
+                ["λύω", "γράφω", "λέγω"].contains(d),
+                "policy-4 fallback: {d}"
+            );
         }
     }
 
@@ -666,22 +686,88 @@ mod tests {
     }
 
     #[test]
-    fn test_windowed_sampling_respects_caller_order_priority() {
-        // limit 4 over an 8-card deck: the FIRST window (first 4 eligible
-        // cards) must supply every prompt; the second window is untouched.
+    fn test_full_shuffle_samples_across_the_whole_deck() {
+        // C5 regression (was: windowed sampling): with limit 4 over a
+        // 24-card deck, every seed now shuffles the FULL eligible set, so
+        // the draws are not pinned to the first 4 cards — seeds produce
+        // differing sets and the union reaches beyond the old window.
         let cards = big_deck();
-        let first_window: Vec<&str> = cards[..4].iter().map(|c| c.id.as_str()).collect();
+        let old_window: HashSet<&str> = cards[..4].iter().map(|c| c.id.as_str()).collect();
+        let mut union: HashSet<String> = HashSet::new();
+        let mut sets: Vec<Vec<String>> = Vec::new();
         for seed in [1u64, 7, 42, 999] {
             let set = generate_mcq_set(&cards, 4, seed);
             assert_eq!(set.len(), 4);
-            for mcq in &set {
-                assert!(
-                    first_window.contains(&mcq.card_id.as_str()),
-                    "seed {seed}: {} must come from the priority window",
-                    mcq.card_id
-                );
+            let ids: Vec<String> = set.iter().map(|m| m.card_id.clone()).collect();
+            let idset: HashSet<&str> = ids.iter().map(|s| s.as_str()).collect();
+            assert_ne!(
+                idset, old_window,
+                "seed {seed} must not be pinned to the old window"
+            );
+            union.extend(ids.iter().cloned());
+            sets.push(ids);
+        }
+        assert!(
+            union.iter().any(|id| !old_window.contains(id.as_str())),
+            "the union across seeds must cover cards beyond the first window"
+        );
+        let differing = sets
+            .iter()
+            .enumerate()
+            .any(|(i, a)| sets.iter().skip(i + 1).any(|b| b != a));
+        assert!(differing, "different seeds must reshuffle the set");
+    }
+
+    /// The real merged deck slice the app ships, ordered Athenaze first the
+    /// way the reviewed tier led in the C5 report: `ath1-001..010` first.
+    fn real_merged_deck() -> Vec<Card> {
+        let mut cards: Vec<Card> =
+            serde_json::from_str(include_str!("../../../../data/cards/athenaze-i.json"))
+                .expect("athenaze-i.json must parse");
+        let mut letters: Vec<Card> =
+            serde_json::from_str(include_str!("../../../../data/cards/letters.json"))
+                .expect("letters.json must parse");
+        cards.append(&mut letters);
+        cards
+    }
+
+    #[test]
+    fn test_practice_seeds_draw_beyond_first_window_real_deck() {
+        // C5 over the real deck: seeds {1,7,42,1337} must produce differing
+        // 10-question sets, none of them EXACTLY ath1-001..ath1-010, and the
+        // union must cover cards beyond the first 10 positions.
+        let cards = real_merged_deck();
+        let first_window: HashSet<&str> = cards[..10].iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(
+            first_window.iter().copied().collect::<Vec<_>>().len(),
+            10,
+            "the fixture's first 10 cards are distinct"
+        );
+        assert!(first_window.contains("ath1-001") && first_window.contains("ath1-010"));
+
+        let mut union: HashSet<String> = HashSet::new();
+        let mut sets: Vec<HashSet<String>> = Vec::new();
+        for seed in [1u64, 7, 42, 1337] {
+            let set = generate_mcq_set(&cards, 10, seed);
+            assert_eq!(set.len(), 10, "seed {seed}: a full practice set expected");
+            let idset: HashSet<String> = set.iter().map(|m| m.card_id.clone()).collect();
+            assert_ne!(
+                idset,
+                first_window.iter().map(|s| s.to_string()).collect(),
+                "seed {seed} must not select exactly ath1-001..ath1-010"
+            );
+            union.extend(idset.iter().cloned());
+            sets.push(idset);
+        }
+        for i in 0..sets.len() {
+            for j in (i + 1)..sets.len() {
+                assert_ne!(sets[i], sets[j], "seeds must produce differing sets");
             }
         }
+        assert!(
+            union.iter().any(|id| !first_window.contains(id.as_str())),
+            "the union across seeds must reach beyond the first window"
+        );
     }
 
     #[test]
@@ -743,7 +829,12 @@ mod tests {
         }
         assert_eq!(per_chapter[4], 0, "ch.4 diacritics are not check-eligible");
         assert_eq!(
-            (per_chapter[1], per_chapter[2], per_chapter[3], per_chapter[5]),
+            (
+                per_chapter[1],
+                per_chapter[2],
+                per_chapter[3],
+                per_chapter[5]
+            ),
             (7, 9, 8, 11),
             "chapter split of the 35 eligible cards"
         );
@@ -768,9 +859,8 @@ mod tests {
     fn alphabet_check_generator() {
         let cards = real_letters_deck();
         let eligible = eligible_alphabet_cards(&cards);
-        let glyph_of = |id: &str| -> &str {
-            cards.iter().find(|c| c.id == id).unwrap().front.trim()
-        };
+        let glyph_of =
+            |id: &str| -> &str { cards.iter().find(|c| c.id == id).unwrap().front.trim() };
         let label_of = |id: &str| -> &str {
             eligible
                 .iter()
@@ -786,11 +876,14 @@ mod tests {
         assert!(a.len() >= 20, "near-full check expected, got {}", a.len());
 
         // Both directions present, in strict alternation.
-        assert!(a.iter().any(|q| q.direction == AlphabetDirection::GlyphToName));
-        assert!(a.iter().any(|q| q.direction == AlphabetDirection::NameToGlyph));
+        assert!(a
+            .iter()
+            .any(|q| q.direction == AlphabetDirection::GlyphToName));
+        assert!(a
+            .iter()
+            .any(|q| q.direction == AlphabetDirection::NameToGlyph));
         assert!(
-            a.windows(2)
-                .all(|w| w[0].direction != w[1].direction),
+            a.windows(2).all(|w| w[0].direction != w[1].direction),
             "directions must alternate"
         );
 
@@ -798,11 +891,12 @@ mod tests {
         for chapter in [1, 2, 3, 5] {
             let in_chapter = a
                 .iter()
-                .filter(|q| {
-                    cards.iter().find(|c| c.id == q.card_id).unwrap().chapter == chapter
-                })
+                .filter(|q| cards.iter().find(|c| c.id == q.card_id).unwrap().chapter == chapter)
                 .count();
-            assert!(in_chapter >= 3, "chapter {chapter} only has {in_chapter} questions");
+            assert!(
+                in_chapter >= 3,
+                "chapter {chapter} only has {in_chapter} questions"
+            );
         }
 
         for q in &a {

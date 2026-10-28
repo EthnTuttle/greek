@@ -44,18 +44,60 @@ pub struct IntervalPreview {
     pub easy_secs: u32,
 }
 
+// --- Learning-step ladder (C6) -------------------------------------------
+// For cards still in (re)learning, FSRS's retention-interval `due` is
+// overridden by a fixed step ladder expressed as DURATION-FROM-NOW, as
+// promised by docs/guide.html:109-114 ("Misses come back the same session
+// ... a card you rate Again on its first lapses is due again in minutes").
+// Without this, FSRS schedules a NEW card rated Again ~0.40 days (≈9h40m)
+// out — it can never resurface in the session it failed in.
+// "In (re)learning" is history-derived: `reps == lapses`, i.e. every review
+// so far was Again (a brand-new card trivially so). An established card
+// (reps > lapses) that lapses keeps its own longer FSRS relearn interval,
+// per the same doc paragraph. Any non-Again rating graduates the card;
+// Easy is deliberately not on the ladder (it graduates immediately).
+const STEP_AGAIN_SECS: u64 = 60; // 1 min
+const STEP_HARD_SECS: u64 = 300; // 5 min
+const STEP_GOOD_SECS: u64 = 600; // 10 min
+
+/// Injectable clock (C6): every scheduling read of "now" goes through this
+/// so tests can pin/advance time. Bindings keep the system clock via
+/// [`SrsEngine::new`]; the sync fold does NOT use it — it replays against
+/// each event's own timestamp via the pure [`step_due`].
+pub(crate) trait Clock: Send + Sync {
+    /// Current time as an ISO 8601 UTC string ("YYYY-MM-DDTHH:MM:SSZ").
+    fn now(&self) -> String;
+}
+
+/// The production clock: reads the system time ([`chrono_now`]).
+pub(crate) struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now(&self) -> String {
+        chrono_now()
+    }
+}
+
 pub struct SrsEngine {
     fsrs: FSRS,
     desired_retention: f32,
+    clock: Box<dyn Clock>,
 }
 
 impl SrsEngine {
     pub fn new() -> Self {
+        Self::with_clock(Box::new(SystemClock))
+    }
+
+    /// Engine reading "now" from an arbitrary clock (tests; sync-fold
+    /// determinism experiments). Binding-facing API is [`SrsEngine::new`].
+    pub(crate) fn with_clock(clock: Box<dyn Clock>) -> Self {
         // Use default FSRS parameters (empty slice triggers defaults)
         let fsrs = FSRS::new(Some(&[])).expect("default FSRS parameters should be valid");
         Self {
             fsrs,
             desired_retention: 0.9,
+            clock,
         }
     }
 
@@ -66,7 +108,7 @@ impl SrsEngine {
         db: &Database,
         limit: usize,
     ) -> anyhow::Result<Vec<CardWithState>> {
-        let now = chrono_now();
+        let now = self.clock.now();
         let mut stmt = db.conn().prepare(
             "SELECT card_id, stability, difficulty, last_review, due_date, reps, lapses
                  FROM memory_states
@@ -128,10 +170,16 @@ impl SrsEngine {
 
     /// Preview the intervals FSRS would assign to each rating for `card_id`
     /// if it were reviewed right now. An unknown card is treated as new and
-    /// still returns `Some`; `None` is returned only on error (SQL/FSRS).
-    pub fn preview_intervals(&self, db: &Database, card_id: &str) -> Option<IntervalPreview> {
-        let current_state = load_memory_state(db, card_id);
-        let now = chrono_now();
+    /// still returns `Ok(Some(_))`; `Ok(None)` only when FSRS has no next
+    /// states, and SQL/decode errors propagate as `Err` (never collapsed
+    /// into `None`, so a corrupt stored state cannot look like a new card).
+    pub fn preview_intervals(
+        &self,
+        db: &Database,
+        card_id: &str,
+    ) -> anyhow::Result<Option<IntervalPreview>> {
+        let current_state = load_memory_state(db, card_id)?;
+        let now = self.clock.now();
         let elapsed_days = elapsed_days_since(current_state.as_ref(), &now);
 
         let memory_state = current_state.as_ref().map(|s| MemoryState {
@@ -141,15 +189,29 @@ impl SrsEngine {
 
         let next_states = self
             .fsrs
-            .next_states(memory_state, self.desired_retention, elapsed_days)
-            .ok()?;
+            .next_states(memory_state, self.desired_retention, elapsed_days)?;
 
-        Some(IntervalPreview {
+        let mut preview = IntervalPreview {
             again_secs: interval_days_to_secs(next_states.again.interval),
             hard_secs: interval_days_to_secs(next_states.hard.interval),
             good_secs: interval_days_to_secs(next_states.good.interval),
             easy_secs: interval_days_to_secs(next_states.easy.interval),
-        })
+        };
+        // Mirror the actual scheduling policy: while the card is in
+        // (re)learning the buttons must show the step ladder, not FSRS's
+        // retention intervals (otherwise "Again: 9h" would be a lie).
+        let (prior_reps, prior_lapses) = current_state
+            .as_ref()
+            .map(|s| (s.reps, s.lapses))
+            .unwrap_or((0, 0));
+        if is_learning(prior_reps, prior_lapses) {
+            preview.again_secs = STEP_AGAIN_SECS as u32;
+            preview.hard_secs = STEP_HARD_SECS as u32;
+            preview.good_secs = STEP_GOOD_SECS as u32;
+            // easy: graduates immediately, schedules via FSRS.
+        }
+
+        Ok(Some(preview))
     }
 
     /// Submit a review and update the memory state
@@ -168,10 +230,12 @@ impl SrsEngine {
         rating: u8,
         source: &str,
     ) -> anyhow::Result<()> {
-        let now = chrono_now();
+        let now = self.clock.now();
 
-        // Load current memory state
-        let current_state: Option<MemoryStateRow> = load_memory_state(db, card_id);
+        // Load current memory state. Errors propagate (C8): a corrupt row
+        // must fail loudly rather than be mistaken for "no state" — which
+        // would silently replace the history below (reps 8 -> reps 1).
+        let current_state: Option<MemoryStateRow> = load_memory_state(db, card_id)?;
 
         // Calculate elapsed days since last review.
         // NOTE: same-day re-reviews saturate at 0 (`days_between` uses
@@ -205,8 +269,15 @@ impl SrsEngine {
         let new_difficulty = chosen_state.memory.difficulty;
         let interval_days = chosen_state.interval;
 
-        // Compute new due date
-        let due_date = add_days_to_now(&now, interval_days);
+        // Compute new due date (C6): through the PURE `step_due` — history
+        // (prior reps/lapses), rating, and the review timestamp go in; no
+        // wall clock. The sync fold replays this exact function against
+        // each event's timestamp, so both paths schedule identically.
+        let (prior_reps, prior_lapses) = current_state
+            .as_ref()
+            .map(|s| (s.reps, s.lapses))
+            .unwrap_or((0, 0));
+        let due_date = step_due(prior_reps, prior_lapses, rating, interval_days, &now);
 
         // Update reps/lapses
         let (new_reps, new_lapses) = if let Some(ref state) = current_state {
@@ -222,47 +293,64 @@ impl SrsEngine {
             (1, lapses)
         };
 
-        // Upsert memory state
-        db.conn().execute(
-            "INSERT INTO memory_states (card_id, stability, difficulty, last_review, due_date, reps, lapses)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-             ON CONFLICT(card_id) DO UPDATE SET
-                stability = excluded.stability,
-                difficulty = excluded.difficulty,
-                last_review = excluded.last_review,
-                due_date = excluded.due_date,
-                reps = excluded.reps,
-                lapses = excluded.lapses",
-            rusqlite::params![
-                card_id,
-                new_stability,
-                new_difficulty,
-                now,
-                due_date,
-                new_reps,
-                new_lapses,
-            ],
-        )?;
+        // Upsert memory state + insert the review log + advance the HLC in
+        // ONE transaction (C1): previously these were separate autocommit
+        // statements, so a fault on the log insert (e.g. a trigger firing)
+        // left the memory state advanced with no review log, and a retry
+        // would double-advance. Now any failure rolls back all three.
+        // Log the ACTUAL applied interval (a learning-step ladder value may
+        // differ from FSRS's `interval_days`); fall back to the FSRS value
+        // only if an unparsable timestamp makes the diff impossible.
+        let scheduled_days = match (iso_to_secs(&due_date), iso_to_secs(&now)) {
+            (Some(due), Some(now)) => due.saturating_sub(now) as f64 / 86400.0,
+            _ => interval_days as f64,
+        };
+        db.with_tx(|conn| {
+            conn.execute(
+                "INSERT INTO memory_states (card_id, stability, difficulty, last_review, due_date, reps, lapses)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(card_id) DO UPDATE SET
+                    stability = excluded.stability,
+                    difficulty = excluded.difficulty,
+                    last_review = excluded.last_review,
+                    due_date = excluded.due_date,
+                    reps = excluded.reps,
+                    lapses = excluded.lapses",
+                rusqlite::params![
+                    card_id,
+                    new_stability,
+                    new_difficulty,
+                    now,
+                    due_date,
+                    new_reps,
+                    new_lapses,
+                ],
+            )?;
 
-        // Log the review, tagged with its source activity and stamped for
-        // sync (globally-unique uuid, originating device, hybrid logical
-        // clock) so it can merge into other devices' databases by uuid-dedup.
-        let scheduled_days = interval_days as f64;
-        db.conn().execute(
-            "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days, source, uuid, device_id, hlc)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            rusqlite::params![
-                card_id,
-                now,
-                rating as i32,
-                elapsed_days as f64,
-                scheduled_days,
-                source,
-                uuid::Uuid::new_v4().to_string(),
-                crate::sync::device_id(db),
-                crate::sync::hlc_now(db).to_string(),
-            ],
-        )?;
+            // Log the review, tagged with its source activity and stamped for
+            // sync (globally-unique uuid, originating device, hybrid logical
+            // clock) so it can merge into other devices' databases by uuid-dedup.
+            // device_id/hlc_now run on this same connection while the
+            // transaction is open, so the HLC advance rolls back with the
+            // rest on failure.
+            conn.execute(
+                "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days, source, uuid, device_id, hlc)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    card_id,
+                    now,
+                    rating as i32,
+                    elapsed_days as f64,
+                    scheduled_days,
+                    source,
+                    uuid::Uuid::new_v4().to_string(),
+                    crate::sync::device_id(db),
+                    crate::sync::hlc_now(db).to_string(),
+                ],
+            )?;
+
+            Ok(())
+        })?;
 
         Ok(())
     }
@@ -308,6 +396,54 @@ pub fn new_cards_remaining_today(db: &Database) -> u32 {
     DEFAULT_DAILY_NEW_CAP.saturating_sub(new_cards_today(db))
 }
 
+/// Single-consultation daily-budget snapshot for building ONE review
+/// session (C3).
+///
+/// The per-chapter `get_new_cards(textbook, chapter, limit)` path consults
+/// [`new_cards_remaining_today`] independently on every call, so a caller
+/// looping chapters (the old Android session builder) saw the SAME unspent
+/// budget on every chapter — a 10/day cap admitted a 7+10+3 multi-curriculum
+/// session. `SessionBudget` consults the remaining allowance ONCE and hands
+/// out admissions one card at a time, so one whole session build can never
+/// exceed the day's true remainder.
+///
+/// Race note: this is a planning SNAPSHOT, not a reservation. The durable
+/// `new_cards_today` counter only advances when a review is actually
+/// persisted by `submit_review` (atomic upsert + log + HLC since C1), so a
+/// session abandoned mid-way leaves the budget unspent, and two builders
+/// started before any submission can plan from the same snapshot. That is
+/// accepted for a single-user UI; the hard record of what counts remains
+/// `review_logs`, written only on successful submission.
+#[derive(Debug, Clone, Copy)]
+pub struct SessionBudget {
+    remaining: u32,
+}
+
+impl SessionBudget {
+    /// Snapshot today's remaining new-card allowance (cap minus the cards
+    /// already first-reviewed today, saturating at 0).
+    pub fn open(db: &Database) -> Self {
+        Self {
+            remaining: new_cards_remaining_today(db),
+        }
+    }
+
+    /// Allowance left in this snapshot.
+    pub fn remaining(&self) -> u32 {
+        self.remaining
+    }
+
+    /// Admit one more new card into the session plan; returns false (and
+    /// admits nothing) once the snapshot is exhausted.
+    pub fn try_admit(&mut self) -> bool {
+        if self.remaining == 0 {
+            return false;
+        }
+        self.remaining -= 1;
+        true
+    }
+}
+
 /// Measured-assessment totals over `review_logs` rows written by the
 /// practice flow (`source = 'practice'`): returns (total, correct) where a
 /// result counts as correct iff its rating is >= 3. Returns (0, 0) on error.
@@ -325,27 +461,31 @@ pub fn practice_stats(db: &Database) -> (u32, u32) {
         .unwrap_or((0, 0))
 }
 
-/// Load the stored memory state for `card_id`, or `None` if the card has
-/// never been reviewed (unknown rows are NOT an error here).
-fn load_memory_state(db: &Database, card_id: &str) -> Option<MemoryStateRow> {
-    db.conn()
-        .query_row(
-            "SELECT card_id, stability, difficulty, last_review, due_date, reps, lapses
+/// Load the stored memory state for `card_id`. `Ok(None)` iff the card has
+/// never been reviewed; genuine SQL/decode errors (e.g. a non-numeric
+/// `difficulty` in a REAL column) are REAL errors propagated to the caller
+/// so a corrupt row is never mistaken for "no state" and silently replaced.
+fn load_memory_state(db: &Database, card_id: &str) -> anyhow::Result<Option<MemoryStateRow>> {
+    match db.conn().query_row(
+        "SELECT card_id, stability, difficulty, last_review, due_date, reps, lapses
              FROM memory_states WHERE card_id = ?1",
-            [card_id],
-            |row| {
-                Ok(MemoryStateRow {
-                    card_id: row.get(0)?,
-                    stability: row.get(1)?,
-                    difficulty: row.get(2)?,
-                    last_review: row.get(3)?,
-                    due_date: row.get(4)?,
-                    reps: row.get(5)?,
-                    lapses: row.get(6)?,
-                })
-            },
-        )
-        .ok()
+        [card_id],
+        |row| {
+            Ok(MemoryStateRow {
+                card_id: row.get(0)?,
+                stability: row.get(1)?,
+                difficulty: row.get(2)?,
+                last_review: row.get(3)?,
+                due_date: row.get(4)?,
+                reps: row.get(5)?,
+                lapses: row.get(6)?,
+            })
+        },
+    ) {
+        Ok(state) => Ok(Some(state)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// Whole days between the stored `last_review` and `now` (0 for new cards
@@ -413,18 +553,43 @@ pub(crate) fn days_between(from: &str, to: &str) -> u32 {
     to_days.saturating_sub(from_days) as u32
 }
 
-/// Parse ISO 8601 date to days since epoch (approximate, for scheduling)
-fn iso_to_days(iso: &str) -> Option<u64> {
-    // Parse "YYYY-MM-DDT..." format
-    if iso.len() < 10 {
+/// Parse the `YYYY-MM-DD` date prefix of an ISO 8601 timestamp into
+/// (year, month, day). Boundary-safe: uses indexed byte access only
+/// (never raw slicing, so multibyte UTF-8 in the first 10 bytes cannot
+/// panic). Validates ASCII digits, `-` separators, month 1..=12, day
+/// 1..=31, and rejects year 0. Anything after byte 9 (the time part)
+/// is ignored. `pub(crate)` so other modules (e.g. sync ingress) can
+/// validate date strings with the same rules.
+pub(crate) fn parse_iso_ymd(iso: &str) -> Option<(u64, u64, u64)> {
+    let b = iso.as_bytes();
+    if b.len() < 10 {
         return None;
     }
-    let year: u64 = iso[0..4].parse().ok()?;
-    let month: u64 = iso[5..7].parse().ok()?;
-    let day: u64 = iso[8..10].parse().ok()?;
+    let digit = |i: usize| -> Option<u64> {
+        let c = *b.get(i)?;
+        if c.is_ascii_digit() {
+            Some((c - b'0') as u64)
+        } else {
+            None
+        }
+    };
+    if *b.get(4)? != b'-' || *b.get(7)? != b'-' {
+        return None;
+    }
+    let year = digit(0)? * 1000 + digit(1)? * 100 + digit(2)? * 10 + digit(3)?;
+    let month = digit(5)? * 10 + digit(6)?;
+    let day = digit(8)? * 10 + digit(9)?;
+    if year == 0 || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    Some((year, month, day))
+}
 
-    // Convert to days since epoch using inverse of days_to_ymd
-    Some(ymd_to_days(year, month, day))
+/// Parse ISO 8601 date to days since epoch (approximate, for scheduling).
+/// Returns `None` for malformed input instead of panicking.
+fn iso_to_days(iso: &str) -> Option<u64> {
+    let (year, month, day) = parse_iso_ymd(iso)?;
+    ymd_to_days(year, month, day)
 }
 
 /// Parse an ISO 8601 timestamp to seconds since the Unix epoch.
@@ -448,15 +613,19 @@ fn interval_days_to_secs(days: f32) -> u32 {
     (days as f64 * 86400.0).round().max(0.0) as u32
 }
 
-/// Convert (year, month, day) to days since Unix epoch
-fn ymd_to_days(year: u64, month: u64, day: u64) -> u64 {
-    let y = if month <= 2 { year - 1 } else { year };
+/// Convert (year, month, day) to days since Unix epoch.
+/// Returns `None` instead of underflow-panicking for year 0 with
+/// month <= 2 (the `year - 1` adjustment) and for pre-epoch dates
+/// whose day count would go negative. Callers normally pass values
+/// already validated by `parse_iso_ymd`.
+fn ymd_to_days(year: u64, month: u64, day: u64) -> Option<u64> {
+    let y = if month <= 2 { year.checked_sub(1)? } else { year };
     let m = if month <= 2 { month + 9 } else { month - 3 };
     let era = y / 400;
     let yoe = y - era * 400;
     let doy = (153 * m + 2) / 5 + day - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146097 + doe - 719468
+    (era * 146097 + doe).checked_sub(719468)
 }
 
 /// Add an FSRS interval (days, possibly fractional) to `now` and return a
@@ -467,17 +636,118 @@ fn ymd_to_days(year: u64, month: u64, day: u64) -> u64 {
 /// minutes or hours later) are preserved. The result stays lexicographically
 /// comparable with legacy midnight-stamped rows like "2026-07-19T00:00:00Z".
 pub(crate) fn add_days_to_now(now: &str, days: f32) -> String {
-    // `now` normally comes from `chrono_now` and always parses; fall back to
-    // the real clock if a caller ever hands us something else.
-    let now_secs = iso_to_secs(now).unwrap_or_else(system_now_secs);
+    // `now` normally comes from the injected Clock / a canonical sync event
+    // and always parses. A malformed input CLAMPS to the Unix epoch
+    // (deterministic) rather than silently falling back to the wall clock:
+    // an epoch-broken stored date must never "succeed" into moving target —
+    // the sync fold replays this and wall-clock fallback would make two
+    // devices diverge. Epoch-clamped results are immediately due (safe:
+    // the card resurfaces instead of being lost).
+    let now_secs = iso_to_secs(now).unwrap_or(0);
     let interval_secs = (days as f64 * 86400.0).round() as i64;
     let new_secs = (now_secs as i64).saturating_add(interval_secs).max(0) as u64;
     secs_to_iso(new_secs)
 }
 
+/// Add whole seconds to a timestamp (deterministic epoch-clamp like
+/// [`add_days_to_now`]). Used for the learning-step ladder.
+pub(crate) fn add_secs_to(ts: &str, secs: u64) -> String {
+    secs_to_iso(iso_to_secs(ts).unwrap_or(0).saturating_add(secs))
+}
+
+/// History-derived learning signal (C6): a card is in (re)learning iff every
+/// review so far was Again — i.e. `reps == lapses` — which trivially covers
+/// brand-new cards (0 == 0). ANY passing rating graduates the card.
+/// Both scheduling paths (incremental submit + sync fold) track reps/lapses
+/// the same way, so this replays identically.
+pub(crate) fn is_learning(prior_reps: i32, prior_lapses: i32) -> bool {
+    prior_reps == prior_lapses
+}
+
+/// PURE due-date decision for one review (C6): given only history-derived
+/// inputs — the card's rep/lapse counts BEFORE this review, the rating, the
+/// FSRS next-state interval, and the review's own timestamp — return the due
+/// timestamp. NO wall clock, NO database reads: the incremental submit path
+/// and the sync fold (`sync::rebuild_memory_states`) call this with their
+/// respective contexts and MUST produce identical output for identical
+/// event histories.
+///
+/// While the card is in (re)learning (see [`is_learning`]), the FSRS `due`
+/// is overridden by the step ladder (docs/guide.html:109-114):
+/// Again→1min, Hard→5min, Good→10min, all as durations from `review_ts`.
+/// Easy — and any rating once the card has graduated — uses the FSRS
+/// interval unmodified.
+pub(crate) fn step_due(
+    prior_reps: i32,
+    prior_lapses: i32,
+    rating: u8,
+    fsrs_interval_days: f32,
+    review_ts: &str,
+) -> String {
+    if is_learning(prior_reps, prior_lapses) {
+        let step = match rating {
+            1 => Some(STEP_AGAIN_SECS),
+            2 => Some(STEP_HARD_SECS),
+            3 => Some(STEP_GOOD_SECS),
+            // 4 (Easy) and invalid ratings graduate into FSRS scheduling.
+            _ => None,
+        };
+        if let Some(secs) = step {
+            return add_secs_to(review_ts, secs);
+        }
+    }
+    add_days_to_now(review_ts, fsrs_interval_days)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    };
+
+    /// Manually-advanceable clock for pinning "now" in scheduling tests (C6).
+    #[derive(Clone)]
+    struct ManualClock(Arc<AtomicU64>);
+
+    impl ManualClock {
+        fn new(secs: u64) -> Self {
+            Self(Arc::new(AtomicU64::new(secs)))
+        }
+        fn advance(&self, delta: u64) {
+            self.0.fetch_add(delta, Ordering::SeqCst);
+        }
+        fn secs(&self) -> u64 {
+            self.0.load(Ordering::SeqCst)
+        }
+    }
+
+    impl Clock for ManualClock {
+        fn now(&self) -> String {
+            secs_to_iso(self.secs())
+        }
+    }
+
+    fn engine_with_clock(clock: &ManualClock) -> SrsEngine {
+        SrsEngine::with_clock(Box::new(clock.clone()))
+    }
+
+    /// Fixed point in time used by the clock-driven tests:
+    /// 2026-06-01T12:00:00Z (midday, so nothing accidentally hits midnight).
+    fn fixed_now() -> u64 {
+        iso_to_secs("2026-06-01T12:00:00Z").unwrap()
+    }
+
+    fn due_date_of(db: &Database, card_id: &str) -> String {
+        db.conn()
+            .query_row(
+                "SELECT due_date FROM memory_states WHERE card_id = ?1",
+                [card_id],
+                |row| row.get(0),
+            )
+            .unwrap()
+    }
 
     #[test]
     fn test_srs_engine_creation() {
@@ -536,6 +806,144 @@ mod tests {
             )
             .unwrap();
         assert_eq!(reps, 2);
+    }
+
+    /// C1: the memory-state upsert, the review-log insert, and the HLC
+    /// advance are one transaction — a fault on the log insert must roll
+    /// back EVERYTHING, and the retry must land exactly once.
+    #[test]
+    fn test_submit_review_is_atomic_when_log_insert_fails() {
+        let db = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+
+        // Reject every review_logs insert with a trigger (simulates a fault
+        // after the memory-state upsert in the old autocommit implementation).
+        db.conn()
+            .execute_batch(
+                "CREATE TRIGGER reject_review_log
+                 BEFORE INSERT ON review_logs
+                 BEGIN
+                     SELECT RAISE(FAIL, 'boom');
+                 END;",
+            )
+            .unwrap();
+
+        let result = engine.submit_review(&db, "atomic-card", 3);
+        assert!(
+            result.is_err(),
+            "submit_review must fail when the review_logs insert fails"
+        );
+
+        // Rollback must leave the database completely untouched:
+        // no memory state ...
+        let state_count: i64 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM memory_states WHERE card_id = 'atomic-card'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(state_count, 0, "memory_states upsert must roll back");
+        // ... no review log ...
+        let log_count: i64 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM review_logs WHERE card_id = 'atomic-card'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(log_count, 0, "review_logs insert must roll back");
+        // ... and the HLC setting must not have advanced.
+        let hlc_written: Option<String> = db
+            .conn()
+            .query_row(
+                "SELECT value FROM user_settings WHERE key = 'hlc_last_ms'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        assert!(
+            hlc_written.is_none(),
+            "HLC advance must roll back with the review"
+        );
+
+        // With the fault gone, the retry must land exactly once:
+        // one repetition, one log row (no double-advance, no orphan).
+        db.conn()
+            .execute_batch("DROP TRIGGER reject_review_log;")
+            .unwrap();
+        engine.submit_review(&db, "atomic-card", 3).unwrap();
+
+        let reps: i32 = db
+            .conn()
+            .query_row(
+                "SELECT reps FROM memory_states WHERE card_id = 'atomic-card'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(reps, 1, "retry must produce exactly one repetition");
+        let log_count: i64 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM review_logs WHERE card_id = 'atomic-card'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(log_count, 1, "retry must produce exactly one log row");
+    }
+
+    /// C8: a memory_states row that cannot be decoded (non-numeric
+    /// `difficulty` in a REAL column) is a genuine error, NOT "no state" —
+    /// the review must fail and the row's history must survive untouched.
+    #[test]
+    fn test_submit_review_errors_on_corrupt_memory_state() {
+        let db = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+
+        // SQLite's flexible typing lets TEXT land in a REAL column.
+        db.conn()
+            .execute(
+                "INSERT INTO memory_states (card_id, stability, difficulty, last_review, due_date, reps, lapses)
+                 VALUES ('corrupt-card', 12.5, 'not-a-number', '2020-01-01T00:00:00Z', '2020-01-02T00:00:00Z', 8, 2)",
+                [],
+            )
+            .unwrap();
+
+        let result = engine.submit_review(&db, "corrupt-card", 3);
+        assert!(
+            result.is_err(),
+            "a corrupt stored state must error, not be treated as 'no state'"
+        );
+
+        // The row must be left untouched (reps 8 / lapses 2 preserved), not
+        // silently replaced by a fresh "first review" state.
+        let (reps, lapses, stability): (i32, i32, f32) = db
+            .conn()
+            .query_row(
+                "SELECT reps, lapses, stability FROM memory_states WHERE card_id = 'corrupt-card'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            (reps, lapses, stability),
+            (8, 2, 12.5),
+            "existing history must not be clobbered"
+        );
+        // And no phantom "first review" log may have been written.
+        let log_count: i64 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM review_logs WHERE card_id = 'corrupt-card'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(log_count, 0);
     }
 
     #[test]
@@ -634,7 +1042,7 @@ mod tests {
         // Parse check: midnight row equals its date at 00:00:00.
         assert_eq!(
             iso_to_secs(legacy).unwrap(),
-            ymd_to_days(2026, 7, 19) * 86400
+            ymd_to_days(2026, 7, 19).unwrap() * 86400
         );
 
         let due = engine.get_due_cards(&db, 10).unwrap();
@@ -652,6 +1060,7 @@ mod tests {
         // Unknown card id is treated as a brand-new card and still returns Some.
         let preview = engine
             .preview_intervals(&db, "never-reviewed-card")
+            .expect("preview query must not error on an unknown card")
             .expect("unknown card should still yield a preview");
 
         assert!(
@@ -701,6 +1110,31 @@ mod tests {
         );
     }
 
+    /// C3: the session budget consults the daily allowance ONCE and hands
+    /// admissions out of that snapshot; real submissions (not plans) are
+    /// what later snapshots see deducted.
+    #[test]
+    fn test_session_budget_single_consultation() {
+        let db = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+
+        // Fresh db: the full cap, admitted exactly once per card.
+        let mut budget = SessionBudget::open(&db);
+        assert_eq!(budget.remaining(), DEFAULT_DAILY_NEW_CAP);
+        for _ in 0..DEFAULT_DAILY_NEW_CAP {
+            assert!(budget.try_admit());
+        }
+        assert!(!budget.try_admit(), "the snapshot must be exhausted at the cap");
+        assert_eq!(budget.remaining(), 0);
+
+        // Planning admits nothing durable: only successful submissions move
+        // the counter a LATER snapshot consults.
+        engine.submit_review(&db, "spent-1", 3).unwrap();
+        engine.submit_review(&db, "spent-2", 3).unwrap();
+        let later = SessionBudget::open(&db);
+        assert_eq!(later.remaining(), DEFAULT_DAILY_NEW_CAP - 2);
+    }
+
     #[test]
     fn test_add_days_to_now_preserves_time_and_subday() {
         // Whole intervals keep the time of day (no midnight stamping)
@@ -735,33 +1169,139 @@ mod tests {
     #[test]
     fn test_submit_review_again_schedules_subday_due() {
         let db = Database::open(":memory:", None).unwrap();
-        let engine = SrsEngine::new();
+        let clock = ManualClock::new(fixed_now());
+        let engine = engine_with_clock(&clock);
 
-        let before_secs = iso_to_secs(&chrono_now()).unwrap();
+        let before_secs = clock.secs();
         engine.submit_review(&db, "again-card", 1).unwrap();
 
-        let due_date: String = db
-            .conn()
-            .query_row(
-                "SELECT due_date FROM memory_states WHERE card_id = ?1",
-                ["again-card"],
-                |row| row.get(0),
-            )
-            .unwrap();
-
+        let due_date = due_date_of(&db, "again-card");
         let due_secs = iso_to_secs(&due_date).expect("due_date must be a full ISO timestamp");
-        let gap = due_secs as i64 - before_secs as i64;
 
-        // The old implementation rounded up to the next midnight; the fixed
-        // one must place an "Again" review back within today (sub-day gap).
-        assert!(gap > 0, "due date must be in the future, got gap {gap}s");
-        assert!(
-            gap < 86400,
-            "Again-rated card must be due within a day, got gap {gap}s"
+        // C6 step ladder (docs/guide.html:109-114): a learning card rated
+        // Again comes back in EXACTLY 1 minute — not FSRS's ~9h40m
+        // retention interval, and not the old midnight stamp.
+        assert_eq!(
+            due_secs - before_secs,
+            STEP_AGAIN_SECS,
+            "new card rated Again must be due one learning step (60s) later"
         );
         assert!(
             !due_date.ends_with("T00:00:00Z"),
             "due_date must not be midnight-stamped: {due_date}"
+        );
+    }
+
+    /// C6: a first-failure card resurfaces in the SAME session once its
+    /// 1-minute step elapses.
+    #[test]
+    fn test_new_card_again_due_in_one_minute_and_resurfaces() {
+        let db = Database::open(":memory:", None).unwrap();
+        let clock = ManualClock::new(fixed_now());
+        let engine = engine_with_clock(&clock);
+
+        engine.submit_review(&db, "ladder-card", 1).unwrap();
+        assert_eq!(
+            due_date_of(&db, "ladder-card"),
+            secs_to_iso(fixed_now() + STEP_AGAIN_SECS)
+        );
+
+        // Immediately after rating: not yet due.
+        assert!(
+            engine
+                .get_due_cards(&db, 10)
+                .unwrap()
+                .iter()
+                .all(|c| c.card.id != "ladder-card"),
+            "card must not be due before its step elapses"
+        );
+
+        // One second past the 60s step: it comes back in this session.
+        clock.advance(STEP_AGAIN_SECS + 1);
+        let due = engine.get_due_cards(&db, 10).unwrap();
+        assert!(
+            due.iter().any(|c| c.card.id == "ladder-card"),
+            "card must resurface once the Again step (60s) has elapsed"
+        );
+    }
+
+    /// C6: the card is still in learning after a first Again (reps == lapses),
+    /// so a second consecutive Again reuses the ladder rather than jumping
+    /// to FSRS's multi-hour retention interval.
+    #[test]
+    fn test_second_consecutive_again_reuses_step_ladder() {
+        let db = Database::open(":memory:", None).unwrap();
+        let clock = ManualClock::new(fixed_now());
+        let engine = engine_with_clock(&clock);
+
+        engine.submit_review(&db, "ladder-card-2", 1).unwrap();
+        clock.advance(STEP_AGAIN_SECS + 1);
+        engine.submit_review(&db, "ladder-card-2", 1).unwrap();
+
+        assert_eq!(
+            due_date_of(&db, "ladder-card-2"),
+            secs_to_iso(clock.secs() + STEP_AGAIN_SECS),
+            "second consecutive Again must reuse the 60s step"
+        );
+        let (reps, lapses): (i32, i32) = db
+            .conn()
+            .query_row(
+                "SELECT reps, lapses FROM memory_states WHERE card_id = 'ladder-card-2'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((reps, lapses), (2, 2));
+    }
+
+    /// C6: once a card graduates (a passing rating leaves reps > lapses),
+    /// later reviews schedule via FSRS — clearly beyond the ladder's
+    /// 10-minute maximum.
+    #[test]
+    fn test_card_past_learning_steps_schedules_via_fsrs() {
+        let db = Database::open(":memory:", None).unwrap();
+        let clock = ManualClock::new(fixed_now());
+        let engine = engine_with_clock(&clock);
+
+        // Again (1min step) -> Good (10min step, graduates) -> Good (FSRS)
+        engine.submit_review(&db, "grad-card", 1).unwrap();
+        clock.advance(STEP_AGAIN_SECS + 1);
+        engine.submit_review(&db, "grad-card", 3).unwrap();
+        assert_eq!(
+            due_date_of(&db, "grad-card"),
+            secs_to_iso(clock.secs() + STEP_GOOD_SECS),
+            "Good on a learning card must take the 10-minute step"
+        );
+
+        clock.advance(STEP_GOOD_SECS + 1);
+        engine.submit_review(&db, "grad-card", 3).unwrap();
+        let gap = iso_to_secs(&due_date_of(&db, "grad-card")).unwrap() - clock.secs();
+        assert!(
+            gap > 2 * STEP_GOOD_SECS,
+            "graduated card must schedule via FSRS, not the ladder: gap {gap}s"
+        );
+    }
+
+    /// C6 defense-in-depth: a malformed/epoch-broken stored timestamp must
+    /// NOT silently succeed against the wall clock (that fallback made the
+    /// sync fold device-dependent). It now clamps deterministically to the
+    /// Unix epoch — the card lands far in the past, i.e. immediately due,
+    /// never lost.
+    #[test]
+    fn test_add_days_to_now_malformed_clamps_to_epoch() {
+        // Garbage input: epoch + 1 day, no wall-clock involvement.
+        assert_eq!(
+            add_days_to_now("not a date", 1.0),
+            "1970-01-02T00:00:00Z"
+        );
+        // Epoch-broken stored date (year 0 is ASCII-valid but unparseable):
+        // deterministic clamp, and demonstrably not "today".
+        let clamped = add_days_to_now("0000-01-01T00:00:00Z", 0.0);
+        assert_eq!(clamped, "1970-01-01T00:00:00Z");
+        let wall_now = iso_to_secs(&chrono_now()).unwrap();
+        assert!(
+            wall_now - iso_to_secs(&clamped).unwrap() > 30 * 86400,
+            "malformed input must not silently succeed near the wall clock"
         );
     }
 
@@ -832,8 +1372,11 @@ mod tests {
         // 1970-01-01 = day 0
         assert_eq!(days_to_ymd(0), (1970, 1, 1));
         // Round-trip
-        assert_eq!(ymd_to_days(1970, 1, 1), 0);
-        assert_eq!(ymd_to_days(2024, 6, 15), iso_to_days("2024-06-15").unwrap());
+        assert_eq!(ymd_to_days(1970, 1, 1), Some(0));
+        assert_eq!(
+            ymd_to_days(2024, 6, 15),
+            iso_to_days("2024-06-15")
+        );
     }
 
     #[test]
@@ -841,5 +1384,83 @@ mod tests {
         let d1 = iso_to_days("2024-01-01T00:00:00Z").unwrap();
         let d2 = iso_to_days("2024-01-02T00:00:00Z").unwrap();
         assert_eq!(d2 - d1, 1);
+    }
+
+    #[test]
+    fn test_parse_iso_ymd_valid() {
+        assert_eq!(
+            parse_iso_ymd("2024-06-15T12:00:00Z"),
+            Some((2024, 6, 15))
+        );
+        // Date-only input (no time part) parses too.
+        assert_eq!(parse_iso_ymd("1970-01-01"), Some((1970, 1, 1)));
+    }
+
+    #[test]
+    fn test_parse_iso_ymd_rejects_malformed() {
+        // Multibyte UTF-8 in the first 10 bytes (used to panic on raw slicing)
+        assert_eq!(parse_iso_ymd("202α-10-09T12:00:00Z"), None);
+        // Year 0
+        assert_eq!(parse_iso_ymd("0000-01-01"), None);
+        // Bad month/day ranges
+        assert_eq!(parse_iso_ymd("2024-00-10"), None);
+        assert_eq!(parse_iso_ymd("2024-13-01"), None);
+        assert_eq!(parse_iso_ymd("2024-01-00"), None);
+        assert_eq!(parse_iso_ymd("2024-01-32"), None);
+        // Truncated
+        assert_eq!(parse_iso_ymd("2024-01"), None);
+        assert_eq!(parse_iso_ymd(""), None);
+        assert_eq!(parse_iso_ymd("202-01-01"), None);
+        // Non-digit where a digit belongs
+        assert_eq!(parse_iso_ymd("202a-01-01"), None);
+        // Missing separators
+        assert_eq!(parse_iso_ymd("202401011"), None);
+        assert_eq!(parse_iso_ymd("2024/01/01"), None);
+    }
+
+    #[test]
+    fn test_iso_to_days_and_secs_reject_malformed() {
+        assert_eq!(iso_to_days("202α-10-09T12:00:00Z"), None);
+        assert_eq!(iso_to_days("0000-01-01"), None);
+        assert_eq!(iso_to_days("2024-13-40"), None);
+        assert_eq!(iso_to_days("2024-06"), None);
+        assert_eq!(iso_to_secs("202α-10-09T12:00:00Z"), None);
+        assert_eq!(iso_to_secs("0000-01-01T00:00:00Z"), None);
+        assert_eq!(iso_to_secs("2024-13-40T99:99:99Z"), None);
+    }
+
+    #[test]
+    fn test_ymd_to_days_rejects_underflow() {
+        // Year 0 with month <= 2 would underflow `year - 1`
+        assert_eq!(ymd_to_days(0, 1, 1), None);
+        assert_eq!(ymd_to_days(0, 2, 28), None);
+        // Pre-epoch dates underflow the Unix-epoch subtraction
+        assert_eq!(ymd_to_days(1, 1, 1), None);
+        // Valid dates still work
+        assert_eq!(ymd_to_days(1970, 1, 1), Some(0));
+    }
+
+    #[test]
+    fn test_days_between_malformed_never_panics() {
+        use std::panic::catch_unwind;
+        let bad = [
+            "202α-10-09T12:00:00Z",
+            "0000-01-01",
+            "2024-13-40",
+            "2024-00-00",
+            "2024-06",
+            "not a date",
+            "",
+        ];
+        // Fold over every ordered pair through days_between, proving the
+        // whole path (parse -> ymd_to_days -> days_between) is panic-free.
+        let result = catch_unwind(|| {
+            bad.iter().fold(0u32, |acc, from| {
+                bad.iter().fold(acc, |acc2, to| {
+                    acc2.saturating_add(days_between(from, to))
+                })
+            })
+        });
+        assert!(result.is_ok(), "days_between must never panic on bad input");
     }
 }
