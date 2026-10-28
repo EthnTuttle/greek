@@ -99,7 +99,7 @@ fun CurriculumScreen(
                         SectionCard(
                             section = section,
                             onToggle = { viewModel.toggleSection(section.name) },
-                            onChapterClick = { chapter -> viewModel.onChapterTapped(chapter.number) }
+                            onChapterClick = { chapter -> viewModel.onChapterTapped(section.textbook, chapter.number) }
                         )
                     }
                 }

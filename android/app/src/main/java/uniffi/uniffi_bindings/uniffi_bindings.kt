@@ -837,6 +837,8 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -865,6 +867,8 @@ internal interface UniffiLib : Library {
     fun uniffi_uniffi_bindings_fn_constructor_greekcore_new_with_cards(`dbPath`: RustBuffer.ByValue,`morphologyDbPath`: RustBuffer.ByValue,`cardsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
     fun uniffi_uniffi_bindings_fn_method_greekcore_add_card_from_lookup(`ptr`: Pointer,`lemma`: RustBuffer.ByValue,`form`: RustBuffer.ByValue,`definition`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_build_review_session(`ptr`: Pointer,`sessionSize`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_check_typed_answer(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`answer`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
@@ -1092,6 +1096,8 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_build_review_session(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_check_typed_answer(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_declare_alphabet_known(
@@ -1224,7 +1230,10 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_func_parse_postag() != 29183.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup() != 26712.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup() != 4784.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_build_review_session() != 2611.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_check_typed_answer() != 4024.toShort()) {
@@ -1254,7 +1263,7 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_known_words() != 26024.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_new_cards() != 38920.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_new_cards() != 23215.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_practice_stats() != 4958.toShort()) {
@@ -1347,13 +1356,13 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_device_id() != 50660.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_export_backup_json() != 18749.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_export_backup_json() != 64085.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_generate_nostr_identity() != 44829.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_import_backup_json() != 52366.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_import_backup_json() != 52819.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_join() != 35801.toShort()) {
@@ -1842,11 +1851,33 @@ private class JavaLangRefCleanable(
 public interface GreekCoreInterface {
     
     /**
-     * Create a new SRS card + initial (immediately-due) memory_state for a word
-     * looked up in the reader. The card id is derived from the lemma so repeated
-     * lookups of the same word are idempotent (no-op if it already exists).
+     * Create a new SRS card for a word looked up in the reader. The card id
+     * is derived from the lemma so repeated lookups of the same word are
+     * idempotent (the content row upserts, nothing else is written).
+     *
+     * C2: NO `memory_states` row is created here. A row's *presence* means
+     * "this card has a learned FSRS state replayable from `review_logs`";
+     * the old zero-state row (stability/difficulty 0.0, reps 0) made every
+     * initial preview a bogus fixed interval and made the first real review
+     * diverge from `sync::rebuild_memory_states` replay. Scheduling state
+     * appears with the first review (`SrsEngine::submit_review` upserts it);
+     * until then the card behaves exactly like any never-reviewed new card.
      */
     fun `addCardFromLookup`(`lemma`: kotlin.String, `form`: kotlin.String, `definition`: kotlin.String): kotlin.String
+    
+    /**
+     * Build a full review session in ONE pass (C3 fix).
+     *
+     * Replaces the Android-side `get_due_cards` + per-chapter `get_new_cards`
+     * loop, in which every chapter call re-saw the full unspent daily budget.
+     * UI-visible ordering matches the old semantics: due cards first (most
+     * overdue first, never gated, never counting toward the new-card cap),
+     * then new cards in curriculum order (letters → athenaze → jact → dcc),
+     * chapter order within a curriculum, deck order within a chapter —
+     * consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`]),
+     * so one session introduces at most the day's true remaining allowance.
+     */
+    fun `buildReviewSession`(`sessionSize`: kotlin.UInt): List<CardWithStateView>
     
     /**
      * Accent-tolerant typed-answer check: true when the answer grades Exact
@@ -1894,6 +1925,14 @@ public interface GreekCoreInterface {
      */
     fun `getKnownWords`(): List<kotlin.String>
     
+    /**
+     * DEPRECATED for session construction (C3): each per-chapter call
+     * re-consults the daily new-card budget independently, so a caller
+     * looping chapters can admit several caps' worth of new cards in one
+     * session (observed: 7 Letters + 10 Athenaze + 3 JACT under a 10/day
+     * cap). Session building MUST go through [`Self::build_review_session`];
+     * this entry point stays for chapter-scoped browsing compatibility.
+     */
     fun `getNewCards`(`textbook`: kotlin.String, `chapter`: kotlin.Int, `limit`: kotlin.Int): List<CardView>
     
     /**
@@ -2067,8 +2106,9 @@ public interface GreekCoreInterface {
     fun `syncDeviceId`(): kotlin.String
     
     /**
-     * Full backup: a complete v1 SyncBatch (`v`, all events, all settings)
-     * as JSON — the "export backup" / paired-file payload.
+     * Full backup: a complete v2 SyncBatch (`v`, all events, all settings,
+     * all known-words, lookup-card content rows, and chapter unlocks) as
+     * JSON — the "export backup" / paired-file payload.
      */
     fun `syncExportBackupJson`(): kotlin.String
     
@@ -2080,9 +2120,19 @@ public interface GreekCoreInterface {
     fun `syncGenerateNostrIdentity`(): kotlin.String
     
     /**
-     * Import a backup produced by `sync_export_backup_json`. STRICT: only
-     * wire version v==1 is accepted. Applies review events (uuid-dedup)
-     * and settings (HLC-LWW), then folds memory state.
+     * Import a backup produced by `sync_export_backup_json`. Wire versions
+     * 1 (reviews+settings only) and 2 (+ known_words / lookup_cards /
+     * chapter_unlocks) are accepted through ONE shared gate
+     * (`greek_core::sync::validate_batch`); anything newer is rejected
+     * whole. Applies review events (uuid-dedup, Unicode/NFC card-id gate),
+     * settings (HLC-LWW), and the v2 content collections (dedup/LWW), then
+     * folds memory state.
+     *
+     * ATOMIC (S5): ALL collections apply inside ONE `with_tx` transaction
+     * on the shared connection — a late error (a setting row with a
+     * malformed HLC, a fold failure anywhere in the batch) rolls back the
+     * ENTIRE import, never leaving earlier inserts committed behind an
+     * `Err` return. On `Err` the database holds nothing from this payload.
      */
     fun `syncImportBackupJson`(`json`: kotlin.String): SyncStatsView
     
@@ -2241,9 +2291,17 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
 
     
     /**
-     * Create a new SRS card + initial (immediately-due) memory_state for a word
-     * looked up in the reader. The card id is derived from the lemma so repeated
-     * lookups of the same word are idempotent (no-op if it already exists).
+     * Create a new SRS card for a word looked up in the reader. The card id
+     * is derived from the lemma so repeated lookups of the same word are
+     * idempotent (the content row upserts, nothing else is written).
+     *
+     * C2: NO `memory_states` row is created here. A row's *presence* means
+     * "this card has a learned FSRS state replayable from `review_logs`";
+     * the old zero-state row (stability/difficulty 0.0, reps 0) made every
+     * initial preview a bogus fixed interval and made the first real review
+     * diverge from `sync::rebuild_memory_states` replay. Scheduling state
+     * appears with the first review (`SrsEngine::submit_review` upserts it);
+     * until then the card behaves exactly like any never-reviewed new card.
      */
     @Throws(GreekException::class)override fun `addCardFromLookup`(`lemma`: kotlin.String, `form`: kotlin.String, `definition`: kotlin.String): kotlin.String {
             return FfiConverterString.lift(
@@ -2251,6 +2309,31 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     uniffiRustCallWithError(GreekException) { _status ->
     UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_add_card_from_lookup(
         it, FfiConverterString.lower(`lemma`),FfiConverterString.lower(`form`),FfiConverterString.lower(`definition`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Build a full review session in ONE pass (C3 fix).
+     *
+     * Replaces the Android-side `get_due_cards` + per-chapter `get_new_cards`
+     * loop, in which every chapter call re-saw the full unspent daily budget.
+     * UI-visible ordering matches the old semantics: due cards first (most
+     * overdue first, never gated, never counting toward the new-card cap),
+     * then new cards in curriculum order (letters → athenaze → jact → dcc),
+     * chapter order within a curriculum, deck order within a chapter —
+     * consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`]),
+     * so one session introduces at most the day's true remaining allowance.
+     */
+    @Throws(GreekException::class)override fun `buildReviewSession`(`sessionSize`: kotlin.UInt): List<CardWithStateView> {
+            return FfiConverterSequenceTypeCardWithStateView.lift(
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_build_review_session(
+        it, FfiConverterUInt.lower(`sessionSize`),_status)
 }
     }
     )
@@ -2394,7 +2477,15 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     
 
-    override fun `getNewCards`(`textbook`: kotlin.String, `chapter`: kotlin.Int, `limit`: kotlin.Int): List<CardView> {
+    
+    /**
+     * DEPRECATED for session construction (C3): each per-chapter call
+     * re-consults the daily new-card budget independently, so a caller
+     * looping chapters can admit several caps' worth of new cards in one
+     * session (observed: 7 Letters + 10 Athenaze + 3 JACT under a 10/day
+     * cap). Session building MUST go through [`Self::build_review_session`];
+     * this entry point stays for chapter-scoped browsing compatibility.
+     */override fun `getNewCards`(`textbook`: kotlin.String, `chapter`: kotlin.Int, `limit`: kotlin.Int): List<CardView> {
             return FfiConverterSequenceTypeCardView.lift(
     callWithPointer {
     uniffiRustCall() { _status ->
@@ -2884,8 +2975,9 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
 
     
     /**
-     * Full backup: a complete v1 SyncBatch (`v`, all events, all settings)
-     * as JSON — the "export backup" / paired-file payload.
+     * Full backup: a complete v2 SyncBatch (`v`, all events, all settings,
+     * all known-words, lookup-card content rows, and chapter unlocks) as
+     * JSON — the "export backup" / paired-file payload.
      */override fun `syncExportBackupJson`(): kotlin.String {
             return FfiConverterString.lift(
     callWithPointer {
@@ -2917,9 +3009,19 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
 
     
     /**
-     * Import a backup produced by `sync_export_backup_json`. STRICT: only
-     * wire version v==1 is accepted. Applies review events (uuid-dedup)
-     * and settings (HLC-LWW), then folds memory state.
+     * Import a backup produced by `sync_export_backup_json`. Wire versions
+     * 1 (reviews+settings only) and 2 (+ known_words / lookup_cards /
+     * chapter_unlocks) are accepted through ONE shared gate
+     * (`greek_core::sync::validate_batch`); anything newer is rejected
+     * whole. Applies review events (uuid-dedup, Unicode/NFC card-id gate),
+     * settings (HLC-LWW), and the v2 content collections (dedup/LWW), then
+     * folds memory state.
+     *
+     * ATOMIC (S5): ALL collections apply inside ONE `with_tx` transaction
+     * on the shared connection — a late error (a setting row with a
+     * malformed HLC, a fold failure anywhere in the batch) rolls back the
+     * ENTIRE import, never leaving earlier inserts committed behind an
+     * `Err` return. On `Err` the database holds nothing from this payload.
      */
     @Throws(GreekException::class)override fun `syncImportBackupJson`(`json`: kotlin.String): SyncStatsView {
             return FfiConverterTypeSyncStatsView.lift(

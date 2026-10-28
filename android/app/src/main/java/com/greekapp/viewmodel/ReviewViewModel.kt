@@ -110,19 +110,12 @@ class ReviewViewModel(
                 return@launch
             }
             try {
-                // 1. Due cards come first (these may now throw).
-                val queue = LinkedHashMap<String, Card>()
-                for (dc in core.getDueCards(SESSION_SIZE)) {
-                    queue[dc.card.id] = Card(dc.card.id, dc.card.front, dc.card.back)
-                }
-
-                // 2. Fill any remaining slots with new cards from unlocked, available
-                //    chapters across every curriculum, so progression isn't stuck on ch.1.
-                if (queue.size < SESSION_SIZE) {
-                    fillWithNewCards(core, queue)
-                }
-
-                val cards = queue.values.toList()
+                // C3: ONE core call builds the session — due cards first, then
+                // new cards across curricula consuming a SINGLE daily new-card
+                // budget snapshot. (The old per-chapter getNewCards loop below
+                // re-saw the full unspent budget on every chapter, so a 10/day
+                // cap admitted a 20-card multi-curriculum session.)
+                val cards = sessionCards(core, SESSION_SIZE.toUInt())
                 if (cards.isEmpty()) {
                     // Nothing to review: clear any stale session and DON'T persist an
                     // empty batch. Persisting "[]" and then clearing it are two
@@ -149,42 +142,6 @@ class ReviewViewModel(
                     isComplete = false,
                     errorMessage = "Couldn't load your cards. Please try again."
                 )
-            }
-        }
-    }
-
-    private fun fillWithNewCards(
-        core: GreekCoreApi,
-        queue: LinkedHashMap<String, Card>
-    ) {
-        val curricula = try {
-            core.getCurricula()
-        } catch (e: Exception) {
-            Log.e(TAG, "getCurricula failed while filling queue", e)
-            return
-        }
-        for (cur in curricula) {
-            if (queue.size >= SESSION_SIZE) break
-            val chapters = try {
-                core.getChapters(cur.textbook)
-            } catch (e: Exception) {
-                Log.e(TAG, "getChapters failed for ${cur.textbook}", e)
-                continue
-            }
-            for (ch in chapters) {
-                if (queue.size >= SESSION_SIZE) break
-                if (!ch.unlocked || !ch.available) continue
-                val remaining = SESSION_SIZE - queue.size
-                val newCards = try {
-                    core.getNewCards(cur.textbook, ch.chapter, remaining)
-                } catch (e: Exception) {
-                    Log.e(TAG, "getNewCards failed for ${cur.textbook} ch ${ch.chapter}", e)
-                    continue
-                }
-                for (nc in newCards) {
-                    if (queue.size >= SESSION_SIZE) break
-                    queue.getOrPut(nc.id) { Card(nc.id, nc.front, nc.back) }
-                }
             }
         }
     }
@@ -220,11 +177,11 @@ class ReviewViewModel(
                 return@launch
             }
             val rating = (difficulty + 1).toUByte()
-            try {
-                core.submitReview(card.id, rating)
-            } catch (e: Exception) {
-                // Never silently drop a review: keep the current card and surface the error.
-                Log.e(TAG, "submitReview failed for ${card.id}", e)
+            // The UniFFI binding converts storage errors to `false` instead of
+            // throwing, so a false return and a thrown exception are the SAME
+            // failure here: never silently drop or advance past the review.
+            if (!submitReviewPersisted(core, card.id, rating)) {
+                Log.w(TAG, "submitReview not persisted for ${card.id}; holding card for retry")
                 _state.value = _state.value.copy(
                     isSubmitting = false,
                     errorMessage = "Couldn't save your review. Tap a rating to retry."
@@ -265,21 +222,25 @@ class ReviewViewModel(
             } else {
                 s.copy(cards = cards, currentIndex = nextIndex, isSubmitting = false, isAnswerRevealed = false, intervalPreview = null)
             }
-            savedStateHandle[KEY_INDEX] = _state.value.currentIndex
-            savedStateHandle[KEY_REVEALED] = false
             if (complete) {
-                // Session finished: drop the durable copy so the next launch builds
-                // a fresh batch instead of resuming a completed one.
+                // Session finished. Drop BOTH session copies, in-memory FIRST:
+                // the SavedStateHandle snapshot takes restoration precedence in
+                // init, so leaving it behind would re-offer the last answered
+                // card after process death. The durable clear is awaited here
+                // (suspend fun, same coroutine) — no fire-and-forget race.
+                clearSavedSession(savedStateHandle)
                 clearDurableSession()
-            } else if (sessionGrew) {
-                // The batch changed, so persist the whole thing (not just the
-                // position) — a process-death resume must replay the SAME grown
-                // session, including the requeued cards.
-                persistSession(cards, _state.value.currentIndex, false)
             } else {
-                persistProgress(_state.value.currentIndex, false)
-            }
-            if (!complete) {
+                savedStateHandle[KEY_INDEX] = _state.value.currentIndex
+                savedStateHandle[KEY_REVEALED] = false
+                if (sessionGrew) {
+                    // The batch changed, so persist the whole thing (not just the
+                    // position) — a process-death resume must replay the SAME grown
+                    // session, including the requeued cards.
+                    persistSession(cards, _state.value.currentIndex, false)
+                } else {
+                    persistProgress(_state.value.currentIndex, false)
+                }
                 loadIntervalPreview(cards[nextIndex].id)
             }
         }
@@ -335,13 +296,15 @@ class ReviewViewModel(
         }
     }
 
-    private fun clearDurableSession() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                ReviewSessionRepository.clear(GreekApplication.appContext)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to clear review session", e)
-            }
+    /**
+     * Suspend so callers inside coroutines AWAIT the clear: fire-and-forget
+     * clears race with any later persist of the same session.
+     */
+    private suspend fun clearDurableSession() {
+        try {
+            ReviewSessionRepository.clear(GreekApplication.appContext)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear review session", e)
         }
     }
 
@@ -388,5 +351,48 @@ class ReviewViewModel(
         private const val KEY_CARDS = "review_cards"
         private const val KEY_INDEX = "review_index"
         private const val KEY_REVEALED = "review_revealed"
+
+        /**
+         * Map the core's ONE-CALL session plan (C3: due-first-then-new
+         * ordering with a single daily new-card budget; see
+         * [GreekCoreApi.buildReviewSession]) into the UI's ordered,
+         * id-deduped card list. Extracted as a static, Log-free helper so
+         * host-JVM unit tests can drive it without Dispatchers.Main (same
+         * pattern as CurriculumViewModel.resolveChapter).
+         */
+        internal fun sessionCards(core: GreekCoreApi, sessionSize: UInt): List<Card> {
+            val queue = LinkedHashMap<String, Card>()
+            for (sc in core.buildReviewSession(sessionSize)) {
+                queue.getOrPut(sc.card.id) { Card(sc.card.id, sc.card.front, sc.card.back) }
+            }
+            return queue.values.toList()
+        }
+
+        /**
+         * One submission attempt through the core. The UniFFI binding converts
+         * storage errors to `false` instead of throwing, and a thrown
+         * exception means the same thing to the caller — so this returns true
+         * ONLY when the review was durably persisted. Extracted as a static,
+         * Log-free helper so host-JVM unit tests can drive it without
+         * Dispatchers.Main (same pattern as CurriculumViewModel.resolveChapter).
+         */
+        internal fun submitReviewPersisted(core: GreekCoreApi, cardId: String, rating: UByte): Boolean =
+            try {
+                core.submitReview(cardId, rating)
+            } catch (e: Exception) {
+                false
+            }
+
+        /**
+         * Remove the in-memory session snapshot. Called on completion in the
+         * same block as the durable DataStore clear: init restores from
+         * SavedStateHandle FIRST, so retaining these keys after completion
+         * would re-offer the last answered card after process death.
+         */
+        internal fun clearSavedSession(handle: SavedStateHandle) {
+            handle.remove<String>(KEY_CARDS)
+            handle.remove<Int>(KEY_INDEX)
+            handle.remove<Boolean>(KEY_REVEALED)
+        }
     }
 }

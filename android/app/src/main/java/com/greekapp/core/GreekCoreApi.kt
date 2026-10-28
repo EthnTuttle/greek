@@ -36,6 +36,19 @@ interface GreekCoreApi {
 
     fun getNewCards(textbook: String, chapter: Int, limit: Int): List<CardView>
 
+    /**
+     * (C3) Build a full review session in ONE core call: due cards first,
+     * then new cards across curricula/chapters consuming a SINGLE daily
+     * new-card budget snapshot. Replaces the per-chapter [getNewCards] loop
+     * in ReviewViewModel, in which every chapter re-saw the full unspent
+     * daily budget (a 10/day cap admitted 7 Letters + 10 Athenaze + 3 JACT).
+     *
+     * The export lands with the C3 core fix; while the checked-in generated
+     * bindings predate it, RustCoreAdapter serves a C3-safe client-side
+     * fallback. Signature mirrors the planned UniFFI export exactly.
+     */
+    fun buildReviewSession(sessionSize: UInt): List<CardWithStateView>
+
     fun getReviewStats(): ReviewStats
 
     fun getTextSections(): List<TextSectionView>
@@ -183,17 +196,19 @@ interface GreekCoreApi {
     suspend fun syncIrohNow(): SyncStats
 
     // ---- Wave-9 contract additions (Progress sharing over nostr) ----
-    // These UniFFI exports do NOT exist in the generated bindings yet — the
-    // Rust `share-nostr` crate lands at integration. RustCoreAdapter resolves
-    // them reflectively (see WAVE9-NOTES.md-style comments there) so the same
-    // APK keeps working pre- and post-regen; while the symbols are absent the
-    // feature reads as "off, nothing pending, no identity" and every action
-    // throws UnsupportedOperationException, which the UI renders verbatim.
-    // See DESIGN-progress-sharing.md + Appendix R for the binding decisions
-    // (consent copy, permanence honesty, milestone set) this surface serves.
+    // The regenerated bindings now contain the share-nostr exports.
+    // `shareConfigGet` and `shareFlushNow` are wired directly by
+    // RustCoreAdapter (the former is a record read — its `sharePubkeyHex`
+    // field name is compile-checked; the latter is async → `suspend`).
+    // The remaining exports below are still resolved reflectively by the
+    // adapter so a stale pre-wave-9 native library degrades to "off,
+    // nothing pending, no identity" ("WAVE9-WIRE" remnants are candidates
+    // for the same direct-call cleanup). See DESIGN-progress-sharing.md +
+    // Appendix R for the binding decisions (consent copy, permanence
+    // honesty, milestone set) this surface serves.
 
     /** Live share config: master switch, derived sharing identity, relay list. */
-    fun shareConfigGet(): ShareConfig = ShareConfig.DISABLED // WAVE9-WIRE
+    fun shareConfigGet(): ShareConfig = ShareConfig.DISABLED
 
     /**
      * Turn sharing on with [relays] (wss:// URLs the user explicitly picked in
@@ -234,11 +249,12 @@ interface GreekCoreApi {
         throw UnsupportedOperationException("Share unavailable: stale native library") // WAVE9-WIRE
 
     /**
-     * Synchronous one-shot outbox flush. The Rust side may regenerate this as
-     * `suspend fun shareFlushNow()` — if so, the adapter override must become
-     * a suspend wrapper (same call site shape as syncNostrPush).
+     * One-shot outbox flush (Settings "retry now"). The checked-in UniFFI
+     * binding regenerates this as an async Rust export → Kotlin
+     * `suspend fun`, so the seam is suspend and the adapter calls the
+     * generated method directly (same call-site shape as syncNostrPush).
      */
-    fun shareFlushNow(): ShareFlushReport = ShareFlushReport.EMPTY // WAVE9-WIRE
+    suspend fun shareFlushNow(): ShareFlushReport = ShareFlushReport.EMPTY
 
     /** Outbox rows still waiting to post (drives the Settings badge). */
     fun sharePendingCount(): UInt = 0u // WAVE9-WIRE

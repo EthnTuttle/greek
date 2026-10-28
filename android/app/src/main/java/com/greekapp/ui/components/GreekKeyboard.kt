@@ -73,17 +73,19 @@ import kotlinx.coroutines.delay
 
 /** Display names for TalkBack + variant descriptions. */
 private val LETTER_NAMES: Map<Char, String> = mutableMapOf<Char, String>().apply {
-    fun put(ch: Char, name: String) {
+    // NB: a local `fun put(...)` here would shadow MutableMap.put and recurse;
+    // keep the distinct name (A1 regression guard).
+    fun putEntry(ch: Char, name: String) {
         put(ch, name)
         put(ch.uppercaseChar(), name)
     }
-    put('α', "alpha"); put('β', "beta"); put('γ', "gamma"); put('δ', "delta")
-    put('ε', "epsilon"); put('ζ', "zeta"); put('η', "eta"); put('θ', "theta")
-    put('ι', "iota"); put('κ', "kappa"); put('λ', "lambda"); put('μ', "mu")
-    put('ν', "nu"); put('ξ', "xi"); put('ο', "omicron"); put('π', "pi")
-    put('ρ', "rho"); put('σ', "sigma"); put('ς', "final sigma"); put('τ', "tau")
-    put('υ', "upsilon"); put('φ', "phi"); put('χ', "chi"); put('ψ', "psi")
-    put('ω', "omega")
+    putEntry('α', "alpha"); putEntry('β', "beta"); putEntry('γ', "gamma"); putEntry('δ', "delta")
+    putEntry('ε', "epsilon"); putEntry('ζ', "zeta"); putEntry('η', "eta"); putEntry('θ', "theta")
+    putEntry('ι', "iota"); putEntry('κ', "kappa"); putEntry('λ', "lambda"); putEntry('μ', "mu")
+    putEntry('ν', "nu"); putEntry('ξ', "xi"); putEntry('ο', "omicron"); putEntry('π', "pi")
+    putEntry('ρ', "rho"); putEntry('σ', "sigma"); putEntry('ς', "final sigma"); putEntry('τ', "tau")
+    putEntry('υ', "upsilon"); putEntry('φ', "phi"); putEntry('χ', "chi"); putEntry('ψ', "psi")
+    putEntry('ω', "omega")
 }
 
 private fun keyName(ch: Char): String = LETTER_NAMES[ch] ?: ch.toString()

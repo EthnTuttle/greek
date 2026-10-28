@@ -40,6 +40,16 @@ data class SyncState(
     val autolaunchEnabled: Boolean = true,
     /** Non-null while the QR/join-ticket dialog should be shown. */
     val irohTicket: String? = null,
+    /**
+     * Backup payload staged for the SAF CreateDocument picker. Lives in
+     * ViewModel state (not `remember`) so a configuration change while the
+     * picker is open can't drop it and leave the callback writing nothing.
+     * Cleared by [SyncViewModel.consumePendingExport].
+     */
+    val pendingExport: String? = null,
+    /** True while the explicit rotate-identity confirmation dialog is shown
+     *  (only reachable when [hasIdentity]; see Issue-A6 gating). */
+    val rotationConfirmPending: Boolean = false,
     val busy: Boolean = false,
     val message: SyncUiMessage? = null
 )
@@ -84,6 +94,31 @@ class SyncViewModel : ViewModel() {
         )
     }
 
+    /**
+     * Validate and stage a fetched backup payload for the SAF picker (the
+     * picker callback retrieves it via [consumePendingExport]). The core can
+     * return an `{"error": ...}`-shaped string on export failure, so anything
+     * that fails [backupPayloadError] becomes an error snackbar and the picker
+     * is NOT launched. Returns true when the payload was staged.
+     */
+    fun stagePendingExport(json: String?): Boolean {
+        val reason = backupPayloadError(json)
+        if (reason != null) {
+            message(SyncUiMessage.Error("invalid backup: $reason"))
+            return false
+        }
+        _state.value = _state.value.copy(pendingExport = json)
+        return true
+    }
+
+    /** Take (and clear) the staged backup payload, if any. Called by the SAF
+     *  picker callback, including the cancel path so nothing stale lingers. */
+    fun consumePendingExport(): String? {
+        val json = _state.value.pendingExport
+        if (json != null) _state.value = _state.value.copy(pendingExport = null)
+        return json
+    }
+
     /** Write the fetched backup payload to the user-picked SAF document. */
     fun writeBackup(uri: android.net.Uri, json: String) {
         busyCall(
@@ -125,7 +160,37 @@ class SyncViewModel : ViewModel() {
         )
     }
 
-    fun generateIdentity() {
+    /**
+     * Entry point for the "Generate identity" button. With no identity the
+     * core call is harmless and runs immediately; with an identity already in
+     * place the core overwrites the stored secret unconditionally (destroying
+     * access to history encrypted under the old key), so the action is gated
+     * behind the explicit rotation dialog ([confirmIdentityRotation]) and the
+     * core is NEVER called from the no-confirm path.
+     */
+    fun requestGenerateIdentity() {
+        when (generateAction(_state.value.hasIdentity)) {
+            GenerateAction.GenerateNow -> generateIdentity()
+            GenerateAction.RequireConfirmation ->
+                _state.value = _state.value.copy(rotationConfirmPending = true)
+        }
+    }
+
+    /** User confirmed the rotation warning in the dialog: proceed to the core. */
+    fun confirmIdentityRotation() {
+        _state.value = _state.value.copy(rotationConfirmPending = false)
+        generateIdentity()
+    }
+
+    /** Dialog dismissed without confirming: nothing reaches the core. */
+    fun dismissIdentityRotation() {
+        _state.value = _state.value.copy(rotationConfirmPending = false)
+    }
+
+    /** Actually calls the core. Private entry is [requestGenerateIdentity] /
+     *  [confirmIdentityRotation] so existing-identity overwrites always pass
+     *  the confirmation gate. */
+    private fun generateIdentity() {
         busyCall(
             block = { CoreProvider.current()?.syncGenerateNostrIdentity() },
             onSuccess = { npub ->
@@ -257,7 +322,127 @@ class SyncViewModel : ViewModel() {
         message(SyncUiMessage.Error(reason.toString()))
     }
 
-    private companion object {
-        const val TAG = "SyncViewModel"
+    companion object {
+        private const val TAG = "SyncViewModel"
+
+        /** How the generate-identity action may proceed for a given state. */
+        enum class GenerateAction { GenerateNow, RequireConfirmation }
+
+        /**
+         * Identity-overwrite gate (A6): generating while an identity exists
+         * overwrites the stored secret, so the UI must route through the
+         * rotation-confirmation dialog instead of calling the core directly.
+         * Static and Log-free so host-JVM tests can drive the decision.
+         */
+        internal fun generateAction(hasIdentity: Boolean): GenerateAction =
+            if (hasIdentity) GenerateAction.RequireConfirmation
+            else GenerateAction.GenerateNow
+
+        /**
+         * Minimal structural gate for a core-exported backup payload: must
+         * parse as a flat JSON object, must carry a `version` field, and must
+         * NOT carry an `error` key (the core signals export failure as an
+         * `{"error": ...}`-shaped string, which used to be written to the
+         * picked file and announced as success). Full schema validation is
+         * deliberately out of scope. Returns a short reason on rejection,
+         * null when the payload is acceptable. Static and Log-free for tests.
+         */
+        internal fun backupPayloadError(json: String?): String? {
+            if (json == null) return "empty payload"
+            val keys = topLevelObjectKeys(json) ?: return "not a JSON object"
+            if ("error" in keys) return "core reported an export error"
+            if ("version" !in keys) return "missing \"version\" field"
+            return null
+        }
+
+        /** Keys of a single flat JSON object, or null when [json] is not a
+         *  well-formed top-level object. Tiny hand-rolled walker (org.json is
+         *  unavailable in host-JVM unit tests); string contents are skipped
+         *  correctly so braces/quotes inside values can't confuse it. */
+        private fun topLevelObjectKeys(json: String): Set<String>? {
+            val s = json.trim()
+            if (s.length < 2 || s[0] != '{') return null
+            val keys = LinkedHashSet<String>()
+            var i = skipWs(s, 1)
+            if (i < s.length && s[i] == '}') {
+                return if (skipWs(s, i + 1) == s.length) keys else null
+            }
+            while (i < s.length) {
+                if (s[i] != '"') return null
+                val (key, afterKey) = parseString(s, i) ?: return null
+                keys.add(key)
+                i = skipWs(s, afterKey)
+                if (i >= s.length || s[i] != ':') return null
+                i = skipWs(s, skipValue(s, skipWs(s, i + 1)) ?: return null)
+                if (i >= s.length) return null
+                when (s[i]) {
+                    ',' -> i = skipWs(s, i + 1)
+                    '}' -> return if (skipWs(s, i + 1) == s.length) keys else null
+                    else -> return null
+                }
+            }
+            return null
+        }
+
+        /** Parse a JSON string at [start] (must be `"`); returns the raw
+         *  contents (escapes NOT decoded — only structural accuracy matters
+         *  for key matching) and the index just past the closing quote. */
+        private fun parseString(s: String, start: Int): Pair<String, Int>? {
+            val sb = StringBuilder()
+            var i = start + 1
+            while (i < s.length) {
+                when (val c = s[i]) {
+                    '"' -> return sb.toString() to i + 1
+                    '\\' -> {
+                        if (i + 1 >= s.length) return null
+                        sb.append(s[i + 1]) // keep escaped char past the check
+                        i += 2
+                    }
+                    else -> { sb.append(c); i++ }
+                }
+            }
+            return null
+        }
+
+        /** Skip one JSON value starting at [start]; returns the index just
+         *  past it, or null when malformed. */
+        private fun skipValue(s: String, start: Int): Int? {
+            if (start >= s.length) return null
+            return when (s[start]) {
+                '"' -> parseString(s, start)?.second
+                '{', '[' -> skipComposite(s, start)
+                else -> {
+                    // number / true / false / null: run to the next delimiter
+                    var i = start
+                    while (i < s.length && s[i] !in ",}]\" \t\n\r") i++
+                    if (i > start) i else null
+                }
+            }
+        }
+
+        /** Skip a balanced `{...}`/`[...]` composite (strings respected). */
+        private fun skipComposite(s: String, start: Int): Int? {
+            var depth = 0
+            var i = start
+            while (i < s.length) {
+                when (s[i]) {
+                    '"' -> i = parseString(s, i)?.second ?: return null
+                    '{', '[' -> { depth++; i++ }
+                    '}', ']' -> {
+                        depth--; i++
+                        if (depth == 0) return i
+                        if (depth < 0) return null
+                    }
+                    else -> i++
+                }
+            }
+            return null
+        }
+
+        private fun skipWs(s: String, start: Int): Int {
+            var i = start
+            while (i < s.length && s[i].isWhitespace()) i++
+            return i
+        }
     }
 }

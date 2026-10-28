@@ -6,8 +6,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.TextRange
@@ -253,9 +256,15 @@ object GreekTextOps {
  * Default [GreekInputController]: performs selection/composition-preserving
  * surgery on a [MutableState] of [TextFieldValue]. Created once per
  * [GreekTextField] and exposed to the panel via [GreekInputDispatcher].
+ *
+ * [onTextCommitted] fires after every panel-originated mutation with the new
+ * field text, so the screen's authoritative `String` state stays in sync
+ * (audit A4: panel commits previously mutated only the internal state and
+ * were wiped by the next external-push sync).
  */
 class MutableStateGreekInputController(
-    private val state: MutableState<TextFieldValue>
+    private val state: MutableState<TextFieldValue>,
+    private val onTextCommitted: (String) -> Unit = {}
 ) : GreekInputController {
 
     override val currentValue: TextFieldValue
@@ -267,8 +276,12 @@ class MutableStateGreekInputController(
         val normalized = Normalizer.normalize(text, Normalizer.Form.NFC)
         val v = state.value
         val comp = v.composition
+        // TextRange accepts (end, start) for right-to-left selections;
+        // normalize at this trust boundary before range surgery (audit P2).
+        val selStart = minOf(v.selection.start, v.selection.end)
+        val selEnd = maxOf(v.selection.start, v.selection.end)
         val r = GreekTextOps.insert(
-            v.text, v.selection.start, v.selection.end,
+            v.text, selStart, selEnd,
             comp?.start ?: -1, comp?.end ?: -1,
             normalized, replaceComposing
         )
@@ -277,13 +290,17 @@ class MutableStateGreekInputController(
             selection = TextRange(r.cursor),
             composition = if (r.compStart >= 0) TextRange(r.compStart, r.compEnd) else null
         )
+        onTextCommitted(state.value.text)
     }
 
     override fun deleteBackward() {
         val v = state.value
         val comp = v.composition
+        // Normalize reversed selection endpoints before range surgery (P2).
+        val selStart = minOf(v.selection.start, v.selection.end)
+        val selEnd = maxOf(v.selection.start, v.selection.end)
         val r = GreekTextOps.deleteBackward(
-            v.text, v.selection.start, v.selection.end,
+            v.text, selStart, selEnd,
             comp?.start ?: -1, comp?.end ?: -1
         )
         state.value = v.copy(
@@ -291,6 +308,7 @@ class MutableStateGreekInputController(
             selection = TextRange(r.cursor),
             composition = if (r.compStart >= 0) TextRange(r.compStart, r.compEnd) else null
         )
+        onTextCommitted(state.value.text)
     }
 }
 
@@ -321,23 +339,36 @@ fun GreekTextField(
     keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
     val dispatcher = LocalGreekInputDispatcher.current
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
     val tfvState = remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
 
+    // Echo suppression: text we pushed up (panel commits + IME edits) comes
+    // back down as `value` on the next recomposition. Recognise our own echo
+    // so a laggy/relayed parent can't reset the field and start a
+    // push→reset→push feedback loop (audit A4).
+    var lastPushedText by remember { mutableStateOf(value) }
+
     // External source-of-truth push (question advanced / query cleared):
-    // replace content when it differs from what the field shows. Panel and
-    // IME edits always flow through here first, so this never fights them.
+    // replace content when it differs from what the field shows. Our own
+    // echoes are skipped; genuine external resets always win.
     val tfv = tfvState.value
-    if (tfv.text != value) {
+    if (tfv.text != value && value != lastPushedText) {
         tfvState.value = TextFieldValue(value, TextRange(value.length))
     }
 
-    val controller = remember { MutableStateGreekInputController(tfvState) }
+    val controller = remember {
+        MutableStateGreekInputController(tfvState) { committedText ->
+            lastPushedText = committedText
+            currentOnValueChange(committedText)
+        }
+    }
 
     OutlinedTextField(
         value = tfvState.value,
         onValueChange = { newValue ->
             tfvState.value = newValue
-            onValueChange(newValue.text)
+            lastPushedText = newValue.text
+            currentOnValueChange(newValue.text)
         },
         modifier = modifier.onFocusChanged { focus ->
             if (focus.isFocused) {

@@ -55,14 +55,15 @@ fun SyncScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // SAF launchers. Export: fetch the document from the core, then launch the
-    // picker; the chosen Uri gets the prefetched payload written into it.
-    var pendingExport by remember { mutableStateOf<String?>(null) }
+    // SAF launchers. Export: the core payload is validated + staged in the
+    // ViewModel (survives config change while the picker is open, unlike a
+    // `remember`), then the picker is launched; the chosen Uri gets the
+    // staged payload written into it.
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
-        val json = pendingExport
-        pendingExport = null
+        // Consume even on cancel so nothing stale lingers in VM state.
+        val json = viewModel.consumePendingExport()
         if (uri != null && json != null) viewModel.writeBackup(uri, json)
     }
     val importLauncher = rememberLauncherForActivityResult(
@@ -154,8 +155,9 @@ fun SyncScreen(
                             // touching the ActivityResultLauncher.
                             viewModel.exportBackupJson { json ->
                                 scope.launch {
-                                    if (json != null) {
-                                        pendingExport = json
+                                    // Validation failure → error snackbar in
+                                    // the VM and NO picker launch.
+                                    if (viewModel.stagePendingExport(json)) {
                                         val stamp = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
                                         exportLauncher.launch("greek-backup-$stamp.json")
                                     }
@@ -258,8 +260,18 @@ fun SyncScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         enabled = !state.busy,
-                        onClick = { viewModel.generateIdentity() }
-                    ) { Text(stringResource(R.string.sync_generate_identity)) }
+                        // With an existing identity this routes through the
+                        // rotation-confirmation dialog in the VM — the core
+                        // overwrite never fires without an explicit confirm.
+                        onClick = { viewModel.requestGenerateIdentity() }
+                    ) {
+                        Text(
+                            stringResource(
+                                if (state.hasIdentity) R.string.sync_rotate_identity
+                                else R.string.sync_generate_identity
+                            )
+                        )
+                    }
                     OutlinedButton(
                         enabled = !state.busy && nsec.isNotBlank(),
                         onClick = { viewModel.importNsec(nsec); nsec = "" }
@@ -339,6 +351,31 @@ fun SyncScreen(
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)
+        )
+    }
+
+    // Rotate-identity confirmation (A6): only reachable when an identity
+    // already exists. The old key cannot be exported from the UI (credential
+    // recovery is an un-shipped P2), so the copy states that limitation
+    // plainly instead of offering a "copy first" affordance that lies.
+    if (state.rotationConfirmPending) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissIdentityRotation,
+            title = { Text(stringResource(R.string.sync_rotate_identity_title)) },
+            text = { Text(stringResource(R.string.sync_rotate_identity_message)) },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmIdentityRotation) {
+                    Text(
+                        text = stringResource(R.string.sync_rotate_identity_confirm),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissIdentityRotation) {
+                    Text(stringResource(R.string.sync_rotate_identity_cancel))
+                }
+            }
         )
     }
 

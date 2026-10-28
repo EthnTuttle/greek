@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.greekapp.core.CoreProvider
+import com.greekapp.core.GreekCoreApi
 import com.greekapp.core.McqData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +17,15 @@ import org.json.JSONObject
 
 /** Question-type alternation, 0-based: even index → typed, odd index → MCQ. */
 internal fun isMcqQuestion(index: Int): Boolean = index % 2 == 1
+
+/** Classification of one alphabet-check verdict record attempt. */
+internal enum class VerdictSaveStatus {
+    /** The attempt is durably recorded (satisfied or not-satisfied). */
+    Persisted,
+
+    /** The attempt was NOT saved — the local verdict is provisional. */
+    Failed
+}
 
 /** One scored answer, kept in question order for the end-of-session summary. */
 data class PracticeResult(
@@ -62,7 +72,21 @@ data class PracticeState(
      */
     val checkVerdict: Boolean? = null,
     /** Guard so [recordAlphabetCheckResult] fires exactly once per attempt. */
-    val checkRecorded: Boolean = false
+    val checkRecorded: Boolean = false,
+    /**
+     * Answered questions whose core save hasn't succeeded yet (via
+     * [PracticeViewModel.submitResult]). > 0 drives the "answer not saved"
+     * banner; drained by the next successful save or
+     * [PracticeViewModel.retrySavingAnswers].
+     */
+    val unsavedAnswerCount: Int = 0,
+    /**
+     * Check mode: the verdict was computed but could NOT be persisted, so the
+     * locally-computed result is NOT final. Retry via
+     * [PracticeViewModel.retryVerdictSave] (restore also re-fires it, because
+     * [checkRecorded] stays false while unsaved).
+     */
+    val verdictSaveFailed: Boolean = false
 )
 
 class PracticeViewModel(
@@ -79,6 +103,10 @@ class PracticeViewModel(
 
     private val _state = MutableStateFlow(PracticeState(isAlphabetCheck = isAlphabetCheck))
     val state: StateFlow<PracticeState> = _state.asStateFlow()
+
+    /** Re-entrancy guard for [recordVerdict] (retry + restore paths can overlap). */
+    @Volatile
+    private var verdictRecording = false
 
     init {
         // Practice sessions are ephemeral: SavedStateHandle (in-memory bundle)
@@ -190,7 +218,7 @@ class PracticeViewModel(
         // Check mode: this is also the per-question recycling hook — every
         // answered check question is submitted immediately (misses become
         // FSRS-Again items), exactly as normal MCQ practice does.
-        submitResult(question.cardId, correct, exact = false)
+        submitResult(result)
     }
 
     fun onTypedInputChange(input: String) {
@@ -224,18 +252,19 @@ class PracticeViewModel(
                 if (question.cardId != currentQuestion?.cardId) return@launch
 
                 val st = _state.value
+                val result = PracticeResult(
+                    cardId = question.cardId,
+                    greekForm = question.correctForm,
+                    correct = correct,
+                    exact = exact
+                )
                 _state.value = st.copy(
                     isSubmitting = false,
                     feedback = AnswerFeedback(correct = correct, exact = exact),
-                    results = st.results + PracticeResult(
-                        cardId = question.cardId,
-                        greekForm = question.correctForm,
-                        correct = correct,
-                        exact = exact
-                    )
+                    results = st.results + result
                 )
                 saveSnapshot()
-                submitResult(question.cardId, correct, exact)
+                submitResult(result)
             } catch (e: Exception) {
                 // Hold the question; the user can retry the check.
                 Log.e(TAG, "Answer check failed for ${question.cardId}", e)
@@ -248,19 +277,69 @@ class PracticeViewModel(
     }
 
     /**
-     * Persist one outcome to the core, AFTER the feedback is on screen. A
-     * failure only costs a stats tick — the session continues uninterrupted.
+     * Persist one outcome to the core, AFTER the feedback is on screen, so the
+     * question flow never blocks on storage. A `false` return or a thrown
+     * exception both mean NOT SAVED (the seam folds binding errors to false):
+     * the result is queued in [pendingSaves], surfaced via
+     * `errorMessage`/`unsavedAnswerCount`, and retried automatically by the
+     * next successful save or explicitly via [retrySavingAnswers].
+     *
+     * [pendingSaves] is ViewModel-scoped, matching the ephemeral-session
+     * policy: only core-persisted results survive process death.
      */
-    private fun submitResult(cardId: String, correct: Boolean, exact: Boolean) {
+    private val pendingSaves = java.util.ArrayDeque<PracticeResult>()
+
+    private fun submitResult(result: PracticeResult) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val core = CoreProvider.current()
+            val saved = core != null && practiceResultPersisted(core, result)
+            if (!saved) {
+                Log.w(TAG, "submitPracticeResult not persisted for ${result.cardId}; queued for retry")
+                val pending = synchronized(pendingSaves) {
+                    pendingSaves.addLast(result)
+                    pendingSaves.size
+                }
+                _state.value = _state.value.copy(
+                    unsavedAnswerCount = pending,
+                    errorMessage = ANSWER_SAVE_ERROR
+                )
+                return@launch
+            }
+            // A successful save heals the backlog: flush older failed saves
+            // in answer order (same sink, same semantics as the live submit).
+            drainPendingSaves(requireNotNull(core))
+        }
+    }
+
+    /** Best-effort flush of failed saves, oldest first. Stops on the first
+     *  still-failing save so result order is preserved. */
+    private fun drainPendingSaves(core: GreekCoreApi) {
+        while (true) {
+            val next = synchronized(pendingSaves) { pendingSaves.peekFirst() } ?: break
+            if (!practiceResultPersisted(core, next)) break
+            synchronized(pendingSaves) { pendingSaves.pollFirst() }
+        }
+        val remaining = synchronized(pendingSaves) { pendingSaves.size }
+        val s = _state.value
+        _state.value = s.copy(
+            unsavedAnswerCount = remaining,
+            // Clear the banner only if it is still the save error (don't stomp
+            // an unrelated load/check error that arrived meanwhile).
+            errorMessage = if (remaining == 0 && s.errorMessage == ANSWER_SAVE_ERROR) {
+                null
+            } else {
+                s.errorMessage
+            }
+        )
+    }
+
+    /** Manual retry hook for the "answer not saved" state (auto-retries happen
+     *  on every subsequent successful save). */
+    fun retrySavingAnswers() {
+        if (synchronized(pendingSaves) { pendingSaves.isEmpty() }) return
         viewModelScope.launch(Dispatchers.IO) {
             val core = CoreProvider.current() ?: return@launch
-            try {
-                if (!core.submitPracticeResult(cardId, correct, exact)) {
-                    Log.w(TAG, "submitPracticeResult not persisted for $cardId")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "submitPracticeResult failed for $cardId", e)
-            }
+            drainPendingSaves(core)
         }
     }
 
@@ -290,29 +369,60 @@ class PracticeViewModel(
      * Check mode only: compute the verdict from the local score and persist it
      * via recordAlphabetCheckResult(correct, total). The returned
      * gate-satisfied-after flag ORs into the verdict, so an already-latched
-     * gate (e.g. declared-known) still shows the success state. A core
-     * failure degrades to the locally computed pass/fail — the attempt was
-     * already fully recycled per-question via submitPracticeResult.
+     * gate (e.g. declared-known) still shows the success state.
+     *
+     * A persistence failure is NOT silently treated as final: the locally
+     * computed verdict is shown alongside the `verdictSaveFailed` state,
+     * `checkRecorded` stays false (so a restored session re-fires this), and
+     * [retryVerdictSave] retries explicitly.
      */
     private fun recordVerdict() {
+        if (verdictRecording) return // re-entrancy guard (retry / restore paths)
         val s = _state.value
         val correct = s.results.count { it.correct }
         val total = s.questions.size
         val locallyPassed = total > 0 && correct >= ALPHABET_CHECK_PASS_SCORE
+        verdictRecording = true
         viewModelScope.launch(Dispatchers.IO) {
-            val satisfied = try {
-                CoreProvider.current()
-                    ?.recordAlphabetCheckResult(correct.toUInt(), total.toUInt()) == true
-            } catch (e: Exception) {
-                Log.e(TAG, "recordAlphabetCheckResult failed", e)
-                false
+            try {
+                val core = CoreProvider.current()
+                // null = save impossible (no core, or the call threw).
+                val outcome = core?.let { recordAlphabetCheckOutcome(it, correct, total) }
+                when (classifyVerdictSave(outcome, locallyPassed)) {
+                    VerdictSaveStatus.Persisted -> {
+                        _state.value = _state.value.copy(
+                            checkVerdict = locallyPassed || outcome == true,
+                            checkRecorded = true,
+                            verdictSaveFailed = false
+                        )
+                    }
+                    VerdictSaveStatus.Failed -> {
+                        Log.w(
+                            TAG,
+                            "recordAlphabetCheckResult not persisted " +
+                                "(outcome=$outcome, locallyPassed=$locallyPassed); flagging for retry"
+                        )
+                        _state.value = _state.value.copy(
+                            checkVerdict = locallyPassed,
+                            checkRecorded = false,
+                            verdictSaveFailed = true,
+                            errorMessage = "Couldn't save your check result. Tap to retry."
+                        )
+                    }
+                }
+                saveSnapshot()
+            } finally {
+                verdictRecording = false
             }
-            _state.value = _state.value.copy(
-                checkVerdict = locallyPassed || satisfied,
-                checkRecorded = true
-            )
-            saveSnapshot()
         }
+    }
+
+    /** Manually retry persisting the alphabet-check verdict once it is in the
+     *  "not saved" state. No-op for normal sessions / already-saved verdicts. */
+    fun retryVerdictSave() {
+        val s = _state.value
+        if (!isAlphabetCheck || !s.isComplete || !s.verdictSaveFailed) return
+        recordVerdict()
     }
 
     /** Restore a rotated session, repairing any inconsistent invariants. */
@@ -482,5 +592,59 @@ class PracticeViewModel(
         private const val KEY_TYPED = "practice_typed"
         private const val KEY_CHECK_RECORDED = "check_recorded"
         private const val KEY_CHECK_VERDICT = "check_verdict"
+
+        /** Banner text while answered questions are queued for a save retry. */
+        private const val ANSWER_SAVE_ERROR =
+            "Couldn't save your answer yet — we'll keep retrying."
+
+        /**
+         * One save attempt for a practice outcome. The seam folds binding
+         * failures to `false` and thrown exceptions mean the same thing, so
+         * this is true ONLY when the result was durably persisted. Static and
+         * Log-free so host-JVM tests can drive it without Dispatchers.Main.
+         */
+        internal fun practiceResultPersisted(core: GreekCoreApi, result: PracticeResult): Boolean =
+            try {
+                core.submitPracticeResult(result.cardId, result.correct, result.exact)
+            } catch (e: Exception) {
+                false
+            }
+
+        /**
+         * One attempt at recording the alphabet-check verdict. Returns the
+         * core's gate-satisfied flag, or null when the call threw (= saved
+         * nothing). Static and Log-free for host-JVM tests.
+         */
+        internal fun recordAlphabetCheckOutcome(
+            core: GreekCoreApi,
+            correct: Int,
+            total: Int
+        ): Boolean? =
+            try {
+                core.recordAlphabetCheckResult(correct.toUInt(), total.toUInt())
+            } catch (e: Exception) {
+                null
+            }
+
+        /**
+         * Classify the raw verdict-record outcome. `true` is unambiguous
+         * (recorded and satisfied). `false`/`null` is only trustworthy as
+         * "recorded" when the attempt FAILED locally — a recorded pass would
+         * have latched the gate and returned `true`. A locally-passing attempt
+         * whose save returned `false` (or threw) did NOT land.
+         */
+        internal fun classifyVerdictSave(
+            outcome: Boolean?,
+            locallyPassed: Boolean
+        ): VerdictSaveStatus =
+            when {
+                outcome == true -> VerdictSaveStatus.Persisted
+                locallyPassed -> VerdictSaveStatus.Failed
+                outcome == null -> VerdictSaveStatus.Failed
+                // Locally-failed attempt with a `false` return: recorded-but-
+                // unsatisfied, or a silent adapter failure a retry cannot help
+                // (the visible verdict is unchanged either way).
+                else -> VerdictSaveStatus.Persisted
+            }
     }
 }

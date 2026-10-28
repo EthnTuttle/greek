@@ -31,6 +31,12 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Ship only the ABIs the app's Rust library is built for; 32-bit
+        // devices would otherwise install and crash on System.loadLibrary.
+        ndk {
+            abiFilters += setOf("arm64-v8a", "x86_64")
+        }
     }
 
     signingConfigs {

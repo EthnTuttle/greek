@@ -63,6 +63,8 @@
     <string name="practice_again">Practice again</string>
     <string name="practice_error_title">Something went wrong</string>
     <string name="practice_try_again">Try Again</string>
+    <string name="practice_retry_saving_answers">Retry saving answers (%1$d pending)</string>
+    <string name="practice_retry_verdict_save">Retry saving result</string>
     <string name="practice_mark_correct">✓</string>
     <string name="practice_mark_wrong">✗</string>
     <string name="practice_star_exact">★</string>
@@ -142,6 +144,11 @@
     <string name="sync_identity_npub">Identity: %1$s…</string>
     <string name="sync_generate_identity">Generate identity</string>
     <string name="sync_identity_generated">Identity ready</string>
+    <string name="sync_rotate_identity">Rotate identity</string>
+    <string name="sync_rotate_identity_title">Rotate identity?</string>
+    <string name="sync_rotate_identity_message">This permanently replaces your current sync identity. Relay history encrypted under the old key becomes unreadable, and relays will treat this device as a brand-new peer.\n\nThe old key cannot currently be viewed or exported from the app — do not rotate unless you no longer need the history under the old identity.</string>
+    <string name="sync_rotate_identity_confirm">Rotate identity</string>
+    <string name="sync_rotate_identity_cancel">Cancel</string>
     <string name="sync_import_nsec">Import nsec</string>
     <string name="sync_nsec_label">Paste nsec secret</string>
     <string name="sync_push_now">Push now</string>

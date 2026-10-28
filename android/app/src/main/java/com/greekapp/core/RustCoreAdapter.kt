@@ -11,6 +11,8 @@ import uniffi.uniffi_bindings.NostrConfigView
 import uniffi.uniffi_bindings.PairedDeviceView
 import uniffi.uniffi_bindings.ReviewStats
 import uniffi.uniffi_bindings.SearchResultView
+import uniffi.uniffi_bindings.ShareConfigView
+import uniffi.uniffi_bindings.ShareFlushReportView
 import uniffi.uniffi_bindings.SyncStatsView
 import uniffi.uniffi_bindings.TextSectionView
 
@@ -41,6 +43,68 @@ class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
 
     override fun getNewCards(textbook: String, chapter: Int, limit: Int): List<CardView> =
         core.getNewCards(textbook, chapter, limit)
+
+    /**
+     * (C3) Single-budget session construction. The checked-in generated
+     * bindings include the export; a stale native .so predating it raises
+     * linkage errors, in which case [buildReviewSessionFallback] serves a
+     * C3-SAFE client-side assembly: the daily new-card budget is
+     * snapshotted ONCE and decremented locally, so stale libraries can't
+     * over-admit either.
+     */
+    override fun buildReviewSession(sessionSize: UInt): List<CardWithStateView> {
+        return try {
+            core.buildReviewSession(sessionSize)
+        } catch (e: UnsatisfiedLinkError) {
+            buildReviewSessionFallback(sessionSize)
+        } catch (e: NoSuchMethodError) {
+            buildReviewSessionFallback(sessionSize)
+        }
+    }
+
+    /**
+     * C3-safe client-side session assembly over the wave-1/2 exports: due
+     * cards first, then new cards across curricula/chapters in deck order,
+     * consuming ONE daily-budget snapshot (vs. the old per-chapter loop in
+     * which every chapter re-saw the full unspent allowance). Only used
+     * while the native `buildReviewSession` export is absent.
+     */
+    private fun buildReviewSessionFallback(sessionSize: UInt): List<CardWithStateView> {
+        val size = sessionSize.toInt()
+        val queue = LinkedHashMap<String, CardWithStateView>()
+        for (dc in core.getDueCards(size)) {
+            queue[dc.card.id] = dc
+        }
+        if (queue.size < size) {
+            var budget = runCatching { core.newCardsRemainingToday().toInt() }.getOrDefault(0)
+            outer@
+            for (cur in runCatching { core.getCurricula() }.getOrDefault(emptyList())) {
+                for (ch in runCatching { core.getChapters(cur.textbook) }.getOrDefault(emptyList())) {
+                    if (!ch.unlocked || !ch.available) continue
+                    if (queue.size >= size || budget <= 0) break@outer
+                    val limit = minOf(size - queue.size, budget)
+                    val newCards = runCatching {
+                        core.getNewCards(cur.textbook, ch.chapter, limit)
+                    }.getOrDefault(emptyList())
+                    for (nc in newCards) {
+                        if (queue.size >= size || budget <= 0) break
+                        if (queue.containsKey(nc.id)) continue
+                        queue[nc.id] = CardWithStateView(
+                            card = nc,
+                            stability = 0f,
+                            difficulty = 0f,
+                            dueDate = "",
+                            reps = 0,
+                            lapses = 0,
+                            isNew = true
+                        )
+                        budget--
+                    }
+                }
+            }
+        }
+        return queue.values.toList()
+    }
 
     override fun getReviewStats(): ReviewStats =
         core.getReviewStats()
@@ -253,27 +317,31 @@ class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
     }
 
     // ---- Wave-9 (Progress sharing over nostr) ----
-    // The share-nostr exports don't exist in the checked-in generated
-    // bindings yet, so unlike waves 2–6 there is no static symbol to call:
-    // each method is looked up reflectively on the loaded GreekCore class —
-    // a NoSuchMethodException is this wave's UnsatisfiedLinkError, tripping
-    // the same one-shot [shareApiAvailable] latch as the sync helpers. After
-    // bindings regen these bodies keep working unchanged; replacing the
-    // reflection with direct calls later is a mechanical cleanup (WAVE9-WIRE).
-    // The latch is SEPARATE from newApiAvailable: a stale share surface must
-    // never degrade the review/sync surfaces.
+    // The share-nostr exports exist in the checked-in generated bindings
+    // now, but most methods below were written against the reflective seam
+    // and keep working unchanged, so only the two paths that were BROKEN
+    // reflectively are wired direct:
+    //
+    //  - shareConfigGet: the generated record's pubkey field is named
+    //    `sharePubkeyHex`, not `pubkeyHex` — reflective lookup always
+    //    missed and latched the surface off. Now a direct record read; the
+    //    field name is compile-checked (see [ShareConfigView.toShareConfig]).
+    //  - shareFlushNow: async Rust export → generated Kotlin *suspend* fun
+    //    whose JVM signature carries a hidden Continuation param, so the
+    //    zero-arg reflective lookup (and the mangled-name retry) could
+    //    never find it. Now a direct suspend call, like syncNostrPush.
+    //
+    // The remaining exports stay reflective (WAVE9-WIRE cleanup): a stale
+    // pre-wave-9 native library still degrades the share surface only,
+    // through the SEPARATE [ShareBindStatus] latch — a stale share surface
+    // must never degrade the review/sync surfaces, and the latch no longer
+    // poisons the feature on transient engine errors (see below).
     //
     // Getters mirror the fail-soft sync getters (safe defaults, never throw).
-    // Actions mirror syncAction: only the stale-bindings case degrades; real
-    // engine errors (relay validation, content policy, identity missing)
-    // propagate — unwrapped from InvocationTargetException — so the UI can
-    // show the engine's own reason strings verbatim (Appendix R honesty).
-    //
-    // WAVE9-WIRE note for integration: if the Rust side declares an export as
-    // async (e.g. shareFlushNow), UniFFI generates a Kotlin suspend fun whose
-    // JVM signature gains a trailing kotlin.coroutines.Continuation param —
-    // extend the lookup below with the Continuation-aware variant that the
-    // sync suspend exports would use, and make the seam method suspend.
+    // Actions mirror syncAction: real engine errors (relay validation,
+    // content policy, identity missing) propagate — unwrapped from
+    // InvocationTargetException — so the UI can show the engine's own
+    // reason strings verbatim (Appendix R honesty).
 
     /** JNI-visible getter name for a camelCase record field (get + Capitalized). */
     private fun javaGetter(field: String) =
@@ -328,33 +396,68 @@ class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
             }
         }
         return try {
-            method.invoke(core, *args)
+            val result = method.invoke(core, *args)
+            // A successful call proves the loaded library has the share
+            // surface — heal a stale latch so one earlier structural
+            // failure can't disable the feature for the process lifetime.
+            ShareBindStatus.available = true
+            result
         } catch (e: java.lang.reflect.InvocationTargetException) {
             throw e.targetException ?: e
         }
     }
 
     /**
-     * Fail-soft getter path: catches both the stale-bindings case and real
-     * engine throws, latching the share surface off on any failure.
+     * Structural share-surface failures = the binding genuinely is absent
+     * (reflection lookup missed, mangled symbol, stale native .so, or the
+     * [UnsupportedOperationException] [shareInvoke] raises for those).
+     * Only these may latch [ShareBindStatus] off; transient engine errors
+     * (relay timeouts, locked db, rate caps) must not.
+     */
+    private fun isStructuralShareFailure(t: Throwable) =
+        t is UnsupportedOperationException || t is NoSuchMethodException ||
+            t is NoSuchMethodError || t is UnsatisfiedLinkError
+
+    /** Latch off only on structural failures; transient errors log and retry next call. */
+    private fun handleShareFailure(api: String, t: Throwable) {
+        // shareInvoke already latched the UnsupportedOperationException case.
+        if (isStructuralShareFailure(t) && t !is UnsupportedOperationException) {
+            markShareUnavailable(api, t)
+        } else if (!isStructuralShareFailure(t)) {
+            android.util.Log.w("RustCoreAdapter", "wave-9 share call $api failed (transient); will retry", t)
+        }
+    }
+
+    /**
+     * Fail-soft getter path: serves the fallback on any failure, latching
+     * the share surface off ONLY for structural (stale-bindings) failures;
+     * a transient engine error leaves the latch alone so the next explicit
+     * user action retries, and any successful call resets a stale latch.
      */
     private fun <T> shareGet(name: String, paramTypes: Array<Class<*>>, fallback: T, vararg args: Any?, map: (Any?) -> T): T {
         if (!ShareBindStatus.available) return fallback
         return runCatching { map(shareInvoke(name, paramTypes, *args)) }
-            .getOrElse { t ->
-                if (t !is UnsupportedOperationException) markShareUnavailable(name, t)
-                fallback
-            }
+            .getOrElse { t -> handleShareFailure(name, t); fallback }
     }
 
-    override fun shareConfigGet(): ShareConfig =
-        shareGet("shareConfigGet", emptyArray(), ShareConfig.DISABLED) { view ->
-            if (view == null) ShareConfig.DISABLED else ShareConfig(
-                enabled = propBool(view, "enabled"),
-                pubkeyHex = propStr(view, "pubkeyHex"),
-                relays = propStrList(view, "relays")
-            )
+    /**
+     * Direct record read (no reflection): the generated `ShareConfigView`
+     * exposes the pubkey as `sharePubkeyHex` — the old reflective lookup
+     * for `pubkeyHex` always missed and permanently latched the surface
+     * off. Field name is compile-checked here and in
+     * [ShareConfigView.toShareConfig]. Fail-soft same as the other wave-9
+     * getters.
+     */
+    override fun shareConfigGet(): ShareConfig {
+        if (!ShareBindStatus.available) return ShareConfig.DISABLED
+        return runCatching {
+            core.shareConfigGet().toShareConfig()
+                .also { ShareBindStatus.available = true }
+        }.getOrElse { t ->
+            handleShareFailure("shareConfigGet", t)
+            ShareConfig.DISABLED
         }
+    }
 
     override fun shareEnable(relays: List<String>) {
         shareInvoke("shareEnable", arrayOf<Class<*>>(List::class.java), relays)
@@ -411,15 +514,25 @@ class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
         return shareInvoke("sharePreview", types, slug, suffix) as? String ?: ""
     }
 
-    override fun shareFlushNow(): ShareFlushReport =
-        shareGet("shareFlushNow", emptyArray(), ShareFlushReport.EMPTY) { view ->
-            if (view == null) ShareFlushReport.EMPTY else ShareFlushReport(
-                posted = propLong(view, "posted").toInt().coerceAtLeast(0).toUInt(),
-                deferred = propLong(view, "deferred").toInt().coerceAtLeast(0).toUInt(),
-                duplicates = propLong(view, "duplicates").toInt().coerceAtLeast(0).toUInt(),
-                failed = propStrList(view, "failed")
-            )
+    /**
+     * Direct suspend call to the generated async export (its JVM signature
+     * carries a hidden Continuation, so the previous zero-arg reflective
+     * lookup could never find it). Fail-soft like the other wave-9 getters:
+     * structural failures latch [ShareBindStatus], transient engine errors
+     * log and retry next time; cancellation propagates.
+     */
+    override suspend fun shareFlushNow(): ShareFlushReport {
+        if (!ShareBindStatus.available) return ShareFlushReport.EMPTY
+        return try {
+            core.shareFlushNow().toShareFlushReport()
+                .also { ShareBindStatus.available = true }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            handleShareFailure("shareFlushNow", t)
+            ShareFlushReport.EMPTY
         }
+    }
 
     override fun sharePendingCount(): UInt =
         shareGet("sharePendingCount", emptyArray(), 0u) { count ->
@@ -441,9 +554,11 @@ class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
         }
 
     /**
-     * One-shot latch check for the wave-9 share surface ONLY (separate from
-     * [newApiAvailable] — a stale share export must not degrade review or
-     * sync). See [ShareBindStatus].
+     * Latch the wave-9 share surface off: reserved by convention for
+     * STRUCTURAL failures (see [isStructuralShareFailure]) — callers route
+     * through [handleShareFailure], and a later successful share call
+     * flips [ShareBindStatus] back, so one bad call can't disable the
+     * feature for the process lifetime.
      */
     private fun markShareUnavailable(api: String, t: Throwable) {
         ShareBindStatus.available = false
@@ -480,16 +595,31 @@ class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
 }
 
 /**
+ * Generated wave-9 config record → seam mirror. The pubkey field is
+ * `sharePubkeyHex` on the generated record (named args below make the
+ * mapping compile-checked against the checked-in bindings).
+ */
+internal fun ShareConfigView.toShareConfig() =
+    ShareConfig(enabled = enabled, pubkeyHex = sharePubkeyHex, relays = relays)
+
+/** Generated wave-9 flush record → seam mirror (counts arrive as u32 → UInt). */
+internal fun ShareFlushReportView.toShareFlushReport() =
+    ShareFlushReport(posted = posted, deferred = deferred, duplicates = duplicates, failed = failed)
+
+/**
  * Fallback implementations for the wave-2 UniFFI exports, used only when the
  * loaded native library predates binding regeneration (see
  * [RustCoreAdapter.newApiAvailable]). Values must stay harmless placeholders.
  */
 /**
- * Process-wide latch for the wave-9 share surface ONLY: flips false forever
- * when any share export lookup/invoke fails on the loaded native library, so
- * the UI can render an explicit "unavailable" banner instead of a confusing
- * always-off state. Separate from the wave-2 latch — a stale share surface
- * must never degrade review or sync.
+ * Process-wide latch for the wave-9 share surface ONLY: flips false on
+ * STRUCTURAL share-binding failures (stale bindings/native library — see
+ * RustCoreAdapter.isStructuralShareFailure), so the UI can render an
+ * explicit "unavailable" banner instead of a confusing always-off state.
+ * Transient engine errors never trip it, and any later successful share
+ * call flips it back — the degradation is defensive, not permanent.
+ * Separate from the wave-2 latch — a stale share surface must never
+ * degrade review or sync.
  */
 object ShareBindStatus {
     @Volatile

@@ -132,13 +132,11 @@ class CurriculumViewModel : ViewModel() {
      * human-readable unlock requirement first: when a hint exists it is shown
      * (no unlock attempt); otherwise the legacy unlock path runs unchanged.
      */
-    fun onChapterTapped(chapterNumber: Int) {
-        val section = _state.value.sections.firstOrNull { s ->
-            s.chapters.any { it.number == chapterNumber }
-        } ?: return
-        val chapter = section.chapters.firstOrNull { it.number == chapterNumber } ?: return
+    fun onChapterTapped(textbook: String, chapterNumber: Int) {
+        val (section, chapter) =
+            resolveChapter(_state.value.sections, textbook, chapterNumber) ?: return
         if (chapter.unlocked) {
-            startChapter(chapterNumber)
+            startChapter(textbook, chapterNumber)
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
@@ -156,7 +154,7 @@ class CurriculumViewModel : ViewModel() {
                 _state.value = _state.value.copy(unlockHint = hint)
             } else {
                 // No hint (pre-wave-2): unlock exactly as startChapter does today.
-                startChapter(chapterNumber)
+                startChapter(textbook, chapterNumber)
             }
         }
     }
@@ -166,15 +164,32 @@ class CurriculumViewModel : ViewModel() {
         _state.value = _state.value.copy(unlockHint = null)
     }
 
-    fun startChapter(chapterNumber: Int) {
-        val section = _state.value.sections.firstOrNull { s ->
-            s.chapters.any { it.number == chapterNumber }
-        } ?: return
+    fun startChapter(textbook: String, chapterNumber: Int) {
+        val (section, _) =
+            resolveChapter(_state.value.sections, textbook, chapterNumber) ?: return
         viewModelScope.launch(Dispatchers.IO) {
             val core = CoreProvider.current() ?: return@launch
             try {
                 core.unlockChapter(section.textbook, chapterNumber)
             } catch (_: Exception) {}
+        }
+    }
+
+    companion object {
+        /**
+         * Resolve a chapter within the section belonging to [textbook].
+         * Chapter numbers overlap across textbooks (e.g. Letters ch. 2 and
+         * Athenaze ch. 2), so the textbook must be matched first; returning
+         * the first section containing the number was release blocker A3.
+         */
+        internal fun resolveChapter(
+            sections: List<Section>,
+            textbook: String,
+            chapterNumber: Int
+        ): Pair<Section, Chapter>? {
+            val section = sections.firstOrNull { it.textbook == textbook } ?: return null
+            val chapter = section.chapters.firstOrNull { it.number == chapterNumber } ?: return null
+            return section to chapter
         }
     }
 }

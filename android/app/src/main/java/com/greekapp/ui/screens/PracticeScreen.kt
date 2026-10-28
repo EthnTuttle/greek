@@ -71,6 +71,7 @@ fun PracticeScreen(
                     passed = verdict,
                     onStudyLetters = onStudyLetters,
                     onTryAgain = { viewModel.startNewSession() },
+                    onRetrySave = { viewModel.retryVerdictSave() },
                     onDone = onBack
                 )
             }
@@ -152,6 +153,19 @@ fun PracticeScreen(
                     .fillMaxWidth()
                     .padding(top = 8.dp)
             )
+            // Failed answer saves queue in the VM: offer an explicit retry
+            // alongside the auto-retry that fires on the next success.
+            if (state.unsavedAnswerCount > 0) {
+                TextButton(onClick = { viewModel.retrySavingAnswers() }) {
+                    Text(
+                        text = stringResource(
+                            R.string.practice_retry_saving_answers,
+                            state.unsavedAnswerCount
+                        ),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
         }
 
         Column(
@@ -365,6 +379,7 @@ private fun AlphabetCheckVerdictScreen(
     passed: Boolean,
     onStudyLetters: () -> Unit,
     onTryAgain: () -> Unit,
+    onRetrySave: () -> Unit,
     onDone: () -> Unit
 ) {
     val score = state.results.count { it.correct }
@@ -391,6 +406,26 @@ private fun AlphabetCheckVerdictScreen(
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
+        // Verdict computed locally but not persisted: surface the VM's error
+        // plus an explicit retry (the VM keeps checkRecorded=false meanwhile,
+        // so a restored session also re-fires the save).
+        if (state.verdictSaveFailed) {
+            Spacer(modifier = Modifier.height(16.dp))
+            state.errorMessage?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
+            }
+            TextButton(onClick = onRetrySave) {
+                Text(
+                    text = stringResource(R.string.practice_retry_verdict_save),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(32.dp))
         if (passed) {
             Button(
