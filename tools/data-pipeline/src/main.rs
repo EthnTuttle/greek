@@ -1,20 +1,29 @@
 use anyhow::{Context, Result};
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::BufReader;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use unicode_normalization::UnicodeNormalization;
 
 const BATCH_SIZE: usize = 10_000;
 const PROGRESS_INTERVAL: usize = 100_000;
 
-/// Default directory containing the Morpheus XML dumps. Override with the
-/// `MORPHEUS_DATA_DIR` environment variable.
-const DEFAULT_MORPHEUS_DIR: &str = "/tmp/morpheus-data";
+/// Default directory containing the Morpheus XML dumps. Override with
+/// `--input-dir` or the `MORPHEUS_DATA_DIR` environment variable.
+/// Deliberately NOT a location that exists on this machine: the original
+/// inputs are lost, so every run must explicitly point at real inputs.
+const DEFAULT_INPUT_DIR: &str = "data/inputs";
+
+/// A database with more than this many rows in `lemmas` is considered a
+/// healthy, fully-built morphology database. The pinned reference asset
+/// (`data/morphology.sqlite`, SHA-256 pinned in `data/MANIFEST`) holds
+/// ~36k lemmas and CANNOT be rebuilt (the source XMLs are lost), so the
+/// pipeline refuses to overwrite such a file unless `--force` is given.
+const MIN_HEALTHY_LEMMAS: i64 = 30_000;
 
 const XML_FILE_NAMES: &[&str] = &[
     "MorpheusGreek1-319492.xml",
@@ -22,13 +31,146 @@ const XML_FILE_NAMES: &[&str] = &[
     "MorpheusGreek638985-958476.xml",
 ];
 
-/// Resolve the full paths of the Morpheus XML files, honoring the
-/// `MORPHEUS_DATA_DIR` env var (defaults to `/tmp/morpheus-data`).
-fn morpheus_xml_files() -> Vec<std::path::PathBuf> {
-    let dir = std::env::var("MORPHEUS_DATA_DIR")
-        .unwrap_or_else(|_| DEFAULT_MORPHEUS_DIR.to_string());
-    let base = Path::new(&dir);
-    XML_FILE_NAMES.iter().map(|name| base.join(name)).collect()
+struct Args {
+    input_dir: PathBuf,
+    output: PathBuf,
+    force: bool,
+}
+
+fn usage() -> String {
+    format!(
+        "Usage: data-pipeline [--input-dir DIR] [--output PATH] [--force]\n\
+         \n\
+         Builds the morphology SQLite database from the Morpheus XML dumps.\n\
+         \n\
+         Options:\n\
+           --input-dir DIR   Directory containing the XML dumps\n\
+                             (env MORPHEUS_DATA_DIR; default: {DEFAULT_INPUT_DIR})\n\
+           --output PATH     Destination SQLite file (env MORPHOLOGY_OUTPUT;\n\
+                             default: a path in the system temp dir — never the\n\
+                             pinned data/morphology.sqlite asset)\n\
+           --force           Allow overwriting an existing HEALTHY database.\n\
+                             Required because the shipped morphology.sqlite is a\n\
+                             pinned, un-rebuildable artifact (see data/MANIFEST).\n\
+         \n\
+         Safety: all expected input XMLs are validated (exist + non-empty)\n\
+         before anything is written; the database is built into '<out>.tmp'\n\
+         and atomically renamed over the destination only when fully built."
+    )
+}
+
+/// Parse CLI arguments (zero-dependency: this crate intentionally uses
+/// std::env rather than pulling in clap).
+fn parse_args() -> Result<Args> {
+    let mut input_dir: Option<PathBuf> = None;
+    let mut output: Option<PathBuf> = None;
+    let mut force = false;
+
+    let mut argv = std::env::args().skip(1);
+    while let Some(arg) = argv.next() {
+        if arg == "--input-dir" {
+            let v = argv.next().context("--input-dir requires a value")?;
+            input_dir = Some(PathBuf::from(v));
+        } else if let Some(v) = arg.strip_prefix("--input-dir=") {
+            input_dir = Some(PathBuf::from(v));
+        } else if arg == "--output" || arg == "-o" {
+            let v = argv.next().context("--output requires a value")?;
+            output = Some(PathBuf::from(v));
+        } else if let Some(v) = arg.strip_prefix("--output=") {
+            output = Some(PathBuf::from(v));
+        } else if arg == "--force" {
+            force = true;
+        } else if arg == "-h" || arg == "--help" {
+            println!("{}", usage());
+            std::process::exit(0);
+        } else {
+            anyhow::bail!("Unknown argument: {arg}\n{}", usage());
+        }
+    }
+
+    let input_dir = input_dir
+        .or_else(|| std::env::var_os("MORPHEUS_DATA_DIR").map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_INPUT_DIR));
+    let output = output
+        .or_else(|| std::env::var_os("MORPHOLOGY_OUTPUT").map(PathBuf::from))
+        .unwrap_or_else(|| {
+            std::env::temp_dir()
+                .join("morphology-pipeline")
+                .join("morphology.sqlite")
+        });
+
+    Ok(Args {
+        input_dir,
+        output,
+        force,
+    })
+}
+
+/// Validate that ALL expected input XMLs exist and are non-empty BEFORE any
+/// output file is touched. Reports every missing/invalid input at once
+/// rather than failing on the first one.
+fn validate_inputs(input_dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut problems: Vec<String> = Vec::new();
+    let mut files: Vec<PathBuf> = Vec::new();
+
+    for name in XML_FILE_NAMES {
+        let path = input_dir.join(name);
+        match fs::metadata(&path) {
+            Ok(md) if md.is_file() && md.len() > 0 => files.push(path),
+            Ok(md) if md.is_file() => {
+                problems.push(format!("{} (empty file)", path.display()))
+            }
+            Ok(_) => problems.push(format!("{} (not a regular file)", path.display())),
+            Err(_) => problems.push(format!("{} (missing)", path.display())),
+        }
+    }
+
+    if !problems.is_empty() {
+        eprintln!("Input validation failed ({} problem(s)):", problems.len());
+        for p in &problems {
+            eprintln!("  {p}");
+        }
+        anyhow::bail!(
+            "Refusing to build: {} of {} required Morpheus XML inputs are \
+             missing or empty. No output was written.\n\
+             (The original XML dumps are no longer obtainable; this check \
+             exists because a build with missing inputs previously replaced \
+             the pinned reference database with an empty one.)",
+            problems.len(),
+            XML_FILE_NAMES.len()
+        );
+    }
+
+    Ok(files)
+}
+
+/// True if `path` is a healthy, fully-built morphology database: it opens,
+/// contains the `lemmas` table, and holds more than MIN_HEALTHY_LEMMAS rows.
+fn destination_is_healthy(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    let conn = match Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+        Ok(conn) => conn,
+        Err(_) => return false,
+    };
+    let has_lemmas_table = conn
+        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='lemmas'")
+        .and_then(|mut stmt| stmt.exists([]))
+        .unwrap_or(false);
+    if !has_lemmas_table {
+        return false;
+    }
+    let lemma_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM lemmas", [], |r| r.get(0))
+        .unwrap_or(0);
+    lemma_count > MIN_HEALTHY_LEMMAS
+}
+
+/// Scratch sibling path the database is built into before the atomic rename
+/// over the real destination.
+fn scratch_path(out: &Path) -> PathBuf {
+    PathBuf::from(format!("{}.tmp", out.display()))
 }
 
 /// Maps first character of AGDT postag to part-of-speech label
@@ -283,12 +425,20 @@ fn parse_xml_file(
     Ok((entries_parsed, errors))
 }
 
-fn create_database(db_path: &Path) -> Result<Connection> {
-    if db_path.exists() {
-        fs::remove_file(db_path)?;
+fn create_database(scratch_db_path: &Path) -> Result<Connection> {
+    // `scratch_db_path` is our own "<out>.tmp" build scratch file — never the
+    // real destination. A stale one may remain from a crashed run; removing
+    // it is safe.
+    if scratch_db_path.exists() {
+        fs::remove_file(scratch_db_path).with_context(|| {
+            format!(
+                "Failed to remove stale scratch database {}",
+                scratch_db_path.display()
+            )
+        })?;
     }
 
-    let conn = Connection::open(db_path)?;
+    let conn = Connection::open(scratch_db_path)?;
 
     // Performance pragmas for bulk import
     conn.execute_batch(
@@ -321,17 +471,9 @@ fn create_database(db_path: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
-fn main() -> Result<()> {
-    let start = Instant::now();
-
-    // Create data directory
-    let data_dir = Path::new("/home/ethan/code/greek/data");
-    fs::create_dir_all(data_dir)?;
-
-    let db_path = data_dir.join("morphology.sqlite");
-    let conn = create_database(&db_path)?;
-
-    eprintln!("Database created at {}", db_path.display());
+/// Parse all XML inputs and populate an already-created database.
+/// Returns (lemma_count, form_count, parse_errors).
+fn build_database(conn: &Connection, xml_files: &[PathBuf]) -> Result<(i64, i64, usize)> {
 
     // Collect all entries, deduplicating as we go
     // Key: (form, lemma_id, postag) -> only insert once
@@ -344,7 +486,6 @@ fn main() -> Result<()> {
     let mut total_entries = 0usize;
     let mut total_errors = 0usize;
 
-    let xml_files = morpheus_xml_files();
     for (i, path) in xml_files.iter().enumerate() {
         eprintln!(
             "Processing file {}... ({})",
@@ -466,14 +607,82 @@ fn main() -> Result<()> {
     )?;
     eprintln!("  FTS5 index created.");
 
-    // Final stats
-    let elapsed = start.elapsed();
-    eprintln!("\nDone in {:.1}s", elapsed.as_secs_f64());
-    eprintln!("Database: {}", db_path.display());
-
-    // Print summary counts
+    // Summary counts
     let lemma_count: i64 = conn.query_row("SELECT COUNT(*) FROM lemmas", [], |r| r.get(0))?;
     let form_count: i64 = conn.query_row("SELECT COUNT(*) FROM forms", [], |r| r.get(0))?;
+
+    Ok((lemma_count, form_count, total_errors))
+}
+
+fn main() -> Result<()> {
+    let start = Instant::now();
+    let args = parse_args()?;
+
+    eprintln!("Input dir: {}", args.input_dir.display());
+    eprintln!("Output:    {}", args.output.display());
+
+    // 1. Validate ALL inputs exist and are non-empty BEFORE anything is
+    //    created or deleted on the output side.
+    let xml_files = validate_inputs(&args.input_dir)?;
+
+    // 2. Guard: never implicitly overwrite a healthy, fully-built database.
+    //    The shipped data/morphology.sqlite is pinned (data/MANIFEST) and
+    //    cannot be rebuilt — the source XMLs are lost — so replacing it must
+    //    always be an explicit, deliberate act.
+    if !args.force && destination_is_healthy(&args.output) {
+        anyhow::bail!(
+            "Refusing to overwrite {}: it is a healthy morphology database \
+             (more than {} lemmas).\n\
+             If this is the pinned data/morphology.sqlite, overwriting it \
+             would destroy an un-rebuildable artifact (see data/MANIFEST). \
+             Pass --force only if you are deliberately replacing it.",
+            args.output.display(),
+            MIN_HEALTHY_LEMMAS
+        );
+    }
+
+    // 3. Build into a scratch sibling "<out>.tmp"; the destination is only
+    //    replaced by a fully-built database via an atomic rename.
+    if let Some(parent) = args.output.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    let tmp_path = scratch_path(&args.output);
+    eprintln!("Building scratch database at {}", tmp_path.display());
+
+    let conn = create_database(&tmp_path)?;
+    let stats = match build_database(&conn, &xml_files) {
+        Ok(stats) => stats,
+        Err(e) => {
+            // Leave the destination untouched and don't leave scratch residue.
+            drop(conn);
+            let _ = fs::remove_file(&tmp_path);
+            let _ = fs::remove_file(format!("{}.tmp-wal", args.output.display()));
+            let _ = fs::remove_file(format!("{}.tmp-shm", args.output.display()));
+            return Err(e);
+        }
+    };
+    let (lemma_count, form_count, total_errors) = stats;
+
+    // Fold the WAL back into the main file so the scratch file is
+    // self-contained, then fsync before the swap.
+    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+    conn.close().map_err(|(_, e)| e)?;
+    fs::File::open(&tmp_path)?.sync_all()?;
+
+    fs::rename(&tmp_path, &args.output).with_context(|| {
+        format!(
+            "Failed to move {} into place as {}",
+            tmp_path.display(),
+            args.output.display()
+        )
+    })?;
+    eprintln!("Installed {} -> {}", tmp_path.display(), args.output.display());
+
+    let elapsed = start.elapsed();
+    eprintln!("\nDone in {:.1}s", elapsed.as_secs_f64());
+    eprintln!("Database: {}", args.output.display());
     eprintln!("  {} lemmas, {} forms", lemma_count, form_count);
 
     if total_errors > 0 {
