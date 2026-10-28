@@ -40,6 +40,13 @@
 
 * { box-sizing: border-box; }
 
+/* D4: author `display` rules below (.btn, .chip, .stat-card, .review-card,
+   .rating-row, .spinner …) otherwise override the UA sheet's
+   [hidden] { display: none }, revealing hidden rating buttons, badges and
+   the idle spinner. This guard must stay EARLY and carry !important so it
+   beats every class-level display rule regardless of source order. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);

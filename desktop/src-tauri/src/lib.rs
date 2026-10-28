@@ -28,8 +28,45 @@ async fn curriculum(state: tauri::State<'_, AppState>) -> Result<String, String>
 }
 
 #[tauri::command]
+async fn alphabet_check_generate(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    commands::alphabet_check_generate(&state.core)
+}
+
+#[tauri::command]
+async fn alphabet_check_answer(
+    state: tauri::State<'_, AppState>,
+    card_id: String,
+    correct: bool,
+) -> Result<String, String> {
+    commands::alphabet_check_answer(&state.core, &card_id, correct)
+}
+
+#[tauri::command]
+async fn alphabet_check_verdict(
+    state: tauri::State<'_, AppState>,
+    correct: u32,
+    total: u32,
+) -> Result<String, String> {
+    commands::alphabet_check_verdict(&state.core, correct, total)
+}
+
+#[tauri::command]
+async fn chapter_unlock(
+    state: tauri::State<'_, AppState>,
+    textbook: String,
+    chapter: i32,
+) -> Result<String, String> {
+    commands::chapter_unlock(&state.core, &textbook, chapter)
+}
+
+#[tauri::command]
 async fn dict_search(state: tauri::State<'_, AppState>, q: String) -> Result<String, String> {
     commands::dict_search(&state.core, &q)
+}
+
+#[tauri::command]
+async fn dict_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    commands::dict_status(&state)
 }
 
 #[tauri::command]
@@ -69,27 +106,38 @@ async fn backup_export(state: tauri::State<'_, AppState>) -> Result<String, Stri
 
 #[tauri::command]
 async fn backup_import(state: tauri::State<'_, AppState>, json: String) -> Result<String, String> {
-    commands::backup_import(&state.core, &json)
+    commands::backup_import(&state, &json)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let state = match AppState::from_env() {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("greek-desktop: fatal init error: {e}");
-            std::process::exit(1);
-        }
-    };
-
     tauri::Builder::default()
-        .manage(state)
+        // Resolve the Tauri bundle resource dir from the app handle BEFORE
+        // .manage(state) (D2): it needs the handle, which only exists once
+        // the Builder is running, so AppState is constructed here rather
+        // than up front.
+        .setup(|app| {
+            use tauri::Manager;
+            let resource_dir = app.path().resource_dir().ok();
+            match AppState::from_env(resource_dir) {
+                Ok(state) => {
+                    app.manage(state);
+                    Ok(())
+                }
+                Err(e) => Err(e.into()),
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             home_stats,
             review_current,
             review_rate,
             curriculum,
+            alphabet_check_generate,
+            alphabet_check_answer,
+            alphabet_check_verdict,
+            chapter_unlock,
             dict_search,
+            dict_status,
             sync_status,
             sync_ticket,
             sync_join,

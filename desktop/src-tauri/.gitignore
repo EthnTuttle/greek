@@ -1,2 +1,4 @@
 /target
 /gen
+# Pinned dictionary staged for bundling (bug D2); binary must not be committed.
+/resources

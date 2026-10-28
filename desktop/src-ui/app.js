@@ -102,10 +102,12 @@
         return loadReview();
       case "curriculum":
         return loadCurriculum();
+      case "dictionary":
+        return loadDictStatus();
       case "sync":
         return loadSyncStatus();
       default:
-        return Promise.resolve(); // dictionary is input-driven
+        return Promise.resolve();
     }
   }
 
@@ -248,6 +250,8 @@
 
   /* ================= CURRICULUM ================= */
 
+  var currData = null; // last curriculum() payload, for re-renders
+
   function loadCurriculum() {
     return call("curriculum").then(function (data) {
       renderCurriculum(data);
@@ -255,6 +259,7 @@
   }
 
   function renderCurriculum(data) {
+    currData = data;
     show($("curr-gate"), !!data.gateNotMet);
     var list = $("curr-list");
     var books = data.textbooks || [];
@@ -267,44 +272,7 @@
         var chapters = book.chapters || [];
         var rows = chapters
           .map(function (ch) {
-            var pct =
-              ch.totalCards > 0
-                ? Math.round((ch.masteredCount * 100) / ch.totalCards)
-                : 0;
-            var lock = ch.unlocked
-              ? ""
-              : '<span class="chapter-lock" aria-label="Locked">🔒</span>';
-            var hint =
-              !ch.unlocked && ch.hint
-                ? '<div class="chapter-hint">' + esc(ch.hint) + "</div>"
-                : "";
-            var progress = ch.unlocked
-              ? '<div class="chapter-progress">' +
-                '<div class="chapter-bar"><span style="width:' +
-                pct +
-                '%"></span></div>' +
-                '<span class="chapter-count">' +
-                ch.masteredCount +
-                " / " +
-                ch.totalCards +
-                " mastered</span></div>"
-              : '<div class="chapter-progress"><span class="chapter-count">Locked</span></div>';
-            return (
-              '<div class="chapter-row' +
-              (ch.unlocked ? "" : " locked") +
-              '">' +
-              lock +
-              '<div class="chapter-main">' +
-              '<div class="chapter-title">' +
-              ch.index +
-              ". " +
-              esc(ch.title) +
-              "</div>" +
-              hint +
-              "</div>" +
-              progress +
-              "</div>"
-            );
+            return chapterRow(book.id, ch);
           })
           .join("");
         return (
@@ -323,13 +291,347 @@
         );
       })
       .join("");
-    list.innerHTML = html;
+    // D1: while the alphabet gate is unmet the check is the on-ramp; the
+    // button opens the in-app check panel (mirrors Android's Curriculum
+    // gate row → AlphabetCheck screen).
+    var gateCta = data.gateNotMet
+      ? '<div class="check-cta">' +
+        '<button class="btn" type="button" data-action="check-start">' +
+        "Take the Alphabet Check</button>" +
+        '<span class="text-dim">24 quick questions on letter names &amp; shapes.</span>' +
+        "</div>"
+      : "";
+    list.innerHTML = gateCta + html;
+  }
+
+  /** One chapter row. Mirrors Android CurriculumViewModel.onChapterTapped:
+   *  unlocked rows are informational; locked rows WITH a core hint are
+   *  non-interactive (the hint states the requirement); locked rows with an
+   *  EMPTY hint have a met requirement and are tappable to unlock. */
+  function chapterRow(textbookId, ch) {
+    var pct =
+      ch.totalCards > 0 ? Math.round((ch.masteredCount * 100) / ch.totalCards) : 0;
+    var lock = ch.unlocked
+      ? ""
+      : '<span class="chapter-lock" aria-label="Locked">🔒</span>';
+    var hint =
+      !ch.unlocked && ch.hint
+        ? '<div class="chapter-hint">' + esc(ch.hint) + "</div>"
+        : "";
+    var progress = ch.unlocked
+      ? '<div class="chapter-progress">' +
+        '<div class="chapter-bar"><span style="width:' +
+        pct +
+        '%"></span></div>' +
+        '<span class="chapter-count">' +
+        ch.masteredCount +
+        " / " +
+        ch.totalCards +
+        " mastered</span></div>"
+      : '<div class="chapter-progress"><span class="chapter-count">Locked</span></div>';
+    var inner =
+      lock +
+      '<div class="chapter-main">' +
+      '<div class="chapter-title">' +
+      ch.index +
+      ". " +
+      esc(ch.title) +
+      "</div>" +
+      hint +
+      "</div>" +
+      progress;
+    if (!ch.unlocked && !ch.hint) {
+      // Requirement met per the core (unlock_hint empty): tappable.
+      return (
+        '<button type="button" class="chapter-row chapter-row-action"' +
+        ' data-action="chapter-unlock" data-textbook="' +
+        esc(textbookId) +
+        '" data-chapter="' +
+        ch.index +
+        '" aria-label="Unlock chapter ' +
+        ch.index +
+        ": " +
+        esc(ch.title) +
+        '">' +
+        inner +
+        '<span class="chapter-unlock-cta">Unlock</span>' +
+        "</button>"
+      );
+    }
+    return (
+      '<div class="chapter-row' + (ch.unlocked ? "" : " locked") + '">' + inner + "</div>"
+    );
+  }
+
+  /** Tap on an unlockable chapter row (hint-empty locked row). */
+  function unlockChapterRow(textbook, chapter) {
+    if (unlockBusy) return Promise.resolve();
+    unlockBusy = true;
+    return call("chapter_unlock", { textbook: textbook, chapter: chapter })
+      .then(function (r) {
+        if (r && r.unlocked) {
+          toast("Chapter unlocked.");
+        } else {
+          // Refused (e.g. alphabet gate on a vocabulary track): say why.
+          toast((r && r.hint) || "Chapter could not be unlocked yet.");
+        }
+      })
+      .catch(function (err) {
+        toast(String(err));
+      })
+      .then(function () {
+        unlockBusy = false;
+        return loadCurriculum();
+      });
+  }
+  var unlockBusy = false;
+
+  /* ---------------- alphabet check ----------------
+   * Mirrors Android PracticeViewModel check mode + AlphabetCheckVerdictScreen:
+   * one generated 24-question batch; each pick is scored locally against
+   * correctIndex AND reported via alphabet_check_answer; after the last
+   * question the verdict (correct, total) is persisted exactly once via
+   * alphabet_check_verdict, which latches the alphabet gate on a pass. */
+
+  var check = {
+    active: false,
+    questions: [],
+    index: 0,
+    correctCount: 0,
+    answered: false, // current question has a pick
+    picked: null,
+    busy: false,
+    saveFailed: false,
+    verdict: null, // null | {gateSatisfied:bool}
+  };
+
+  function checkReset() {
+    check.active = false;
+    check.questions = [];
+    check.index = 0;
+    check.correctCount = 0;
+    check.answered = false;
+    check.picked = null;
+    check.busy = false;
+    check.saveFailed = false;
+    check.verdict = null;
+  }
+
+  function startAlphabetCheck() {
+    if (check.busy) return Promise.resolve();
+    check.busy = true;
+    return call("alphabet_check_generate")
+      .then(function (questions) {
+        if (!questions || questions.length === 0) {
+          toast("The Alphabet Check is unavailable right now.");
+          return;
+        }
+        checkReset();
+        check.active = true;
+        check.questions = questions;
+        renderCheck();
+      })
+      .catch(function (err) {
+        toast(String(err));
+      })
+      .then(function () {
+        check.busy = false;
+      });
+  }
+
+  /** Local scoring for the current question; reports the answer to the core. */
+  function answerCheck(choiceIndex) {
+    if (!check.active || check.answered || check.busy) return Promise.resolve();
+    var q = check.questions[check.index];
+    if (!q || choiceIndex < 0 || choiceIndex >= q.choices.length) {
+      return Promise.resolve();
+    }
+    var correct = choiceIndex === q.correctIndex;
+    check.answered = true;
+    check.picked = choiceIndex;
+    if (correct) check.correctCount += 1;
+    renderCheck();
+    // Per-question recycling hook (misses become FSRS-Again items). Like
+    // Android, a persistence hiccup does not block the attempt itself.
+    return call("alphabet_check_answer", { cardId: q.cardId, correct: correct }).catch(
+      function () {
+        toast("Answer not saved — continuing anyway.");
+      }
+    );
+  }
+
+  /** Advance; after the last question, persist the verdict exactly once. */
+  function nextCheck() {
+    if (!check.active || !check.answered) return Promise.resolve();
+    check.index += 1;
+    check.answered = false;
+    check.picked = null;
+    if (check.index < check.questions.length) {
+      renderCheck();
+      return Promise.resolve();
+    }
+    return recordCheckVerdict();
+  }
+
+  function recordCheckVerdict() {
+    if (check.busy) return Promise.resolve();
+    check.busy = true;
+    check.saveFailed = false;
+    renderCheck();
+    return call("alphabet_check_verdict", {
+      correct: check.correctCount,
+      total: check.questions.length,
+    })
+      .then(function (r) {
+        check.verdict = r;
+      })
+      .catch(function (err) {
+        // Locally computed result still shows (Android behaviour); a retry
+        // button re-fires this same call.
+        check.saveFailed = true;
+        toast("Couldn't save the check result: " + String(err));
+      })
+      .then(function () {
+        check.busy = false;
+        renderCheck();
+      });
+  }
+
+  /** Leave the check (verdict screen "Back to curriculum" or abort). */
+  function exitCheck() {
+    checkReset();
+    return loadCurriculum();
+  }
+
+  function renderCheck() {
+    var list = $("curr-list");
+    var total = check.questions.length;
+    var passMark = Math.min(22, total); // ALPHABET_CHECK pass bar (22 of 24)
+    if (check.index >= total) {
+      // Verdict screen.
+      var passed = !!(check.verdict && check.verdict.gateSatisfied);
+      var locallyPassed = check.correctCount >= 22 && total >= 24;
+      // Android: verdict = locallyPassed || core outcome (an already-latched
+      // gate still shows the success state).
+      var shown = locallyPassed || passed;
+      list.innerHTML =
+        '<div class="card check-panel" id="check-verdict-panel">' +
+        '<h2 id="check-verdict-title">' +
+        (shown ? "Alphabet check passed 🎉" : "Not quite") +
+        "</h2>" +
+        '<p id="check-verdict-score" class="check-score">' +
+        check.correctCount +
+        " / " +
+        total +
+        "</p>" +
+        '<p class="text-dim">' +
+        (shown
+          ? "Vocabulary tracks are now unlocked."
+          : "You need " +
+            passMark +
+            " or more to pass. Review the letters and try again.") +
+        "</p>" +
+        (check.saveFailed
+          ? '<p class="chapter-hint">Result not saved yet — it will count ' +
+            "once saved.</p>" +
+            '<button class="btn secondary" type="button" data-action="check-retry">' +
+            "Save verdict</button> "
+          : "") +
+        (check.verdict && !passed
+          ? '<button class="btn secondary" type="button" data-action="check-retry" data-restart="1">' +
+            "Try again</button> "
+          : "") +
+        '<button class="btn" type="button" data-action="check-exit">' +
+        "Back to curriculum</button>" +
+        "</div>";
+      return;
+    }
+    var q = check.questions[check.index];
+    var choices = q.choices
+      .map(function (c, i) {
+        var cls = "check-choice";
+        if (check.answered) {
+          if (i === q.correctIndex) cls += " correct";
+          else if (i === check.picked) cls += " incorrect";
+        }
+        return (
+          '<button type="button" class="' +
+          cls +
+          '" data-action="check-answer" data-choice="' +
+          i +
+          '"' +
+          (check.answered ? " disabled" : "") +
+          '><span class="check-choice-label">' +
+          esc(c) +
+          "</span></button>"
+        );
+      })
+      .join("");
+    list.innerHTML =
+      '<div class="card check-panel">' +
+      '<div class="check-topline">' +
+      '<span class="chip" id="check-progress">Question ' +
+      (check.index + 1) +
+      " of " +
+      total +
+      "</span>" +
+      '<span class="chapter-count" id="check-score">' +
+      check.correctCount +
+      " correct</span>" +
+      "</div>" +
+      '<p class="check-prompt' +
+      (q.glyphToName ? " greek" : "") +
+      '" id="check-prompt">' +
+      esc(q.prompt) +
+      "</p>" +
+      '<p class="text-dim check-direction">' +
+      (q.glyphToName ? "Which letter is this?" : "Which glyph matches this name?") +
+      "</p>" +
+      '<div class="check-choices">' +
+      choices +
+      "</div>" +
+      '<p class="check-feedback" id="check-feedback" aria-live="polite">' +
+      (check.answered
+        ? check.picked === q.correctIndex
+          ? "Correct"
+          : "Not quite — the answer is “" + esc(q.choices[q.correctIndex]) + "”"
+        : "") +
+      "</p>" +
+      (check.answered
+        ? '<button class="btn btn-block" type="button" data-action="check-next">' +
+          (check.index + 1 === total ? "Finish" : "Next") +
+          "</button>"
+        : '<button class="btn btn-block" type="button" data-action="check-exit">' +
+          "Abort check</button>") +
+      (check.busy ? '<p class="text-dim">Saving…</p>' : "") +
+      "</div>";
   }
 
   /* ================= DICTIONARY ================= */
 
   var dictTimer = null;
   var dictSeq = 0; // drop stale responses when the user types quickly
+  var dictInstalled = null; // null = unknown; dict_status on tab load sets it
+
+  /* D2: a fresh install with no bundled/pinned morphology.sqlite used to be
+   * indistinguishable from a zero-hit query. Ask the backend once per tab
+   * visit so the panel can say "Dictionary not installed" instead of
+   * "No matches". */
+  function loadDictStatus() {
+    return call("dict_status").then(function (s) {
+      var status = $("dict-status");
+      dictInstalled = !!s.installed;
+      if (!dictInstalled && !$("dict-input").value.trim()) {
+        status.textContent =
+          "Dictionary not installed — the morphology lexicon is missing, " +
+          "so lookups return nothing. Reinstall the app (or drop " +
+          "morphology.sqlite into the app data directory) and restart.";
+        show(status, true);
+      } else {
+        show(status, false);
+      }
+    });
+  }
 
   function onDictInput() {
     if (dictTimer) clearTimeout(dictTimer);
@@ -364,7 +666,10 @@
     var status = $("dict-status");
     if (!hits || hits.length === 0) {
       results.innerHTML = "";
-      status.textContent = 'No matches for "' + q + '".';
+      status.textContent =
+        dictInstalled === false
+          ? "Dictionary not installed — see the notice on this tab."
+          : 'No matches for "' + q + '".';
       show(status, true);
       return;
     }
@@ -549,6 +854,11 @@
           " · settings applied " +
           r.settingsApplied +
           (via.length ? " via " + via.join(" + ") : " (no transport)");
+        // Partial failure (e.g. nostr pull failed, push succeeded) is NOT a
+        // clean success: surface the per-operation errors sync_now reports.
+        if (r.errors && r.errors.length) {
+          line += " — partial failure: " + r.errors.join("; ");
+        }
         var el = $("sync-result");
         el.textContent = line;
         show(el, true);
@@ -663,6 +973,37 @@
       }
     });
 
+    // Curriculum (event delegation over chapter rows + the alphabet check)
+    $("curr-list").addEventListener("click", function (ev) {
+      var el = ev.target;
+      while (el && el !== ev.currentTarget && !(el.getAttribute && el.getAttribute("data-action"))) {
+        el = el.parentNode;
+      }
+      if (!el || !el.getAttribute) return;
+      var action = el.getAttribute("data-action");
+      if (!action) return;
+      if (action === "check-start") {
+        startAlphabetCheck();
+      } else if (action === "check-answer") {
+        answerCheck(parseInt(el.getAttribute("data-choice"), 10));
+      } else if (action === "check-next") {
+        nextCheck();
+      } else if (action === "check-retry") {
+        if (el.getAttribute("data-restart")) {
+          startAlphabetCheck();
+        } else {
+          recordCheckVerdict();
+        }
+      } else if (action === "check-exit") {
+        exitCheck();
+      } else if (action === "chapter-unlock") {
+        unlockChapterRow(
+          el.getAttribute("data-textbook"),
+          parseInt(el.getAttribute("data-chapter"), 10)
+        );
+      }
+    });
+
     // Dictionary
     $("dict-input").addEventListener("input", onDictInput);
 
@@ -722,6 +1063,12 @@
       showReviewEmpty: showReviewEmpty,
       renderCurriculum: renderCurriculum,
       loadCurriculum: loadCurriculum,
+      startAlphabetCheck: startAlphabetCheck,
+      answerCheck: answerCheck,
+      nextCheck: nextCheck,
+      recordCheckVerdict: recordCheckVerdict,
+      exitCheck: exitCheck,
+      unlockChapterRow: unlockChapterRow,
       renderDictResults: renderDictResults,
       runDictSearch: runDictSearch,
       renderSyncStatus: renderSyncStatus,
@@ -735,6 +1082,7 @@
       exportBackup: exportBackup,
       importBackupFile: importBackupFile,
       _review: review, // test-only introspection
+      _check: check, // test-only introspection
       _call: call,
     };
   }

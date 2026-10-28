@@ -31,6 +31,42 @@ function assert(cond, label) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* ---------------- stylesheet model (D4) ----------------
+ * The mock DOM has no CSS engine, so boolean `hidden` alone does NOT tell
+ * whether an element is rendered: in a real browser any author `display`
+ * rule on the element's classes overrides the UA sheet's
+ * `[hidden] { display: none }` — this exact bug (D4) made hidden rating
+ * buttons, badges and the idle spinner visible. Model "rendered visible"
+ * as: not hidden, OR hidden but overridden by a class display rule AND the
+ * stylesheet is missing the `[hidden] { display: none !important }` guard.
+ */
+const cssRaw = readFileSync(join(here, "..", "style.css"), "utf8");
+const cssCollapsed = cssRaw
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/\s+/g, "")
+  .replace(/;/g, "");
+const HIDDEN_GUARD = "[hidden]{display:none!important}";
+const cssHasHiddenGuard = cssCollapsed.includes(HIDDEN_GUARD);
+
+// Ids the app toggles via the `hidden` attribute whose classes carry a
+// `display` rule in style.css (the D4 victim set). Self-checked below so
+// the map rots loudly instead of silently.
+const DISPLAY_RULE_BY_ID = {
+  "rating-row": ".rating-row",
+  "btn-show-answer": ".btn",
+  "review-new-badge": ".chip",
+  "review-card": ".review-card",
+  "stat-accuracy": ".stat-card",
+  "sync-busy": ".spinner",
+};
+
+/** Rendered-visibility truth for the mock DOM (see header comment). */
+function renderedVisible(id) {
+  const e = el(id);
+  if (!e.hidden) return true;
+  return !cssHasHiddenGuard && Boolean(DISPLAY_RULE_BY_ID[id]);
+}
+
 /* ---------------- fake DOM ---------------- */
 
 function makeEl(tag) {
@@ -124,7 +160,12 @@ const ALLOWED = new Set([
   "review_current",
   "review_rate",
   "curriculum",
+  "alphabet_check_generate",
+  "alphabet_check_answer",
+  "alphabet_check_verdict",
+  "chapter_unlock",
   "dict_search",
+  "dict_status",
   "sync_status",
   "sync_ticket",
   "sync_join",
@@ -155,6 +196,14 @@ let reviewIdx = 0;
 
 const PUBKEY = "a".repeat(64);
 let dictFailNext = false;
+let dictInstalledState = true;
+let ch3Unlocked = false; // curriculum canned state: chapter_unlock flips it
+
+const CHECK_QUESTIONS = [
+  { cardId: "letters-002", glyphToName: true, prompt: "Β β", choices: ["beta", "alpha", "gamma", "delta"], correctIndex: 0 },
+  { cardId: "letters-001", glyphToName: false, prompt: "alpha", choices: ["Η η", "Α α", "Ω ω", "Ε ε"], correctIndex: 1 },
+  { cardId: "letters-010", glyphToName: true, prompt: "Γ γ", choices: ["pi", "rho", "gamma", "tau"], correctIndex: 2 },
+];
 
 const CANNED = {
   home_stats: () =>
@@ -186,6 +235,8 @@ const CANNED = {
           chapters: [
             { index: 1, title: "The Vowels", totalCards: 7, masteredCount: 4, unlocked: true, hint: "" },
             { index: 2, title: "Stop Consonants", totalCards: 9, masteredCount: 0, unlocked: false, hint: "Master chapter 1 to unlock" },
+            // hint "" on a locked row = requirement met → tappable (D1)
+            { index: 3, title: "Continuants", totalCards: 9, masteredCount: 0, unlocked: ch3Unlocked, hint: "" },
           ],
         },
         {
@@ -197,17 +248,43 @@ const CANNED = {
         },
       ],
     }),
+  alphabet_check_generate: () => JSON.stringify(CHECK_QUESTIONS),
+  alphabet_check_answer: (args) => {
+    if (typeof args.cardId !== "string" || typeof args.correct !== "boolean") {
+      return Promise.reject("cardId must be a string, correct a boolean");
+    }
+    return "ok";
+  },
+  alphabet_check_verdict: (args) => {
+    if (!Number.isInteger(args.correct) || !Number.isInteger(args.total)) {
+      return Promise.reject("correct/total must be integers");
+    }
+    // mirror the core contract loosely: mock passes at ≥90%
+    return JSON.stringify({ gateSatisfied: args.total > 0 && args.correct * 10 >= args.total * 9 });
+  },
+  chapter_unlock: (args) => {
+    if (typeof args.textbook !== "string" || !Number.isInteger(args.chapter)) {
+      return Promise.reject("textbook must be a string, chapter an integer");
+    }
+    if (args.textbook === "letters" && args.chapter === 3) {
+      ch3Unlocked = true;
+      return JSON.stringify({ unlocked: true, hint: "" });
+    }
+    return JSON.stringify({ unlocked: false, hint: "Locked by the alphabet gate" });
+  },
   dict_search: (args) => {
     if (dictFailNext) {
       dictFailNext = false;
       return Promise.reject("index not loaded");
     }
     if (typeof args.q !== "string") return Promise.reject("q must be a string");
+    if (!dictInstalledState) return JSON.stringify([]); // no lexicon → zero rows (D2 precondition)
     return JSON.stringify([
       { lemma: "ἄνθρωπος", pos: "noun", gloss: "man, human being" },
       { lemma: "λόγος", pos: "noun", gloss: "word, reason" },
     ]);
   },
+  dict_status: () => JSON.stringify({ installed: dictInstalledState, path: dictInstalledState ? "/fake/resource/morphology.sqlite" : null }),
   sync_status: () =>
     JSON.stringify({
       deviceId: "abc123def4567890fedcba",
@@ -291,12 +368,33 @@ if (!App) {
 /* ---------------- scenarios ---------------- */
 
 async function main() {
+  console.log("== Stylesheet (D4) ==");
+  assert(
+    cssHasHiddenGuard,
+    "css: [hidden] { display: none !important } guard present"
+  );
+  const btnRuleAt = cssCollapsed.indexOf(".btn{");
+  assert(
+    cssHasHiddenGuard &&
+      btnRuleAt > -1 &&
+      cssCollapsed.indexOf(HIDDEN_GUARD) < btnRuleAt,
+    "css: [hidden] guard declared earlier than the first author display rule"
+  );
+  for (const id of Object.keys(DISPLAY_RULE_BY_ID)) {
+    const sel = DISPLAY_RULE_BY_ID[id];
+    const m = new RegExp(sel.replace(/\./g, "\\.") + "\\{[^}]*display:").exec(
+      cssCollapsed
+    );
+    assert(Boolean(m), "css self-check: " + sel + " really sets display (D4 map not stale)");
+  }
+
   console.log("== Home ==");
   await App.showTab("home");
   assert(el("stat-due-num").textContent === "3", "home: due count rendered");
   assert(el("stat-new").textContent === "2 / 10", "home: new X/cap rendered");
   assert(el("stat-streak").textContent === "4 days", "home: streak rendered");
   assert(el("stat-accuracy").hidden === false, "home: accuracy visible when total>0");
+  assert(renderedVisible("stat-accuracy"), "home: accuracy rendered visible (D4)");
   assert(el("stat-accuracy-num").textContent === "80%", "home: accuracy pct");
   assert(el("gate-banner").hidden === false, "home: gate banner shown when !gateSatisfied");
   assert(
@@ -309,11 +407,30 @@ async function main() {
   assert(App._review.card && App._review.card.front === "Β β", "review: first card loaded");
   assert(el("review-front").innerHTML.includes("Β β"), "review: front rendered to DOM");
   assert(el("review-new-badge").hidden === false, "review: new badge for isNew card");
+  assert(renderedVisible("review-new-badge"), "review: new badge rendered visible (D4)");
   assert(el("review-remaining").textContent === "1 left", "review: remaining chip");
+  // D4: pre-answer state — rendered visibility, not just the boolean.
+  // rating-row carries `display: grid` and btn-show-answer `display:
+  // (inline-)block`, so in a real browser `hidden` only wins via the CSS
+  // guard; asserting .hidden here used to pass while both were painted.
+  assert(el("rating-row").hidden === true, "review: rating row hidden before reveal");
+  assert(
+    renderedVisible("rating-row") === false,
+    "review: rating buttons NOT rendered before the answer is revealed (D4)"
+  );
+  assert(
+    renderedVisible("btn-show-answer") === true,
+    "review: show-answer button rendered before reveal (D4)"
+  );
   App.revealAnswer();
   assert(App._review.revealed === true, "review: reveal sets state");
   assert(el("review-back").textContent === "beta — b as in book", "review: back revealed");
   assert(el("rating-row").hidden === false, "review: rating row visible after reveal");
+  assert(renderedVisible("rating-row") === true, "review: rating row rendered after reveal (D4)");
+  assert(
+    renderedVisible("btn-show-answer") === false,
+    "review: show-answer button hidden after reveal (D4)"
+  );
   await App.rate(1);
   App.revealAnswer(); // next card needs its answer revealed before rating
   await App.rate(2);
@@ -336,8 +453,82 @@ async function main() {
   assert(currHtml.includes("🔒"), "curriculum: lock icon on locked chapter");
   assert(currHtml.includes("Master chapter 1 to unlock"), "curriculum: locked hint shown");
   assert(currHtml.includes("4 / 7 mastered"), "curriculum: mastered/total row");
+  // D1: interactivity
+  assert(currHtml.includes('data-action="check-start"'), "curriculum: check CTA while gate unmet");
+  assert(
+    currHtml.includes('data-action="chapter-unlock" data-textbook="letters" data-chapter="3"'),
+    "curriculum: hint-empty locked row is a tappable unlock button"
+  );
+  assert(
+    !currHtml.includes('data-chapter="2"'),
+    "curriculum: hinted locked row stays non-interactive"
+  );
+
+  // Chapter-row tap → chapter_unlock, list re-renders with the row unlocked.
+  await App.unlockChapterRow("letters", 3);
+  assert(calls.includes("chapter_unlock"), "curriculum: chapter_unlock invoked on tap");
+  assert(
+    el("curr-list").innerHTML.includes("0 / 9 mastered"),
+    "curriculum: unlocked ch.3 shows progress row after unlock"
+  );
+
+  // Alphabet check loop: generate → answer each → verdict → back.
+  await App.startAlphabetCheck();
+  assert(calls.includes("alphabet_check_generate"), "check: generate invoked");
+  assert(
+    el("curr-list").innerHTML.includes("Question 1 of 3"),
+    "check: progress label rendered"
+  );
+  assert(
+    el("curr-list").innerHTML.includes('data-action="check-answer"'),
+    "check: choice buttons rendered"
+  );
+  for (let i = 0; i < CHECK_QUESTIONS.length; i++) {
+    assert(App._check.index === i, "check: question index " + i);
+    await App.answerCheck(CHECK_QUESTIONS[i].correctIndex);
+    assert(App._check.answered === true, "check: answer recorded locally");
+    await App.nextCheck();
+  }
+  assert(
+    calls.filter((c) => c === "alphabet_check_answer").length === 3,
+    "check: per-question answers reported"
+  );
+  assert(
+    calls.filter((c) => c === "alphabet_check_verdict").length === 1,
+    "check: verdict persisted exactly once"
+  );
+  assert(
+    el("curr-list").innerHTML.includes("Alphabet check passed"),
+    "check: passing verdict rendered"
+  );
+  assert(el("curr-list").innerHTML.includes("3 / 3"), "check: score rendered");
+  await App.exitCheck();
+  assert(el("curr-list").innerHTML.includes("The Alphabet"), "check: exit restores curriculum");
 
   console.log("== Dictionary ==");
+  await App.showTab("dictionary");
+  assert(calls.includes("dict_status"), "dictionary: tab load checks installation (D2)");
+  assert(el("dict-status").hidden === true, "dictionary: installed → no notice on tab load");
+  // Not-installed path: D2 distinguishes it from a plain "No matches".
+  dictInstalledState = false;
+  await App.showTab("home");
+  await App.showTab("dictionary");
+  assert(
+    el("dict-status").hidden === false &&
+      el("dict-status").textContent.includes("Dictionary not installed"),
+    "dictionary: not-installed message rendered (D2)"
+  );
+  el("dict-input").value = "zzzqqq"; // zero-hit query while not installed
+  await App.runDictSearch();
+  assert(
+    el("dict-status").hidden === false &&
+      el("dict-status").textContent.includes("Dictionary not installed"),
+    "dictionary: zero hits under missing lexicon still says not installed (D2)"
+  );
+  dictInstalledState = true;
+  await App.showTab("home");
+  await App.showTab("dictionary");
+  assert(el("dict-status").hidden === true, "dictionary: installed again → notice clears");
   el("dict-input").value = "man";
   await App.runDictSearch();
   const dictHtml = el("dict-results").innerHTML;
@@ -361,6 +552,9 @@ async function main() {
   );
 
   console.log("== Sync ==");
+  // Mock fidelity: index.html mounts #sync-busy with the `hidden` attribute
+  // (idle spinner); the mock DOM can't parse markup, so seed it here.
+  el("sync-busy").hidden = true;
   await App.showTab("sync");
   assert(el("sync-device-id").textContent === "abc123def456", "sync: device id 12ch mono");
   assert(el("sync-relays-view").textContent === "wss://relay.damus.io", "sync: relays shown");
@@ -369,6 +563,7 @@ async function main() {
   assert(pairedHtml.includes("Pixel"), "sync: paired label");
   assert(pairedHtml.includes("never"), "sync: empty lastSyncHlc → never");
   assert(el("paired-empty").hidden === true, "sync: empty hint hidden with devices");
+  assert(renderedVisible("sync-busy") === false, "sync: idle spinner NOT rendered (D4)");
 
   await App.showTicket();
   assert(

@@ -26,13 +26,10 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "6"
-# nostr-sdk vs rusqlite: used ONLY by nostr_identity_ensure to derive the
-# existing identity's pubkey hex when one is already stored (GreekCore
-# exposes generation but no pubkey getter). It is a read-only peek at the
-# app DB's user_settings table, mirroring sync_generate_nostr_identity's
-# Keys::parse path; all learning/sync logic still flows through GreekCore.
-nostr-sdk = { version = "0.43", default-features = false, features = ["nip44"] }
-rusqlite = { version = "0.31", features = ["bundled"] }
+# nostr-sdk: used ONLY by nostr_identity_ensure to derive the existing
+# identity's pubkey hex from the secrets vault (GreekCore now exposes
+# `sync_nostr_pubkey()` — a later change can switch to it and drop this dep).
+nostr-sdk = { version = "0.44.1", default-features = false, features = ["nip44"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
