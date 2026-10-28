@@ -1,0 +1,17 @@
+# Pinned data artifacts
+#
+# These binary assets are git-ignored and distributed outside git (GitHub
+# Releases / manual distribution). Every consumer (Android build, desktop
+# packaging, CI smoke tests) MUST verify the SHA-256 below after fetching.
+#
+# Format: <sha256>  <path>  [<bytes>]
+e97d66b77154ce8ac1c5380d44d8c50ba8397719297a76b1bd15569df02ba411  data/morphology.sqlite
+# morphology.sqlite.provenance
+#   Derived from Morpheus Greek Unicode XML dumps (inputs no longer
+#   obtainable; see data/README.md "Provenance"). Curated glosses applied via
+#   data/overrides/lemma_glosses.tsv. Quick-check ok; 36,165 lemmas /
+#   958,469 forms as of the 2026-10-20 production-readiness audit.
+#   Rebuilding from scratch is NOT possible — treat this file as the pinned
+#   reference artifact.
+#
+# Verify: sha256sum -c data/MANIFEST --ignore-missing

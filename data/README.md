@@ -14,8 +14,23 @@ analyses) are no longer available, so **a full rebuild is not possible**. All
 corrections to lemma glosses happen at the SQL level via curated overrides
 (see below).
 
-Builder: `tools/data-pipeline` (Rust). Do not re-run it — without the XML
-inputs it would only produce an empty database.
+Builder: `tools/data-pipeline` (Rust). Hardened after the audit: it takes
+`--input-dir` / `--output` (env fallbacks `MORPHEUS_DATA_DIR` /
+`MORPHOLOGY_OUTPUT`; defaults are `data/inputs` and a temp-dir path — never
+the pinned asset), validates that all expected XML inputs exist and are
+non-empty before writing anything, builds into `<out>.tmp` and atomically
+renames it over the destination, and refuses to overwrite a healthy database
+(> 30k lemmas) without `--force`. Do not re-run it against the real asset —
+without the XML inputs it exits with an error before touching anything.
+
+## Pinned artifact
+
+The current reference database is pinned by SHA-256 in `data/MANIFEST`
+(verify with `sha256sum -c data/MANIFEST --ignore-missing`). The Android
+asset copy (`android/app/src/main/assets/morphology.sqlite`) must match the
+same hash after every `cp`. Both files are git-ignored; distribution happens
+out-of-band (GitHub Releases asset, pending ROLLOUT) and must carry the same
+hash.
 
 ## Known quirks of the stored data
 
