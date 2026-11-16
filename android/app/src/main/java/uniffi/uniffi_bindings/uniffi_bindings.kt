@@ -1254,7 +1254,7 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup_with_context() != 21123.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_build_review_session() != 7040.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_build_review_session() != 49750.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_check_typed_answer() != 4024.toShort()) {
@@ -1305,10 +1305,10 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_mark_word_known() != 57534.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_new_cards_remaining_today() != 58993.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_new_cards_remaining_today() != 10637.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_new_cards_today() != 42457.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_new_cards_today() != 38144.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_preview_intervals() != 57569.toShort()) {
@@ -1933,8 +1933,9 @@ public interface GreekCoreInterface {
      * then never-reviewed lookup cards, then new cards in curriculum order
      * (letters → athenaze → jact → dcc),
      * chapter order within a curriculum, deck order within a chapter —
-     * consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`]),
-     * so one session introduces at most the day's true remaining allowance.
+     * consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`])
+     * for lookup/vocabulary cards. Letters are cap-exempt but still respect
+     * the overall session size, chapter unlocks, and ID de-duplication.
      */
     fun `buildReviewSession`(`sessionSize`: kotlin.UInt): List<CardWithStateView>
     
@@ -2025,12 +2026,14 @@ public interface GreekCoreInterface {
     fun `markWordKnown`(`word`: kotlin.String, `known`: kotlin.Boolean)
     
     /**
-     * Remaining new-card allowance for today under the daily cap.
+     * Remaining vocabulary new-card allowance for today under the daily cap.
      */
     fun `newCardsRemainingToday`(): kotlin.UInt
     
     /**
-     * Number of cards introduced (first-ever review) on today's date.
+     * Number of cap-counting VOCABULARY cards first reviewed today. Letters
+     * are cap-exempt and excluded from this Home/budget metric only; their
+     * review logs and organic-gate history are unchanged.
      */
     fun `newCardsToday`(): kotlin.UInt
     
@@ -2467,8 +2470,9 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
      * then never-reviewed lookup cards, then new cards in curriculum order
      * (letters → athenaze → jact → dcc),
      * chapter order within a curriculum, deck order within a chapter —
-     * consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`]),
-     * so one session introduces at most the day's true remaining allowance.
+     * consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`])
+     * for lookup/vocabulary cards. Letters are cap-exempt but still respect
+     * the overall session size, chapter unlocks, and ID de-duplication.
      */
     @Throws(GreekException::class)override fun `buildReviewSession`(`sessionSize`: kotlin.UInt): List<CardWithStateView> {
             return FfiConverterSequenceTypeCardWithStateView.lift(
@@ -2731,7 +2735,7 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
 
     
     /**
-     * Remaining new-card allowance for today under the daily cap.
+     * Remaining vocabulary new-card allowance for today under the daily cap.
      */override fun `newCardsRemainingToday`(): kotlin.UInt {
             return FfiConverterUInt.lift(
     callWithPointer {
@@ -2746,7 +2750,9 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
 
     
     /**
-     * Number of cards introduced (first-ever review) on today's date.
+     * Number of cap-counting VOCABULARY cards first reviewed today. Letters
+     * are cap-exempt and excluded from this Home/budget metric only; their
+     * review logs and organic-gate history are unchanged.
      */override fun `newCardsToday`(): kotlin.UInt {
             return FfiConverterUInt.lift(
     callWithPointer {
