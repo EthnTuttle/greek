@@ -421,7 +421,7 @@
   },
   {
     "id": "letters-032",
-    "front": "ᾳ",
+    "front": "ᾳ — name the diacritic",
     "back": "Iota subscript: small ι under long α η ω — once an i-glide, now usually silent: λόγῳ (dat. of λόγος).",
     "chapter": 4,
     "card_type": "Diacritic",
@@ -448,7 +448,7 @@
   {
     "id": "letters-034",
     "front": "ει",
-    "back": "ει — a long close e, as in 'vein' (/eː/): εἰμί 'I am'. Modern: /i/.",
+    "back": "ει — ei, a long close e, as in 'vein' (/eː/): εἰμί 'I am'. Modern: /i/.",
     "chapter": 5,
     "card_type": "Diphthong",
     "pos": "diphthong",
@@ -474,7 +474,7 @@
   {
     "id": "letters-036",
     "front": "υι",
-    "back": "υι — say 'oo' gliding into 'ee' with lips rounded (/yi̯/): υἱός 'son'.",
+    "back": "υι — ui, say 'oo' gliding into 'ee' with lips rounded (/yi̯/): υἱός 'son'.",
     "chapter": 5,
     "card_type": "Diphthong",
     "pos": "diphthong",
@@ -500,7 +500,7 @@
   {
     "id": "letters-038",
     "front": "ευ",
-    "back": "ευ — e + u blended quickly (/eu̯/), no exact English match: εὖ 'well', εὑρίσκω 'find'.",
+    "back": "ευ — eu, e + u blended quickly (/eu̯/), no exact English match: εὖ 'well', εὑρίσκω 'find'.",
     "chapter": 5,
     "card_type": "Diphthong",
     "pos": "diphthong",
@@ -513,7 +513,7 @@
   {
     "id": "letters-039",
     "front": "ηυ",
-    "back": "ηυ — long open e + u blended (/ɛːu̯/): ηὗρον 'found', the aorist of εὑρίσκω.",
+    "back": "ηυ — ēu, long open e + u blended (/ɛːu̯/): ηὗρον 'found', the aorist of εὑρίσκω.",
     "chapter": 5,
     "card_type": "Diphthong",
     "pos": "diphthong",
@@ -538,8 +538,8 @@
   },
   {
     "id": "letters-041",
-    "front": "ᾳ",
-    "back": "ᾳ — long a with iota glide (/aːi̯/), written with subscript: χώρᾳ (dat. of χώρα 'country').",
+    "front": "ᾳ — transliterate the long diphthong",
+    "back": "ᾳ — āi, long a with iota glide (/aːi̯/), written with subscript: χώρᾳ (dat. of χώρα 'country').",
     "chapter": 5,
     "card_type": "Diphthong",
     "pos": "diphthong",
@@ -553,7 +553,7 @@
   {
     "id": "letters-042",
     "front": "ῃ",
-    "back": "ῃ — long open e with iota glide (/ɛːi̯/), written with subscript: μάχῃ (dat. of ἡ μάχη 'battle').",
+    "back": "ῃ — ēi, long open e with iota glide (/ɛːi̯/), written with subscript: μάχῃ (dat. of ἡ μάχη 'battle').",
     "chapter": 5,
     "card_type": "Diphthong",
     "pos": "diphthong",
@@ -567,7 +567,7 @@
   {
     "id": "letters-043",
     "front": "ῳ",
-    "back": "ῳ — long open o with iota glide (/ɔːi̯/), written with subscript: τραγῳδία 'tragedy', κωμῳδία 'comedy'.",
+    "back": "ῳ — ōi, long open o with iota glide (/ɔːi̯/), written with subscript: τραγῳδία 'tragedy', κωμῳδία 'comedy'.",
     "chapter": 5,
     "card_type": "Diphthong",
     "pos": "diphthong",

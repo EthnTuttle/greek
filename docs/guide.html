@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Learner's guide — Greek</title>
-<meta name="description" content="How Greek teaches you Greek: the alphabet gate, FSRS review, measured practice, reader and dictionary, and why new cards are capped at 10 per day.">
+<meta name="description" content="How Greek teaches you Greek: the alphabet gate, FSRS review, measured practice, reader and dictionary, and why vocabulary new cards are capped at 10 per day.">
 <link rel="icon" href="assets/owl.png">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -28,8 +28,8 @@
 <h1>Learner's guide</h1>
 <p>
   How the app teaches, in order: the alphabet gate, the review loop, practice
-  mode, and the reader and dictionary. Every claim on this page matches shipped
-  behavior as of October 2026.
+  mode, and the reader and dictionary. This page includes the November 2026
+  learning-flow updates.
 </p>
 
 <h2>1. The alphabet gate</h2>
@@ -43,7 +43,8 @@
 
 <h3>The letters track</h3>
 <p>
-  "The Alphabet &amp; Pronunciation" is 43 cards in 5 staged chapters:
+  "The Alphabet &amp; Pronunciation" is 43 cards in 5 staged chapters.
+  Pronunciation is explained through text and IPA; there are no audio recordings.
 </p>
 <table>
   <thead><tr><th>Chapter</th><th>Contents</th><th>Cards</th></tr></thead>
@@ -56,11 +57,12 @@
   </tbody>
 </table>
 <p>
-  Chapters unlock in sequence, but with a pragmatic rule specific to letters:
-  a card counts toward unlock progress once you have <em>seen it twice</em>
-  (2 or more reviews, any source). Vocabulary chapters use the stricter 30-day
-  stability rule — punishingly slow for a recognition skill of 24 glyphs, so
-  the letters track deliberately doesn't apply it to itself.
+  Chapters unlock automatically in sequence, with a pragmatic rule specific to
+  letters: a card counts toward unlock progress once you have <em>reviewed it
+  once</em> (1 or more reviews, any source). Vocabulary chapters use a separate
+  learning rule described below, not the 30-day stability measure. The app also
+  displays a separate <strong>mastered</strong> count for cards whose estimated
+  stability is at least 30 days; learning and mastered are different milestones.
 </p>
 
 <h3>Unlocking vocabulary — three honest lanes</h3>
@@ -92,7 +94,10 @@
   Once satisfied, the gate latches permanently — passing the check on one
   device unlocks it everywhere when you sync, and it never re-locks.
   A diligent beginner doing ~20 minutes a day typically unlocks vocabulary on
-  day 4–6. The full reasoning, including the anti-gaming math (a retake-spammer
+  day 2–4, though the organic lane also requires reviews on two distinct
+  days (a check can be taken earlier and is unlimited). Letters introductions
+  are not subject to the 10-per-day vocabulary cap. The full reasoning,
+  including the anti-gaming math (a retake-spammer
   with true accuracy 0.7 passes about 1% of attempts), is in
   <a href="https://github.com/EthnTuttle/greek/blob/master/DESIGN-alphabet-gate.md">DESIGN-alphabet-gate.md</a>.
 </p>
@@ -106,12 +111,12 @@
 <ul>
   <li><strong>Due cards first, most overdue first.</strong> Nothing due today is dropped.</li>
   <li>
-    <strong>Misses come back the same session.</strong> Due dates are full
-    timestamps with no whole-day rounding and no midnight stamping, so FSRS's
-    sub-day learning steps survive: a card you rate <em>Again</em> on its first
-    lapses is due again in minutes (an established card you forgot shows its own
-    longer relearn interval — see the screenshot, where Again is 10 hours on a
-    16-day-stable card).
+    <strong>Misses come back the same session on Android and desktop.</strong>
+    A card rated <em>Again</em> is requeued and returns after the rest of the
+    queue and its new interval. Due dates are full timestamps with no whole-day
+    rounding and no midnight stamping, so sub-day learning steps survive. An
+    established card can still have a longer relearn interval (see the
+    screenshot, where Again is 10 hours on a 16-day-stable card).
   </li>
   <li>
     <strong>Interval previews on the buttons.</strong> Again / Hard / Good /
@@ -132,7 +137,8 @@
 <h2>3. Practice — measured, not self-reported</h2>
 <p>
   Self-rating inflates; measured assessment doesn't. Practice mode generates
-  objective questions from your own deck:
+  objective questions from the loaded decks. When too few reviewed cards are
+  available, it can also draw eligible cards that have not yet been introduced:
 </p>
 <ul>
   <li>
@@ -142,10 +148,14 @@
     textbook, then anywhere — so wrong answers are plausible on purpose.
   </li>
   <li>
-    <strong>Typed answers:</strong> graded three ways — <em>Exact</em>
-    (accents and all), <em>Lenient</em> (right letters, accents off or case
-    folded), or <em>Wrong</em>. The accent-tolerant check reuses the dictionary's
-    own normalization, so grading can't drift from search.
+    <strong>Typed answers:</strong> only single-word Greek fronts and simple
+    upper/lowercase letter pairs use the typed lane. Article-plus-noun phrases,
+    alternate forms, declension annotations, and principal-parts lists route to
+    multiple choice instead of demanding an impossible exact string. Typed
+    answers are graded three ways — <em>Exact</em> (accents and all),
+    <em>Lenient</em> (right letters, accents off or case folded), or
+    <em>Wrong</em>. The accent-tolerant check reuses the dictionary's
+    normalization, so grading can't drift from search.
   </li>
   <li>
     Results are written into your review history tagged
@@ -182,10 +192,13 @@
   </li>
 </ul>
 
-<h2>5. Why only 10 new cards a day?</h2>
+<h2>5. Why only 10 new vocabulary cards a day?</h2>
 <p>
-  New-card introductions are capped at <strong>10 per day</strong>, and Home
-  shows the counter ("New today: 3 / 10") so the budget is visible.
+  Vocabulary new-card introductions (including reader lookups) are capped at
+  <strong>10 per day</strong>, and Home shows the vocabulary counter
+  ("New today: 3 / 10") so the budget is visible. Letters are exempt: their
+  review history still feeds the organic alphabet gate, which independently
+  requires measured accuracy and activity on two distinct days.
 </p>
 <p>
   This is not arbitrary austerity. Every card you introduce today becomes
@@ -196,11 +209,14 @@
   discussion's counterpoint lives in
   <a href="https://github.com/EthnTuttle/greek/blob/master/DESIGN-alphabet-gate.md">DESIGN-alphabet-gate.md</a>
   and the pacing notes in
-  <a href="https://github.com/EthnTuttle/greek/blob/master/PLAN-PARALLEL-AGENTS.md">PLAN-PARALLEL-AGENTS.md</a>:
-  at the 10-card cap, the full 43-card alphabet track is still introduced in
-  4–5 days. Chapters behind you unlock the next one when you've mastered 80%
-  of the current one's cards (mastered = FSRS stability of 30 days or more) —
-  the firehose stays closed until said mastery is real, not "seen once".
+  <a href="https://github.com/EthnTuttle/greek/blob/master/PLAN-PARALLEL-AGENTS.md">PLAN-PARALLEL-AGENTS.md</a>.
+  The next vocabulary chapter unlocks automatically once 80% of
+  the admissible cards in the chapter BEFORE it count as <strong>learning</strong>: each has
+  graduated from the initial learning steps, has review activity on at least
+  two distinct days, and was most recently rated Hard or better. No unlock tap
+  is needed. This is deliberately separate from the <strong>mastered</strong>
+  display count, which means FSRS stability of 30 days or more; unlocking does
+  not require every card to reach that longer-term milestone.
 </p>
 
 <p>
@@ -212,7 +228,7 @@
 
 <footer class="site-footer">
   <div class="wrap">
-    <p>Greek — <a href="https://github.com/EthnTuttle/greek">source on GitHub</a>. Last updated October 2026.</p>
+    <p>Greek — <a href="https://github.com/EthnTuttle/greek">source on GitHub</a>. Last updated November 2026.</p>
   </div>
 </footer>
 

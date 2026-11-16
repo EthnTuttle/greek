@@ -1,17 +1,18 @@
 use crate::db::Database;
 use crate::srs::Card;
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
 
 /// A card counts as mastered once its memory-state stability reaches this
 /// many days (i.e. it is well entrenched in long-term memory). A card that
 /// has merely been seen once does NOT count.
 pub const MASTERY_STABILITY_DAYS: f32 = 30.0;
 
-/// Fraction of a chapter's cards that must be mastered before the next
-/// chapter's unlock requirement counts as met.
+/// Fraction of a chapter's cards that must be learned (not necessarily
+/// mature) before the next chapter's unlock requirement counts as met.
 pub const UNLOCK_THRESHOLD: f32 = 0.8;
 
-/// Number of mastered cards required in a chapter before the next chapter's
+/// Number of learned cards required in a chapter before the next chapter's
 /// unlock requirement counts as met: `ceil(UNLOCK_THRESHOLD * card_count)`.
 /// A card_count of 0 yields 0, so the requirement is always met — this
 /// prevents deadlocks for chapters past card coverage (e.g. Athenaze ch.17+).
@@ -33,11 +34,10 @@ const ORGANIC_MIN_PRACTICE: u32 = 20;
 const ORGANIC_MIN_ACCURACY: f64 = 0.85;
 const ORGANIC_MIN_DAYS: u32 = 2;
 
-/// A letters-track card counts as "familiar" (toward the intra-letters
-/// unlock progress) once it has been reviewed at least this many times,
-/// regardless of source — vocabulary chapters keep the 30-day stability
-/// rule instead.
-const LETTERS_FAMILIAR_REPS: i32 = 2;
+/// A letters-track card counts as "familiar" after one passing or failing
+/// introduction. Unlike vocabulary chapters this needs no two-day evidence:
+/// a single Easy rating must never strand the alphabet track for weeks.
+const LETTERS_FAMILIAR_REPS: i32 = 1;
 
 /// How the alphabet gate was satisfied. Persisted in `user_settings` under
 /// its serde snake-case name (e.g. `"check_passed"`).
@@ -86,6 +86,12 @@ pub struct AlphabetGateState {
     pub letters_practice_correct: u32,
     pub letters_active_days: u32,
     pub letters_chapters_met: u32,
+    /// Explicit organic-lane progress: current measured accuracy and each
+    /// denominator/threshold, so clients need not duplicate gate policy.
+    pub letters_practice_accuracy: f64,
+    pub letters_practice_required: u32,
+    pub letters_accuracy_required: f64,
+    pub letters_active_days_required: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +106,10 @@ pub struct ChapterInfo {
     pub chapter: i32,
     pub title: String,
     pub card_count: i32,
+    /// Introduced sufficiently for pacing (see the vocabulary/letters rules
+    /// below). This is deliberately separate from long-term mastery.
+    pub learning_count: i32,
+    /// Display-only long-term measure: stability >= 30 days.
     pub mastered_count: i32,
     pub unlocked: bool,
     /// Whether this chapter has loaded card data. Chapters with no cards
@@ -107,9 +117,9 @@ pub struct ChapterInfo {
     /// as "Coming Soon".
     pub available: bool,
     /// Unlock-gating hint shown for locked chapters whose previous chapter
-    /// is not yet mastered enough. Empty when the chapter is already
-    /// unlocked (including default-unlocked chapters) or when the unlock
-    /// requirement is met and the user may simply tap to unlock.
+    /// has too few learned cards. Empty when unlocked (including a newly
+    /// auto-unlocked chapter) or when an alphabet-gated chapter otherwise
+    /// meets its prerequisite.
     pub unlock_hint: String,
 }
 
@@ -123,6 +133,66 @@ pub fn card_in_textbook(card: &Card, textbook: &str) -> bool {
     card.tags
         .iter()
         .any(|t| t == textbook || t.starts_with(&prefix))
+}
+
+/// Normalize a vocabulary headword without erasing meaning. Unlike
+/// `morphology::normalize_form` (used deliberately for accent-lenient search
+/// and typed answers), this key only applies NFC + case folding + final-sigma
+/// folding. Accents, breathings and iota subscripts remain significant.
+pub fn normalized_headword_preserving_diacritics(front: &str) -> String {
+    let cut = front
+        .char_indices()
+        .find_map(|(i, c)| matches!(c, ',' | '(').then_some(i))
+        .unwrap_or(front.len());
+    let normalized = front[..cut].to_lowercase().nfc().collect::<String>();
+    let normalized = normalized.trim().replace('ς', "σ");
+    let normalized = normalized.trim();
+    let without_article = normalized
+        .split_once(char::is_whitespace)
+        .and_then(|(first, rest)| {
+            let rest = rest.trim();
+            let is_article = matches!(
+                crate::morphology::normalize_form(first).as_str(),
+                "ο" | "η" | "το"
+            );
+            let rest_is_greek = rest.chars().next().is_some_and(|c| {
+                ('\u{0370}'..='\u{03ff}').contains(&c) || ('\u{1f00}'..='\u{1fff}').contains(&c)
+            });
+            (is_article && rest_is_greek).then_some(rest)
+        })
+        .unwrap_or(normalized);
+    without_article.to_string()
+}
+
+/// Principal-parts status is explicit deck metadata, not an ID naming guess:
+/// every shipped PP card has this type and/or tag.
+pub fn is_principal_parts(card: &Card) -> bool {
+    card.card_type == "PrincipalParts" || card.tags.iter().any(|t| t == "principal-parts")
+}
+
+/// The session's cross-deck learning-unit key. Letters are entirely exempt.
+/// Plain vocabulary shares its diacritic-preserving citation-form key.
+/// Principal parts are separate from plain verbs and dedupe only with another
+/// PP card carrying the same full list: Athenaze/JACT store that list on the
+/// front; the core deck stores it on the back with a bare verb on the front.
+pub fn learning_unit_key(card: &Card) -> Option<String> {
+    if card_in_textbook(card, "letters") {
+        return None;
+    }
+    if is_principal_parts(card) {
+        let list = if card.front.contains(',') {
+            &card.front
+        } else {
+            &card.back
+        };
+        let normalized = list.to_lowercase().nfc().collect::<String>();
+        return Some(format!(
+            "principal-parts:{}",
+            normalized.trim().replace('ς', "σ")
+        ));
+    }
+    let key = normalized_headword_preserving_diacritics(&card.front);
+    (!key.is_empty()).then_some(key)
 }
 
 /// Shared practice-eligibility policy (C4): a letters-track card is ALWAYS
@@ -162,6 +232,96 @@ fn memory_ids_where(
         .unwrap_or_default()
 }
 
+/// Vocabulary cards satisfying all three parts of the pacing predicate:
+/// graduated (`reps > lapses`, the same boundary as the learning ladder),
+/// reviewed on at least two distinct UTC days, and most recently rated Hard
+/// or better. `review_logs` supplies both temporal facts so evidence syncs
+/// across devices instead of depending on a local-only memory-state column.
+fn learned_vocabulary_ids(db: &Database) -> std::collections::HashSet<String> {
+    db.conn()
+        .prepare(
+            "SELECT ms.card_id
+             FROM memory_states ms
+             JOIN (
+                 SELECT card_id
+                 FROM review_logs
+                 GROUP BY card_id
+                 HAVING COUNT(DISTINCT substr(timestamp, 1, 10)) >= 2
+             ) days ON days.card_id = ms.card_id
+             WHERE ms.reps > ms.lapses
+               AND (
+                   SELECT rl.rating
+                   FROM review_logs rl
+                   WHERE rl.card_id = ms.card_id
+                   ORDER BY rl.timestamp DESC, rl.hlc DESC, rl.uuid DESC, rl.id DESC
+                   LIMIT 1
+               ) >= 2",
+        )
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| row.get::<_, String>(0))
+                .ok()
+                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        })
+        .unwrap_or_default()
+}
+
+/// All introduced card IDs and their session learning-unit keys. Kept beside
+/// chapter arithmetic so denominator suppression cannot drift from session
+/// admission. Lookup cards participate just as they do in session dedupe.
+fn memory_units(
+    db: &Database,
+    cards: &[Card],
+) -> (
+    std::collections::HashSet<String>,
+    std::collections::HashSet<String>,
+) {
+    let state_ids: std::collections::HashSet<String> = db
+        .conn()
+        .prepare("SELECT card_id FROM memory_states")
+        .ok()
+        .map(|mut stmt| {
+            stmt.query_map([], |row| row.get::<_, String>(0))
+                .ok()
+                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                .unwrap_or_default()
+        })
+        .unwrap_or_default();
+    let mut keys = std::collections::HashSet::new();
+    for card in cards {
+        if state_ids.contains(&card.id) {
+            if let Some(key) = learning_unit_key(card) {
+                keys.insert(key);
+            }
+        }
+    }
+    if let Ok(mut stmt) = db.conn().prepare(
+        "SELECT lc.card_id, lc.front FROM lookup_cards lc
+         JOIN memory_states ms ON ms.card_id = lc.card_id",
+    ) {
+        if let Ok(rows) = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }) {
+            for (id, front) in rows.flatten() {
+                // A loaded deck ID wins over a coincident lookup row, just
+                // as session enrichment prefers bundled content.
+                if cards.iter().any(|card| card.id == id) {
+                    continue;
+                }
+                let key = id
+                    .strip_prefix("lookup-")
+                    .map(normalized_headword_preserving_diacritics)
+                    .filter(|key| !key.is_empty())
+                    .unwrap_or_else(|| normalized_headword_preserving_diacritics(&front));
+                if !key.is_empty() {
+                    keys.insert(key);
+                }
+            }
+        }
+    }
+    (state_ids, keys)
+}
+
 pub struct Curriculum;
 
 impl Curriculum {
@@ -188,8 +348,10 @@ impl Curriculum {
             },
             CurriculumInfo {
                 textbook: "dcc".to_string(),
-                display_name: "DCC Core Vocabulary".to_string(),
-                // The 550 DCC-Core cards are a single frequency-ordered list,
+                display_name: "Core Vocabulary (unofficial)".to_string(),
+                // The 550 core-vocabulary cards are one deck (not a
+                // frequency-ordered list; the Fable audit found padded
+                // alphabetical repetition and spurious frequency claims),
                 // exposed as one pseudo-chapter (chapter 0).
                 total_chapters: 1,
             },
@@ -251,10 +413,10 @@ impl Curriculum {
             )
             .unwrap_or(0) as u32;
 
-        // Letters chapters where >=80% of the seeded cards have been seen
-        // twice (reps >= 2, any source): the letters-track exposure bar.
+        // Letters chapters where >=80% of the seeded cards have had one
+        // introduction (reps >= 1, any source): the exposure progress bar.
         let letters_chapters_met = {
-            let reps2_ids = memory_ids_where(db, "reps >= ?1", LETTERS_FAMILIAR_REPS as f64);
+            let familiar_ids = memory_ids_where(db, "reps >= ?1", LETTERS_FAMILIAR_REPS as f64);
             cards
                 .iter()
                 .filter(|c| card_in_textbook(c, "letters"))
@@ -263,7 +425,7 @@ impl Curriculum {
                     |mut acc, c| {
                         let entry = acc.entry(c.chapter).or_default();
                         entry.0 += 1;
-                        if reps2_ids.contains(&c.id) {
+                        if familiar_ids.contains(&c.id) {
                             entry.1 += 1;
                         }
                         acc
@@ -287,6 +449,14 @@ impl Curriculum {
                 letters_practice_correct,
                 letters_active_days,
                 letters_chapters_met,
+                letters_practice_accuracy: if letters_practice_total == 0 {
+                    0.0
+                } else {
+                    letters_practice_correct as f64 / letters_practice_total as f64
+                },
+                letters_practice_required: ORGANIC_MIN_PRACTICE,
+                letters_accuracy_required: ORGANIC_MIN_ACCURACY,
+                letters_active_days_required: ORGANIC_MIN_DAYS,
             };
         }
 
@@ -310,6 +480,14 @@ impl Curriculum {
                 letters_practice_correct,
                 letters_active_days,
                 letters_chapters_met,
+                letters_practice_accuracy: if letters_practice_total == 0 {
+                    0.0
+                } else {
+                    letters_practice_correct as f64 / letters_practice_total as f64
+                },
+                letters_practice_required: ORGANIC_MIN_PRACTICE,
+                letters_accuracy_required: ORGANIC_MIN_ACCURACY,
+                letters_active_days_required: ORGANIC_MIN_DAYS,
             };
         }
 
@@ -333,6 +511,14 @@ impl Curriculum {
                 letters_practice_correct,
                 letters_active_days,
                 letters_chapters_met,
+                letters_practice_accuracy: if letters_practice_total == 0 {
+                    0.0
+                } else {
+                    letters_practice_correct as f64 / letters_practice_total as f64
+                },
+                letters_practice_required: ORGANIC_MIN_PRACTICE,
+                letters_accuracy_required: ORGANIC_MIN_ACCURACY,
+                letters_active_days_required: ORGANIC_MIN_DAYS,
             };
         }
 
@@ -360,6 +546,14 @@ impl Curriculum {
             letters_practice_correct,
             letters_active_days,
             letters_chapters_met,
+            letters_practice_accuracy: if letters_practice_total == 0 {
+                0.0
+            } else {
+                letters_practice_correct as f64 / letters_practice_total as f64
+            },
+            letters_practice_required: ORGANIC_MIN_PRACTICE,
+            letters_accuracy_required: ORGANIC_MIN_ACCURACY,
+            letters_active_days_required: ORGANIC_MIN_DAYS,
         }
     }
 
@@ -381,118 +575,118 @@ impl Curriculum {
         correct >= ALPHABET_CHECK_PASS_MIN && total >= ALPHABET_CHECK_N
     }
 
+    /// Return chapter pacing and display statistics.
     ///
-    /// `cards` is the full set of loaded flashcards; per-chapter `card_count`
-    /// and `mastered_count` are computed from it (mastered = has a
-    /// memory_states row with stability >= MASTERY_STABILITY_DAYS). Chapters
-    /// with no cards are marked `available == false` so the UI can render
-    /// them as "Coming Soon".
+    /// Vocabulary `learning_count` uses the synced-log predicate documented
+    /// by [`learned_vocabulary_ids`]. Letters use single-pass familiarity
+    /// (`reps >= 1`). `mastered_count` is always the independent display-only
+    /// 30-day-stability measure. Meeting 80% of the preceding chapter's
+    /// learning count atomically admits and latches the next chapter here;
+    /// empty preceding chapters satisfy the rule and never cause deadlock.
+    /// The 80% denominator uses only units not currently key-suppressed by an
+    /// existing memory state; owned states always count, and latches never
+    /// relock if later evidence changes the live fraction.
     pub fn get_chapters(db: &Database, textbook: &str, cards: &[Card]) -> Vec<ChapterInfo> {
-        let info = Self::get_textbooks();
-        let total_chapters = info
+        let total_chapters = Self::get_textbooks()
             .iter()
             .find(|t| t.textbook == textbook)
             .map(|t| t.total_chapters)
             .unwrap_or(0);
 
-        // Set of card ids that count as "mastered". Vocabulary textbooks use
-        // the long-term rule (stability >= 30 days); the letters track counts
-        // a card as soon as it has been seen twice (reps >= 2, any source),
-        // because letter familiarity is an exposure-level skill and the 30d
-        // rule would take weeks to unlock intra-letters chapters.
-        let mastered_ids: std::collections::HashSet<String> = if textbook == "letters" {
+        let learning_ids = if textbook == "letters" {
             memory_ids_where(db, "reps >= ?1", LETTERS_FAMILIAR_REPS as f64)
         } else {
-            memory_ids_where(db, "stability >= ?1", MASTERY_STABILITY_DAYS as f64)
+            learned_vocabulary_ids(db)
         };
-
-        // Alphabet gate: while unmet, vocabulary tracks are presented fully
-        // locked regardless of the stored progress rows.
+        let mastered_ids = memory_ids_where(db, "stability >= ?1", MASTERY_STABILITY_DAYS as f64);
+        let (state_ids, memory_keys) = memory_units(db, cards);
         let gate_locked = textbook != "letters" && !Self::alphabet_gate_state(db, cards).satisfied;
-
-        // Cards belonging to this textbook, so we only scan them once per chapter.
         let textbook_cards: Vec<&Card> = cards
             .iter()
             .filter(|c| card_in_textbook(c, textbook))
             .collect();
-
-        let mut chapters = Vec::new();
-
-        // The DCC pseudo-chapter uses chapter number 0; other textbooks are 1-based.
         let chapter_range: Vec<i32> = if textbook == "dcc" {
             vec![0]
         } else {
             (1..=total_chapters).collect()
         };
-
-        // Default (always-unlocked) chapter of this textbook: ch.1 for
-        // 1-based tracks, ch.0 for DCC — used for the gate hint below.
-        let default_chapter: i32 = if textbook == "dcc" { 0 } else { 1 };
+        let default_chapter = if textbook == "dcc" { 0 } else { 1 };
+        let mut chapters = Vec::new();
 
         for chapter in chapter_range {
-            // Check if chapter is unlocked
-            let unlocked: bool = db
+            let stored_unlocked: bool = db
                 .conn()
                 .query_row(
                     "SELECT unlocked FROM curriculum_progress WHERE textbook = ?1 AND chapter = ?2",
                     rusqlite::params![textbook, chapter],
                     |row| row.get::<_, i32>(0).map(|v| v != 0),
                 )
-                .unwrap_or(chapter <= 1); // Chapter 1 (and the DCC chapter 0) unlocked by default
-                                          // The alphabet gate overrides: vocabulary chapters report locked
-                                          // until the gate is satisfied.
-            let unlocked = unlocked && !gate_locked;
-
+                .unwrap_or(chapter == default_chapter);
             let chapter_cards: Vec<&&Card> = textbook_cards
                 .iter()
                 .filter(|c| c.chapter == chapter)
                 .collect();
-
             let card_count = chapter_cards.len() as i32;
+            let learning_count = chapter_cards
+                .iter()
+                .filter(|c| learning_ids.contains(&c.id))
+                .count() as i32;
             let mastered_count = chapter_cards
                 .iter()
                 .filter(|c| mastered_ids.contains(&c.id))
                 .count() as i32;
-            let available = card_count > 0;
 
-            // Unlock-gating hint. Empty when the chapter is already unlocked
-            // (including the default-unlocked first chapter: athenaze/jact
-            // ch.1, dcc ch.0). For a locked chapter, the requirement is met
-            // when the previous chapter's mastered count reaches
-            // needed_for_unlock(prev card_count). A previous chapter with no
-            // cards at all (past card coverage, e.g. Athenaze ch.17+) counts
-            // as met so later chapters can never deadlock.
+            let previous = chapter - 1;
+            // Threshold over currently ADMISSIBLE learning units: an
+            // unreviewed card whose key is already represented elsewhere is
+            // excluded. Cards with their own state always remain included,
+            // preventing history/order changes from invalidating learned
+            // evidence. With no duplicates this is the original denominator.
+            let previous_admissible: Vec<&&Card> = textbook_cards
+                .iter()
+                .filter(|c| {
+                    c.chapter == previous
+                        && (state_ids.contains(&c.id)
+                            || learning_unit_key(c)
+                                .map(|key| !memory_keys.contains(&key))
+                                .unwrap_or(true))
+                })
+                .collect();
+            let previous_count = previous_admissible.len() as i32;
+            let previous_learning = previous_admissible
+                .iter()
+                .filter(|c| learning_ids.contains(&c.id))
+                .count() as i32;
+            let needed = needed_for_unlock(previous_count);
+            let prerequisite_met = chapter == default_chapter || previous_learning >= needed;
+
+            // Automatic unlock is a durable latch. Existing unlocked rows
+            // are never revoked by a later Again or deleted review history.
+            if chapter != default_chapter && !stored_unlocked && !gate_locked && prerequisite_met {
+                let _ = Self::unlock_chapter(db, textbook, chapter);
+            }
+            let unlocked = (stored_unlocked || prerequisite_met) && !gate_locked;
             let unlock_hint = if unlocked {
                 String::new()
             } else if gate_locked && chapter == default_chapter {
                 "Finish 'The Alphabet & Pronunciation' — or pass the Alphabet Check.".to_string()
+            } else if prerequisite_met {
+                String::new()
             } else {
-                let prev = chapter - 1;
-                let prev_count = textbook_cards.iter().filter(|c| c.chapter == prev).count() as i32;
-                let prev_mastered = textbook_cards
-                    .iter()
-                    .filter(|c| c.chapter == prev && mastered_ids.contains(&c.id))
-                    .count() as i32;
-                let needed = needed_for_unlock(prev_count);
-                if prev_mastered >= needed {
-                    String::new()
-                } else {
-                    format!(
-                        "Master 80% of Chapter {} to unlock ({}/{})",
-                        prev, prev_mastered, needed
-                    )
-                }
+                format!(
+                    "Learn 80% of Chapter {} to unlock ({}/{})",
+                    previous, previous_learning, needed
+                )
             };
-
-            let title = chapter_title(textbook, chapter);
 
             chapters.push(ChapterInfo {
                 chapter,
-                title,
+                title: chapter_title(textbook, chapter),
                 card_count,
+                learning_count,
                 mastered_count,
                 unlocked,
-                available,
+                available: card_count > 0,
                 unlock_hint,
             });
         }
@@ -500,7 +694,27 @@ impl Curriculum {
         chapters
     }
 
-    /// Unlock a chapter for study
+    /// Whether an API caller may unlock this chapter now.
+    ///
+    /// This deliberately consumes `get_chapters`' public state rather than
+    /// reimplementing learning arithmetic: an already-unlocked chapter is
+    /// idempotently accepted; a locked chapter must be available and have an
+    /// empty hint (the previous chapter's threshold is met). Vocabulary also
+    /// requires the alphabet gate explicitly, because only the first chapter
+    /// carries the gate hint while later chapters show prerequisite hints.
+    pub fn can_unlock_chapter(db: &Database, textbook: &str, chapter: i32, cards: &[Card]) -> bool {
+        if textbook != "letters" && !Self::alphabet_gate_state(db, cards).satisfied {
+            return false;
+        }
+        Self::get_chapters(db, textbook, cards)
+            .into_iter()
+            .find(|c| c.chapter == chapter)
+            .map(|c| c.unlocked || (c.available && c.unlock_hint.is_empty()))
+            .unwrap_or(false)
+    }
+
+    /// Persist an already-authorized chapter unlock. Callers at public API
+    /// boundaries must check `can_unlock_chapter` first.
     pub fn unlock_chapter(db: &Database, textbook: &str, chapter: i32) -> anyhow::Result<()> {
         db.conn().execute(
             "INSERT INTO curriculum_progress (textbook, chapter, unlocked)
@@ -542,7 +756,7 @@ fn chapter_title(textbook: &str, chapter: i32) -> String {
             3 => "Aristophanes' Acharnians".to_string(),
             _ => format!("Section {}", chapter),
         },
-        "dcc" => "DCC Core Vocabulary (Frequency List)".to_string(),
+        "dcc" => "Core Vocabulary (unofficial)".to_string(),
         _ => format!("Chapter {}", chapter),
     }
 }
@@ -682,41 +896,56 @@ mod tests {
         assert!(!chapters[1].unlocked);
         assert_eq!(
             chapters[1].unlock_hint,
-            "Master 80% of Chapter 1 to unlock (2/4)"
+            "Learn 80% of Chapter 1 to unlock (0/4)"
         );
+        assert!(!Curriculum::can_unlock_chapter(&db, "athenaze", 2, &cards));
 
         // Once unlocked, the hint clears even though mastery is unchanged.
         Curriculum::unlock_chapter(&db, "athenaze", 2).unwrap();
         let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
         assert!(chapters[1].unlocked);
         assert_eq!(chapters[1].unlock_hint, "");
+        assert!(Curriculum::can_unlock_chapter(&db, "athenaze", 2, &cards));
     }
 
     #[test]
     fn test_unlock_hint_empty_when_requirement_met() {
         let db = Database::open(":memory:", None).unwrap();
-        // Chapter 1 has 5 cards, 4 mastered = ceil(0.8 * 5): requirement met.
-        db.conn()
-            .execute(
-                "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
-                 VALUES ('ath1-001', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0),
-                        ('ath1-002', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0),
-                        ('ath1-003', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0),
-                        ('ath1-004', 30.0, 5.0, '2024-01-01T00:00:00Z', 5, 0)",
-                [],
-            )
-            .unwrap();
+        // Four graduated cards, each passing on two days, meet the learned
+        // requirement. Stability is deliberately low: maturity is not a gate.
+        for id in ["ath1-001", "ath1-002", "ath1-003", "ath1-004"] {
+            db.conn()
+                .execute(
+                    "INSERT INTO memory_states
+                         (card_id, stability, difficulty, last_review, due_date, reps, lapses)
+                     VALUES (?1, 2.0, 5.0, '2024-01-02T00:00:00Z',
+                             '2024-01-03T00:00:00Z', 5, 0)",
+                    [id],
+                )
+                .unwrap();
+            for day in ["2024-01-01", "2024-01-02"] {
+                db.conn()
+                    .execute(
+                        "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days)
+                         VALUES (?1, ?2, 3, 0.0, 0.0)",
+                        rusqlite::params![id, format!("{day}T12:00:00Z")],
+                    )
+                    .unwrap();
+            }
+        }
         let cards = vec![
             sample_card("ath1-001", 1, "athenaze-i"),
             sample_card("ath1-002", 1, "athenaze-i"),
             sample_card("ath1-003", 1, "athenaze-i"),
             sample_card("ath1-004", 1, "athenaze-i"),
             sample_card("ath1-005", 1, "athenaze-i"),
+            sample_card("ath2-001", 2, "athenaze-i"),
         ];
         let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
-        // Still locked, but the user may tap to unlock: no hint.
-        assert!(!chapters[1].unlocked);
+        // First satisfied read admits and durably latches chapter 2.
+        assert!(chapters[1].unlocked);
         assert_eq!(chapters[1].unlock_hint, "");
+        assert!(Curriculum::can_unlock_chapter(&db, "athenaze", 2, &cards));
     }
 
     #[test]
@@ -744,7 +973,7 @@ mod tests {
         // 17's requirement counts as met and must not deadlock.
         let cards = vec![sample_card("ath17-001", 17, "athenaze-ii")];
         let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
-        assert!(!chapters[16].unlocked); // chapter 17
+        assert!(chapters[16].unlocked); // chapter 17: empty prerequisite never deadlocks
         assert_eq!(chapters[16].unlock_hint, "");
     }
 
@@ -763,16 +992,15 @@ mod tests {
     #[test]
     fn test_unlock_chapter() {
         let db = Database::open(":memory:", None).unwrap();
-
-        // Chapter 2 should not be unlocked initially
-        let chapters = Curriculum::get_chapters(&db, "athenaze", &[]);
+        // Nonempty, unlearned chapter 1 keeps chapter 2 closed. (With no
+        // loaded cards at all, the no-deadlock rule intentionally opens it.)
+        let cards = vec![sample_card("ath1-001", 1, "athenaze-i")];
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
         assert!(!chapters[1].unlocked);
 
-        // Unlock chapter 2
         Curriculum::unlock_chapter(&db, "athenaze", 2).unwrap();
 
-        // Now it should be unlocked
-        let chapters = Curriculum::get_chapters(&db, "athenaze", &[]);
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
         assert!(chapters[1].unlocked);
     }
 
@@ -840,7 +1068,7 @@ mod tests {
         assert!(chapters[1].unlock_hint.contains("Chapter 1"));
         assert_eq!(
             chapters[1].unlock_hint,
-            "Master 80% of Chapter 1 to unlock (0/6)"
+            "Learn 80% of Chapter 1 to unlock (0/6)"
         );
     }
 
@@ -865,14 +1093,126 @@ mod tests {
         let chapters = Curriculum::get_chapters(&db, "letters", &cards);
         assert_eq!(chapters[0].card_count, 7);
         assert_eq!(chapters[0].mastered_count, 7);
-        // The unlock requirement is now met (7 >= 6): the hint clears and
-        // the user may simply tap to unlock chapter 2.
-        assert!(!chapters[1].unlocked);
+        // The requirement is met (7 >= 6), so chapter 2 auto-unlocks;
+        // manual unlock remains idempotent.
+        assert!(chapters[1].unlocked);
         assert_eq!(chapters[1].unlock_hint, "");
 
         Curriculum::unlock_chapter(&db, "letters", 2).unwrap();
         let chapters = Curriculum::get_chapters(&db, "letters", &cards);
         assert!(chapters[1].unlocked);
+    }
+
+    #[test]
+    fn vocabulary_learning_requires_graduation_two_days_and_latest_pass() {
+        let db = Database::open(":memory:", None).unwrap();
+        for (id, reps, lapses) in [
+            ("ath1-good", 3, 1),
+            ("ath1-one-day", 3, 0),
+            ("ath1-latest-again", 2, 1),
+            ("ath1-still-learning", 1, 1),
+        ] {
+            db.conn()
+                .execute(
+                    "INSERT INTO memory_states
+                         (card_id, stability, difficulty, last_review, due_date, reps, lapses)
+                     VALUES (?1, 2.0, 5.0, '2024-01-02T12:00:00Z',
+                             '2024-01-03T12:00:00Z', ?2, ?3)",
+                    rusqlite::params![id, reps, lapses],
+                )
+                .unwrap();
+        }
+        for (id, day, rating) in [
+            ("ath1-good", "2024-01-01", 3),
+            ("ath1-good", "2024-01-02", 3),
+            ("ath1-one-day", "2024-01-02", 3),
+            ("ath1-latest-again", "2024-01-01", 3),
+            ("ath1-latest-again", "2024-01-02", 1),
+            ("ath1-still-learning", "2024-01-01", 3),
+            ("ath1-still-learning", "2024-01-02", 3),
+        ] {
+            db.conn()
+                .execute(
+                    "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days)
+                     VALUES (?1, ?2, ?3, 0.0, 0.0)",
+                    rusqlite::params![id, format!("{day}T12:00:00Z"), rating],
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            learned_vocabulary_ids(&db),
+            std::collections::HashSet::from(["ath1-good".to_string()])
+        );
+    }
+
+    #[test]
+    fn automatic_unlock_latches_without_30_day_mastery() {
+        let db = Database::open(":memory:", None).unwrap();
+        let cards = vec![
+            sample_card("ath1-001", 1, "athenaze-i"),
+            sample_card("ath2-001", 2, "athenaze-i"),
+        ];
+        db.conn()
+            .execute(
+                "INSERT INTO memory_states
+                     (card_id, stability, difficulty, last_review, due_date, reps, lapses)
+                 VALUES ('ath1-001', 1.0, 5.0, '2024-01-02T12:00:00Z',
+                         '2024-01-03T12:00:00Z', 2, 0)",
+                [],
+            )
+            .unwrap();
+        for day in ["2024-01-01", "2024-01-02"] {
+            db.conn()
+                .execute(
+                    "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days)
+                     VALUES ('ath1-001', ?1, 3, 0.0, 0.0)",
+                    [format!("{day}T12:00:00Z")],
+                )
+                .unwrap();
+        }
+        let chapters = Curriculum::get_chapters(&db, "athenaze", &cards);
+        assert_eq!(chapters[0].learning_count, 1);
+        assert_eq!(chapters[0].mastered_count, 0);
+        assert!(chapters[1].unlocked);
+
+        // Once latched, even deleting all evidence cannot auto-relock it.
+        db.conn()
+            .execute_batch("DELETE FROM memory_states; DELETE FROM review_logs;")
+            .unwrap();
+        assert!(Curriculum::get_chapters(&db, "athenaze", &cards)[1].unlocked);
+        let persisted: i32 = db
+            .conn()
+            .query_row(
+                "SELECT unlocked FROM curriculum_progress
+                 WHERE textbook = 'athenaze' AND chapter = 2",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(persisted, 1);
+    }
+
+    #[test]
+    fn one_easy_letter_satisfies_single_pass_familiarity() {
+        let db = Database::open(":memory:", None).unwrap();
+        let mut cards: Vec<Card> = (1..=7)
+            .map(|i| letters_card(&format!("letters-{i:03}"), 1))
+            .collect();
+        cards.push(letters_card("letters-008", 2));
+        for i in 1..=6 {
+            db.conn()
+                .execute(
+                    "INSERT INTO memory_states
+                         (card_id, stability, difficulty, due_date, reps, lapses)
+                     VALUES (?1, 15.69, 5.0, '2099-01-01T00:00:00Z', 1, 0)",
+                    [format!("letters-{i:03}")],
+                )
+                .unwrap();
+        }
+        let chapters = Curriculum::get_chapters(&db, "letters", &cards);
+        assert_eq!(chapters[0].learning_count, 6);
+        assert_eq!(chapters[0].mastered_count, 0);
+        assert!(chapters[1].unlocked, "an Easy first exposure cannot stall");
     }
 
     // --- Alphabet gate tests (DESIGN-alphabet-gate.md §8) ---
@@ -1182,11 +1522,12 @@ mod tests {
             })
             .collect();
 
-        // Letters: reps >= 2 counts — all 7 ch.1 cards "met", requirement
-        // (6 of 7) satisfied, hint clears, and the state reports 1 met chapter.
+        // Letters: one introduction is enough for learning; all seven meet
+        // the chapter, while low stability keeps long-term mastery at zero.
         let chapters = Curriculum::get_chapters(&db, "letters", &letters);
-        assert_eq!(chapters[0].mastered_count, 7);
-        assert!(!chapters[1].unlocked);
+        assert_eq!(chapters[0].learning_count, 7);
+        assert_eq!(chapters[0].mastered_count, 0);
+        assert!(chapters[1].unlocked);
         assert_eq!(chapters[1].unlock_hint, "");
         let mut all_cards = letters.clone();
         all_cards.extend(vocab.iter().cloned());
@@ -1200,7 +1541,7 @@ mod tests {
         assert_eq!(chapters[0].mastered_count, 0);
         assert_eq!(
             chapters[1].unlock_hint,
-            "Master 80% of Chapter 1 to unlock (0/4)"
+            "Learn 80% of Chapter 1 to unlock (0/4)"
         );
     }
 
@@ -1231,7 +1572,7 @@ mod tests {
         );
         assert_eq!(
             chapters[1].unlock_hint,
-            "Master 80% of Chapter 1 to unlock (0/4)"
+            "Learn 80% of Chapter 1 to unlock (0/4)"
         );
         // After passing the check, ch.1 is back to default-unlocked.
         Curriculum::record_alphabet_gate(&db, AlphabetGateMethod::CheckPassed).unwrap();
@@ -1241,7 +1582,7 @@ mod tests {
         assert!(!chapters[1].unlocked);
         assert_eq!(
             chapters[1].unlock_hint,
-            "Master 80% of Chapter 1 to unlock (0/4)"
+            "Learn 80% of Chapter 1 to unlock (0/4)"
         );
         // The letters track itself is never gate-locked.
         let chapters = Curriculum::get_chapters(&db, "letters", &cards);
