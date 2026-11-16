@@ -9,6 +9,7 @@ use std::collections::HashSet;
 
 use crate::morphology::normalize_form;
 use crate::Card;
+use unicode_normalization::UnicodeNormalization;
 
 /// One EN→GR multiple-choice question: `prompt_gloss` is the card's English
 /// back, `choices` are Greek fronts (4 options including the correct one),
@@ -19,6 +20,9 @@ pub struct Mcq {
     pub prompt_gloss: String,
     pub choices: Vec<String>,
     pub correct_index: usize,
+    /// Whether the target can also be served as a typed-answer question.
+    /// Callers must fall back to multiple choice when this is false.
+    pub typeable: bool,
 }
 
 /// Grade for a typed (free-form) answer against a card's Greek front.
@@ -56,9 +60,9 @@ pub enum TypedGrade {
 ///   3. same `pos`, anywhere
 ///   4. any eligible card
 /// Each pool is consumed in seeded-random order until 3 distractors are
-/// found. Choices are deduped by front text (including against the correct
-/// front), and a card is omitted from the set entirely when even policy 4
-/// cannot yield 3 distinct distractors.
+/// found. Choices are deduped by normalized front text (including against the
+/// correct front). Distractors equivalent to the answer are excluded; if that
+/// leaves fewer than 3 distractors, the ambiguous card is omitted entirely.
 pub fn generate_mcq_set(cards: &[Card], limit: usize, seed: u64) -> Vec<Mcq> {
     generate_mcq_set_with_pool(cards, cards, limit, seed)
 }
@@ -103,21 +107,156 @@ pub fn generate_mcq_set_with_pool(
     out
 }
 
-/// Grade a typed answer against a card's Greek front. Both sides are
-/// trimmed and have internal runs of whitespace collapsed first. The
-/// lenient check reuses [`normalize_form`] from the morphology module
-/// (accent/diacritic stripping + case folding) so grading can never drift
-/// from dictionary normalization.
+/// Whether a card front is suitable for the typed-practice lane.
+///
+/// Interim rule: only one Greek word is typeable. Articles, comma/parenthesis
+/// annotations, principal-parts lists, slash alternatives, numerals and dashed
+/// declensions stay in the legacy MCQ lane. The one deliberate exception is a
+/// letter card's upper/lowercase pair (`Α α`): its bare glyph is unambiguous.
+/// Grouped probes (`ζ ξ ψ`) and `Σ σ/ς` are NOT exceptions.
+pub fn is_typeable_front(front: &str) -> bool {
+    let front = collapse_whitespace(front);
+    if front.is_empty()
+        || front.chars().any(|c| {
+            c.is_numeric()
+                || matches!(
+                    c,
+                    ',' | '，' | '(' | ')' | '（' | '）' | '/' | '-' | '‐' | '‑' | '–' | '—'
+                )
+        })
+    {
+        return false;
+    }
+
+    let words: Vec<&str> = front.split_whitespace().collect();
+    match words.as_slice() {
+        [word] => is_greek_word(word),
+        [upper, lower] => {
+            is_greek_word(upper)
+                && is_greek_word(lower)
+                && normalize_typed_text(upper).chars().count() == 1
+                && normalize_typed_text(upper) == normalize_typed_text(lower)
+        }
+        _ => false,
+    }
+}
+
+fn is_greek_word(word: &str) -> bool {
+    !word.is_empty()
+        && word.nfc().all(|c| {
+            matches!(c, '\u{0370}'..='\u{03ff}' | '\u{1f00}'..='\u{1fff}' if c.is_alphabetic())
+                || matches!(c, '\u{0300}'..='\u{036f}')
+        })
+}
+
+/// Grade a typed answer against the answer key derived from a card's front.
+/// Both sides are NFC-normalized and whitespace-collapsed. Final and medial
+/// sigma are equivalent for BOTH exact and lenient grading. The lenient check
+/// reuses [`normalize_form`] (diacritic stripping + case folding).
+///
+/// The key accepts the headword before a comma/parenthesis, makes an article
+/// optional, and makes movable `(ν)` optional. Letter-pair fronts accept either
+/// bare glyph. Eligibility for actually showing the typed lane is deliberately
+/// narrower: see [`is_typeable_front`].
 pub fn grade_typed(expected_front: &str, answer: &str) -> TypedGrade {
-    let expected = collapse_whitespace(expected_front);
-    let given = collapse_whitespace(answer);
-    if given == expected {
+    let given = fold_sigma(&collapse_whitespace(answer).nfc().collect::<String>());
+    if given.is_empty() {
+        return TypedGrade::Wrong;
+    }
+    let keys = typed_answer_keys(expected_front);
+    let normalized_keys: Vec<String> = keys
+        .iter()
+        .map(|key| fold_sigma(&collapse_whitespace(key).nfc().collect::<String>()))
+        .collect();
+    if normalized_keys.iter().any(|key| *key == given) {
         return TypedGrade::Exact;
     }
-    if normalize_form(&given) == normalize_form(&expected) {
+    let normalized_given = normalize_typed_text(&given);
+    if normalized_keys
+        .iter()
+        .any(|key| normalize_typed_text(key) == normalized_given)
+    {
         return TypedGrade::Lenient;
     }
     TypedGrade::Wrong
+}
+
+/// Build the small accepted-answer set from citation-form punctuation.
+fn typed_answer_keys(front: &str) -> Vec<String> {
+    let front = collapse_whitespace(front).nfc().collect::<String>();
+    let head_end = front.find([',', '(']).unwrap_or(front.len());
+    let head = front[..head_end].trim();
+    if head.is_empty() {
+        return Vec::new();
+    }
+
+    let mut keys = vec![head.to_string()];
+    let words: Vec<&str> = head.split_whitespace().collect();
+
+    // Upper/lowercase letter cards ask for one glyph, not the two-token front.
+    if let [upper, lower] = words.as_slice() {
+        if normalize_typed_text(upper).chars().count() == 1
+            && normalize_typed_text(upper) == normalize_typed_text(lower)
+        {
+            keys.clear();
+            keys.push((*upper).to_string());
+            keys.push((*lower).to_string());
+        } else if upper.chars().count() == 1 {
+            let alternatives: Vec<&str> = lower.split('/').collect();
+            if alternatives.len() > 1
+                && alternatives.iter().all(|alt| {
+                    let alternative = normalize_typed_text(alt);
+                    alternative.chars().count() == 1 && alternative == normalize_typed_text(upper)
+                })
+            {
+                keys.clear();
+                keys.push((*upper).to_string());
+                keys.extend(alternatives.into_iter().map(str::to_string));
+            }
+        }
+    }
+
+    if words.len() > 1 && is_greek_article(words[0]) {
+        keys.push(words[1..].join(" "));
+    }
+    if front[head_end..].trim_start().starts_with("(ν)") {
+        keys.push(format!("{head}ν"));
+    }
+    keys
+}
+
+fn is_greek_article(word: &str) -> bool {
+    matches!(
+        normalize_typed_text(word).as_str(),
+        "ο" | "η"
+            | "το"
+            | "τον"
+            | "την"
+            | "τη"
+            | "του"
+            | "τησ"
+            | "τω"
+            | "τῳ"
+            | "οι"
+            | "αι"
+            | "τα"
+            | "τουσ"
+            | "τασ"
+            | "των"
+            | "τοισ"
+            | "τοις"
+            | "ταισ"
+    )
+}
+
+fn fold_sigma(s: &str) -> String {
+    s.chars().map(|c| if c == 'ς' { 'σ' } else { c }).collect()
+}
+
+/// Unicode lowercasing is context-sensitive and can itself produce a final
+/// sigma, so fold BOTH before and after morphology normalization.
+fn normalize_typed_text(s: &str) -> String {
+    fold_sigma(&normalize_form(&fold_sigma(s)))
 }
 
 /// Trim leading/trailing whitespace and collapse internal whitespace runs
@@ -164,11 +303,71 @@ fn shuffled_indices(len: usize, rng: &mut Xorshift64) -> Vec<usize> {
     idx
 }
 
+/// Semi-normalize choice/gloss text without discarding meaningful punctuation.
+/// In particular, two differently-worded glosses are not guessed to be synonyms.
+fn normalize_choice_text(text: &str) -> String {
+    normalize_typed_text(&collapse_whitespace(text))
+}
+
+/// Normalized citation headword: text before the first comma/parenthesis,
+/// without an optional article. This also extracts the base lemma from a
+/// principal-parts list, making that card equivalent to its plain-verb twin.
+fn normalized_headword(front: &str) -> String {
+    let collapsed = collapse_whitespace(front);
+    let head_end = collapsed.find([',', '(']).unwrap_or(collapsed.len());
+    let words = collapsed[..head_end].split_whitespace();
+    let normalized = if words.clone().next().is_some_and(is_greek_article) {
+        words.collect::<Vec<_>>().join(" ")
+    } else {
+        collapsed[..head_end].trim().to_string()
+    };
+    normalize_choice_text(&normalized)
+}
+
+/// Whether accepting `candidate` would also be a valid answer to `target`.
+///
+/// The MCQ state machine has one `correct_index` and no accepted-alternatives
+/// field, so equivalent distractors must be dropped during generation rather
+/// than accepted at submission time. Small decks may consequently omit a
+/// prompt instead of showing a question with fewer than four choices.
+fn answers_equivalent(candidate: &Card, target: &Card) -> bool {
+    let candidate_front = normalize_choice_text(&candidate.front);
+    let target_front = normalize_choice_text(&target.front);
+
+    // Case/diacritic/whitespace variants are the same written answer.
+    if candidate_front == target_front {
+        return true;
+    }
+
+    // Citation variants and principal-parts twins are the same answer even
+    // when their full fronts or English glosses differ. This covers both
+    // cross-deck duplicates and in-deck pairs such as χρόνος / χρόνος, ὁ.
+    let candidate_head = normalized_headword(&candidate.front);
+    let target_head = normalized_headword(&target.front);
+    if !candidate_head.is_empty() && candidate_head == target_head {
+        return true;
+    }
+
+    // Identical glosses for different lemmata (the shipped DCC χρή/δεῖ pair)
+    // mean the EN→GR prompt genuinely accepts either front.
+    if normalize_choice_text(&candidate.back) == normalize_choice_text(&target.back) {
+        return true;
+    }
+
+    // Deliberately tiny curated semantic-equivalence list for pairs whose
+    // gloss wording differs (e.g. the JACT versions of χρή and δεῖ). This is
+    // not intended to grow into a general synonym database.
+    matches!(
+        (candidate_front.as_str(), target_front.as_str()),
+        ("χρη", "δει") | ("δει", "χρη")
+    )
+}
+
 /// Build one MCQ for `target`, drawing distractors from `pool` (restricted
 /// to `pool_eligible` indices), or `None` when even the widest distractor
-/// policy cannot produce 3 distinct distractor fronts. The target can never
-/// appear among its own distractors: its front is pre-seeded in `used`, so
-/// the front-text dedup excludes it (and any duplicate-front twin).
+/// policy cannot produce 3 non-equivalent distractor fronts. The target can
+/// never appear among its own distractors: its front is pre-seeded in `used`,
+/// so front-text dedup excludes it (and any duplicate-front twin).
 fn build_mcq(
     target: &Card,
     pool: &[Card],
@@ -177,6 +376,10 @@ fn build_mcq(
 ) -> Option<Mcq> {
     let mut used: HashSet<&str> = HashSet::new();
     used.insert(target.front.as_str());
+    let mut used_normalized = HashSet::new();
+    used_normalized.insert(normalize_choice_text(&target.front));
+    let mut used_headwords = HashSet::new();
+    used_headwords.insert(normalized_headword(&target.front));
     let mut distractors: Vec<String> = Vec::new();
 
     // The four distractor policies in strict widening order.
@@ -199,9 +402,19 @@ fn build_mcq(
             if distractors.len() == 3 {
                 break;
             }
-            let front = pool[matching[pi]].front.as_str();
-            if used.insert(front) {
-                distractors.push(front.to_string());
+            let candidate = &pool[matching[pi]];
+            let normalized = normalize_choice_text(&candidate.front);
+            let headword = normalized_headword(&candidate.front);
+            if answers_equivalent(candidate, target)
+                || used_normalized.contains(&normalized)
+                || (!headword.is_empty() && used_headwords.contains(&headword))
+            {
+                continue;
+            }
+            if used.insert(candidate.front.as_str()) {
+                used_normalized.insert(normalized);
+                used_headwords.insert(headword);
+                distractors.push(candidate.front.clone());
             }
         }
     }
@@ -225,6 +438,7 @@ fn build_mcq(
         prompt_gloss: target.back.clone(),
         choices,
         correct_index,
+        typeable: is_typeable_front(&target.front),
     })
 }
 
@@ -392,19 +606,23 @@ pub fn generate_alphabet_check(cards: &[Card], n: usize, seed: u64) -> Vec<Alpha
     for (i, (c, _)) in eligible.iter().enumerate() {
         by_chapter.entry(c.chapter).or_default().push(i);
     }
+    // Shuffle each chapter pool ONCE and consume that same ordering for both
+    // the stratified minimum and round-robin remainder. Keeping a separate
+    // unshuffled cursor used to reselect cards from the first shuffled picks.
+    for pool in by_chapter.values_mut() {
+        let order = shuffled_indices(pool.len(), &mut rng);
+        *pool = order.into_iter().map(|i| pool[i]).collect();
+    }
     let mut picks: Vec<usize> = Vec::new();
     let mut cursor: std::collections::HashMap<i32, usize> = std::collections::HashMap::new();
     let chapters: Vec<i32> = by_chapter.keys().copied().collect();
     for &ch in &chapters {
         let pool = &by_chapter[&ch];
-        for pi in shuffled_indices(pool.len(), &mut rng)
-            .into_iter()
-            .take(3.min(pool.len()))
-        {
+        for &i in pool.iter().take(3.min(pool.len())) {
             if picks.len() >= n {
                 break;
             }
-            picks.push(pool[pi]);
+            picks.push(i);
             *cursor.entry(ch).or_default() += 1;
         }
     }
@@ -604,6 +822,121 @@ mod tests {
     }
 
     #[test]
+    fn test_normalized_and_gloss_equivalents_are_rejected() {
+        let target = card("t", "λόγος", "word", 1, "noun", &["athenaze"]);
+        let normalized = card("n", "ΛΟΓΟΣ", "speech", 1, "noun", &["athenaze"]);
+        assert!(answers_equivalent(&normalized, &target));
+        let same_gloss = card("g", "λέξις", " word ", 1, "noun", &["athenaze"]);
+        assert!(answers_equivalent(&same_gloss, &target));
+        let unrelated = card("u", "οἶκος", "house", 1, "noun", &["athenaze"]);
+        assert!(!answers_equivalent(&unrelated, &target));
+    }
+
+    #[test]
+    fn test_real_deck_dcc_necessity_pair_is_not_a_distractor() {
+        // dcc-059/dcc-060 recreate the audit exactly: χρή and δεῖ share the
+        // gloss "it is necessary (impersonal)" but are different lemmata.
+        let cards: Vec<Card> =
+            serde_json::from_str(include_str!("../../../../data/cards/dcc-core.json"))
+                .expect("dcc-core.json must parse");
+        let target = cards.iter().position(|c| c.id == "dcc-059").unwrap();
+        let set = generate_mcq_set_with_pool(&cards[target..=target], &cards, 1, 42);
+        assert_eq!(set.len(), 1);
+        assert_eq!(set[0].choices[set[0].correct_index], "χρή");
+        assert!(
+            !distractor_fronts(&set[0]).contains(&"δεῖ"),
+            "an equally valid answer must not be shown as a wrong choice: {:?}",
+            set[0].choices
+        );
+    }
+
+    #[test]
+    fn test_curated_chre_dei_equivalence_covers_different_glosses() {
+        // JACT words these cards differently, so normalized gloss equality
+        // cannot catch the pair; the deliberately curated relation can.
+        let chre = card(
+            "jact-125",
+            "χρή",
+            "it is necessary, one must (+ acc. + inf.)",
+            10,
+            "verb",
+            &["jact"],
+        );
+        let dei = card(
+            "jact-100",
+            "δεῖ",
+            "it is necessary (+ acc. + inf.)",
+            8,
+            "verb",
+            &["jact"],
+        );
+        assert!(answers_equivalent(&dei, &chre));
+        assert!(answers_equivalent(&chre, &dei));
+    }
+
+    #[test]
+    fn test_plain_verb_and_principal_parts_twins_are_equivalent() {
+        let cards: Vec<Card> =
+            serde_json::from_str(include_str!("../../../../data/cards/athenaze-i.json"))
+                .expect("athenaze-i.json must parse");
+        let plain = cards.iter().find(|c| c.front == "φεύγω").unwrap();
+        let principal_parts = cards
+            .iter()
+            .find(|c| c.front.starts_with("φεύγω, φεύξομαι,"))
+            .unwrap();
+        assert!(answers_equivalent(plain, principal_parts));
+        assert!(answers_equivalent(principal_parts, plain));
+
+        let set = generate_mcq_set_with_pool(&[principal_parts.clone()], &cards, 1, 91);
+        assert_eq!(set.len(), 1);
+        assert!(
+            !distractor_fronts(&set[0]).contains(&"φεύγω"),
+            "the plain-verb twin must not be offered as a wrong choice: {:?}",
+            set[0].choices
+        );
+    }
+
+    #[test]
+    fn test_in_deck_headword_twins_are_equivalent() {
+        let cards: Vec<Card> =
+            serde_json::from_str(include_str!("../../../../data/cards/dcc-core.json"))
+                .expect("dcc-core.json must parse");
+        let target = cards.iter().find(|c| c.id == "dcc-078").unwrap();
+        let twin = cards.iter().find(|c| c.id == "dcc-371").unwrap();
+        assert!(answers_equivalent(twin, target));
+        assert!(answers_equivalent(target, twin));
+
+        let set = generate_mcq_set_with_pool(&[target.clone()], &cards, 1, 17);
+        assert_eq!(set.len(), 1);
+        assert!(
+            !distractor_fronts(&set[0]).contains(&"χρόνος"),
+            "same-headword in-deck twin must be excluded: {:?}",
+            set[0].choices
+        );
+    }
+
+    #[test]
+    fn test_mcq_items_expose_typeable_fallback_metadata() {
+        let mut prompts = vec![
+            card("word", "λόγος", "word", 1, "noun", &["athenaze"]),
+            card("article", "ὁ ἀγρός", "field", 1, "noun", &["athenaze"]),
+        ];
+        for (id, front) in [
+            ("a", "ἄνθρωπος"),
+            ("b", "θεός"),
+            ("c", "οἶκος"),
+            ("d", "νῆσος"),
+        ] {
+            prompts.push(card(id, front, id, 1, "noun", &["athenaze"]));
+        }
+        for target in &prompts[..2] {
+            let set = generate_mcq_set_with_pool(&[target.clone()], &prompts, 1, 4);
+            assert_eq!(set.len(), 1);
+            assert_eq!(set[0].typeable, target.id == "word");
+        }
+    }
+
+    #[test]
     fn test_duplicate_fronts_can_starve_distractor_pool() {
         // 3 candidates but only 2 unique fronts -> omission.
         let cards = vec![
@@ -771,6 +1104,59 @@ mod tests {
     }
 
     #[test]
+    fn test_typed_front_eligibility_is_deliberately_narrow() {
+        for front in ["λόγος", "Α α", "αι", "ἄνθρωπος"] {
+            assert!(is_typeable_front(front), "should be typeable: {front}");
+        }
+        for front in [
+            "ὁ ἀγρός",
+            "μακρός, -ά, -όν",
+            "πρός (+ acc.)",
+            "ἐστί(ν)",
+            "δύο-μέρος",
+            "φεύγω, φεύξομαι, ἔφυγον",
+            "Σ σ/ς",
+            "ζ ξ ψ",
+            "λόγος1",
+            "word",
+            "",
+        ] {
+            assert!(!is_typeable_front(front), "must use MCQ fallback: {front}");
+        }
+    }
+
+    #[test]
+    fn test_grade_typed_uses_citation_form_answer_key() {
+        // This path is intentionally tested directly even though this front
+        // shape is MCQ-only under the interim eligibility rule.
+        assert_eq!(grade_typed("μακρός, -ά, -όν", "μακρός"), TypedGrade::Exact);
+        assert_eq!(
+            grade_typed("μακρός, -ά, -όν", "μακροσ"),
+            TypedGrade::Lenient
+        );
+        assert_eq!(grade_typed("ὁ ἀγρός", "ἀγρός"), TypedGrade::Exact);
+        assert_eq!(grade_typed("ὁ ἀγρός", "ὁ ἀγρός"), TypedGrade::Exact);
+        assert_eq!(grade_typed("ὁ ἀγρός", "αγρος"), TypedGrade::Lenient);
+        assert_eq!(grade_typed("πρός (+ acc.)", "πρός"), TypedGrade::Exact);
+        assert_eq!(grade_typed("ἐστί(ν)", "ἐστί"), TypedGrade::Exact);
+        assert_eq!(grade_typed("ἐστί(ν)", "ἐστίν"), TypedGrade::Exact);
+        assert_eq!(grade_typed("ἐστί(ν)", "εστιν"), TypedGrade::Lenient);
+        assert_eq!(grade_typed("Α α", "α"), TypedGrade::Exact);
+        assert_eq!(grade_typed("Α α", "Α"), TypedGrade::Exact);
+        assert_eq!(grade_typed("Σ σ/ς", "σ"), TypedGrade::Exact);
+        assert_eq!(grade_typed("Σ σ/ς", "ς"), TypedGrade::Exact);
+    }
+
+    #[test]
+    fn test_grade_typed_folds_sigma_for_exact_and_lenient_grades() {
+        assert_eq!(grade_typed("λόγος", "λόγοσ"), TypedGrade::Exact);
+        assert_eq!(grade_typed("λόγοσ", "λόγος"), TypedGrade::Exact);
+        assert_eq!(grade_typed("λόγος", "λογος"), TypedGrade::Lenient);
+        assert_eq!(grade_typed("λόγος", "ΛΟΓΟΣ"), TypedGrade::Lenient);
+        assert_eq!(grade_typed("ά", "α\u{0301}"), TypedGrade::Exact);
+    }
+
+    #[test]
     fn test_grade_typed_matrix() {
         let expected = "ἄνθρωπος";
         // Exact: byte-identical after whitespace cleanup.
@@ -874,6 +1260,12 @@ mod tests {
         let b = generate_alphabet_check(&cards, 24, 42);
         assert_eq!(a, b, "same seed must reproduce the identical check");
         assert!(a.len() >= 20, "near-full check expected, got {}", a.len());
+        let unique_ids: HashSet<&str> = a.iter().map(|q| q.card_id.as_str()).collect();
+        assert_eq!(
+            unique_ids.len(),
+            a.len(),
+            "every emitted prompt must use a different card"
+        );
 
         // Both directions present, in strict alternation.
         assert!(a

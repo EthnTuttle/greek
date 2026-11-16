@@ -88,6 +88,12 @@ object GreekTextOps {
         replaceComposing: Boolean
     ): TextEditResult {
         val hasComp = compStart in 0..compEnd && compEnd <= text.length
+        // resolveSigma necessarily emits ς at the current end of a word. If
+        // the next key appends a Greek letter, that former final sigma is now
+        // medial. Repair it before the insertion; σ/ς have the same UTF-16
+        // width, so all selection/composition offsets remain valid.
+        val insertionOffset = if (hasComp && replaceComposing) compStart else selStart
+        val text = repairMedialSigma(text, insertionOffset, insert)
         return if (hasComp && replaceComposing) {
             val newText = text.replaceRange(compStart, compEnd, insert)
             TextEditResult(newText, compStart + insert.length, -1, -1)
@@ -202,6 +208,32 @@ object GreekTextOps {
             this == 0x0313 || this == 0x0314 || this == 0x0342 || this == 0x0345 ||
             this == 0x0308 || this == 0x0300 || this == 0x0301 || this == 0x0304 ||
             this == 0x0306
+
+    /** Turn a formerly-final ς into σ when a Greek letter is appended after it. */
+    private fun repairMedialSigma(text: String, insertionOffset: Int, insert: String): String {
+        var next = 0
+        while (next < insert.length) {
+            val cp = insert.codePointAt(next)
+            if (!cp.isCombiningGreekMark()) {
+                if (!cp.isGreekLetter()) return text
+                break
+            }
+            next += Character.charCount(cp)
+        }
+        if (next >= insert.length) return text // combining mark(s) only
+
+        var previous = insertionOffset.coerceIn(0, text.length)
+        while (previous > 0) {
+            val cp = text.codePointBefore(previous)
+            if (!cp.isCombiningGreekMark()) {
+                if (cp != 'ς'.code) return text
+                val sigmaOffset = previous - Character.charCount(cp)
+                return text.replaceRange(sigmaOffset, previous, "σ")
+            }
+            previous -= Character.charCount(cp)
+        }
+        return text
+    }
 
     /**
      * Context-appropriate sigma for an insertion at ([selStart]..[selEnd]) in

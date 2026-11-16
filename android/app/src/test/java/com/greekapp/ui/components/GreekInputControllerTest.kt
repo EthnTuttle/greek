@@ -67,6 +67,34 @@ class GreekInputControllerTest {
         assertEquals(TextRange(1), state.value.selection)
     }
 
+    // ---- Final sigma: left-to-right typing must repair a now-medial ς ----
+
+    @Test
+    fun `typing epsilon sigma tau iota produces epsilon sigma tau iota with medial sigma`() {
+        val (c, state) = controllerWith("", TextRange(0))
+        val expected = listOf("ε", "ες", "εστ", "εστι")
+        listOf("ε", "σ", "τ", "ι").forEachIndexed { index, letter ->
+            val value = state.value
+            val insertion = if (letter == "σ") {
+                GreekTextOps.resolveSigma(value.text, value.selection.start, value.selection.end)
+            } else {
+                letter
+            }
+            c.insertText(insertion)
+            assertEquals(expected[index], state.value.text)
+            assertEquals(TextRange(expected[index].length), state.value.selection)
+        }
+    }
+
+    @Test
+    fun `sigma stays final when non letter input follows`() {
+        val (c, state) = controllerWith("ες", TextRange(2))
+        c.insertText("!")
+        assertEquals("ες!", state.value.text)
+        c.insertText("τ")
+        assertEquals("ες!τ", state.value.text)
+    }
+
     // ---- A4: panel commits propagate ----
 
     @Test
