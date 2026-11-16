@@ -9,7 +9,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import uniffi.uniffi_bindings.AnalysisView
 import uniffi.uniffi_bindings.TokenView
+
+data class WordCandidate(
+    val lemma: String,
+    val pos: String,
+    val definition: String,
+    val parseSummaries: List<String>
+)
 
 data class WordAnalysis(
     val word: String,
@@ -17,7 +25,8 @@ data class WordAnalysis(
     val pos: String,
     val definition: String,
     val parseInfo: String? = null,
-    val otherParses: List<String> = emptyList(),
+    /** All distinct lemmas, preserving the core's ranked candidate order. */
+    val candidates: List<WordCandidate> = emptyList(),
     val isKnown: Boolean = false,
     val canAddToSrs: Boolean = true
 )
@@ -49,6 +58,23 @@ data class ReaderState(
  */
 internal fun normalizeGreekWord(word: String): String =
     word.lowercase().trim { it in " .,;·?!·\"'()[]»«…—–-·;·" }
+
+/**
+ * Preserve every distinct lemma in the core's ranked order. Multiple analyses
+ * of one lemma stay together, with every distinct human-readable parse shown;
+ * this is a grouping step only, never a candidate-selection/ranking policy.
+ */
+internal fun wordCandidates(results: List<AnalysisView>): List<WordCandidate> =
+    results.groupBy { it.lemma }.map { (lemma, analyses) ->
+        WordCandidate(
+            lemma = lemma,
+            pos = analyses.map { it.pos }.filter { it.isNotBlank() }.distinct()
+                .joinToString(" · ").ifBlank { "unknown" },
+            definition = analyses.map { it.definition.trim() }.filter { it.isNotEmpty() }
+                .distinct().joinToString("\n").ifBlank { "No definition available" },
+            parseSummaries = analyses.map { it.postagHuman }.filter { it.isNotBlank() }.distinct()
+        )
+    }
 
 class ReaderViewModel(
     private val savedStateHandle: SavedStateHandle
@@ -134,14 +160,17 @@ class ReaderViewModel(
             try {
                 val results = core.lookupWord(normalized)
                 val analysis = if (results.isNotEmpty()) {
-                    val first = results.first()
+                    val candidates = wordCandidates(results)
+                    // The core has already ranked candidates. Only this first
+                    // candidate is used for card creation; ALL are displayed.
+                    val first = candidates.first()
                     WordAnalysis(
                         word = word,
                         lemma = first.lemma,
-                        pos = first.postagHuman.split(",").firstOrNull()?.trim() ?: "unknown",
+                        pos = first.pos,
                         definition = first.definition,
-                        parseInfo = first.postagHuman,
-                        otherParses = results.drop(1).map { it.postagHuman }.distinct(),
+                        parseInfo = first.parseSummaries.firstOrNull(),
+                        candidates = candidates,
                         isKnown = known,
                         canAddToSrs = true
                     )
@@ -198,7 +227,9 @@ class ReaderViewModel(
             try {
                 core.addCardFromLookup(analysis.lemma, analysis.word, analysis.definition)
                 _state.value = _state.value.copy(
-                    message = "Added “${analysis.lemma}” to your review deck.",
+                    // The core admits never-reviewed lookup cards into new
+                    // sessions after existing due cards and before deck-new cards.
+                    message = "Added “${analysis.lemma}” to your review cards.",
                     showAnalysis = false,
                     selectedWord = null
                 )

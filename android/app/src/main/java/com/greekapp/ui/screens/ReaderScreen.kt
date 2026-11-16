@@ -20,6 +20,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
@@ -33,6 +36,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.greekapp.ui.theme.GreekFontFamily
 import com.greekapp.viewmodel.ReaderViewModel
 import com.greekapp.viewmodel.SectionInfo
+import com.greekapp.viewmodel.WordCandidate
 import com.greekapp.viewmodel.normalizeGreekWord
 import uniffi.uniffi_bindings.TokenView
 
@@ -235,6 +239,16 @@ private fun ClickableGreekText(
     // offset, then to the "WORD" annotation covering it. Replaces the deprecated
     // ClickableText while preserving the exact tap-to-analyze behavior.
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val lookupActions = effectiveTokens.mapNotNull { token ->
+        if (token.surface.any { it.isLetter() }) {
+            CustomAccessibilityAction(label = "Look up ${token.surface}") {
+                onWordClick(token.surface)
+                true
+            }
+        } else {
+            null
+        }
+    }
 
     Text(
         text = annotatedText,
@@ -245,15 +259,20 @@ private fun ClickableGreekText(
             color = onSurface
         ),
         onTextLayout = { layoutResult = it },
-        modifier = Modifier.pointerInput(annotatedText) {
-            detectTapGestures { pos ->
-                val offset = layoutResult?.getOffsetForPosition(pos) ?: return@detectTapGestures
-                annotatedText.getStringAnnotations(tag = "WORD", start = offset, end = offset)
-                    .firstOrNull()?.let { annotation ->
-                        onWordClick(annotation.item)
-                    }
+        modifier = Modifier
+            // TalkBack exposes these per-word actions without requiring a
+            // precise pointer tap on a character within the passage.
+            .semantics { customActions = lookupActions }
+            .pointerInput(annotatedText) {
+                detectTapGestures { pos ->
+                    val offset = layoutResult?.getOffsetForPosition(pos)
+                        ?: return@detectTapGestures
+                    annotatedText.getStringAnnotations(tag = "WORD", start = offset, end = offset)
+                        .firstOrNull()?.let { annotation ->
+                            onWordClick(annotation.item)
+                        }
+                }
             }
-        }
     )
 }
 
@@ -267,6 +286,7 @@ private fun WordAnalysisSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -280,87 +300,21 @@ private fun WordAnalysisSheet(
 
         Divider()
 
-        // Lemma
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Lemma:",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = word.lemma,
-                style = MaterialTheme.typography.titleMedium,
-                fontFamily = GreekFontFamily,
-                fontWeight = FontWeight.Medium
-            )
-        }
-
-        // POS
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Part of speech:",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = word.pos,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
-            )
-        }
-
-        // Parse info
-        if (word.parseInfo != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Parse:",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = word.parseInfo,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-
-        // Additional (ambiguous) parses
-        if (word.otherParses.isNotEmpty()) {
-            Text(
-                text = "Other possible parses:",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            word.otherParses.forEach { parse ->
-                Text(
-                    text = "• $parse",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-
-        Divider()
-
-        // Definition
         Text(
-            text = "Definition",
+            text = if (word.candidates.size > 1) {
+                "Dictionary candidates — multiple entries are possible; use the passage's context."
+            } else {
+                "Dictionary candidate"
+            },
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Text(
-            text = word.definition,
-            style = MaterialTheme.typography.bodyLarge,
-            lineHeight = 24.sp
-        )
+        if (word.candidates.isEmpty()) {
+            Text(text = word.definition, style = MaterialTheme.typography.bodyLarge)
+        }
+        word.candidates.forEachIndexed { index, candidate ->
+            WordCandidateCard(candidate = candidate, number = index + 1)
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -407,5 +361,45 @@ private fun WordAnalysisSheet(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun WordCandidateCard(candidate: WordCandidate, number: Int) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "$number. ${candidate.lemma}",
+                style = MaterialTheme.typography.titleLarge,
+                fontFamily = GreekFontFamily,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = candidate.pos,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = candidate.definition,
+                style = MaterialTheme.typography.bodyLarge,
+                lineHeight = 24.sp
+            )
+            if (candidate.parseSummaries.isNotEmpty()) {
+                Text(
+                    text = if (candidate.parseSummaries.size == 1) "Parse" else "Possible parses",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                candidate.parseSummaries.forEach { parse ->
+                    Text(text = "• $parse", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
     }
 }

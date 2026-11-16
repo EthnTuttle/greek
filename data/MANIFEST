@@ -5,7 +5,7 @@
 # packaging, CI smoke tests) MUST verify the SHA-256 below after fetching.
 #
 # Format: <sha256>  <path>  [<bytes>]
-e97d66b77154ce8ac1c5380d44d8c50ba8397719297a76b1bd15569df02ba411  data/morphology.sqlite
+8124aed63099e8a9adef51d93bef713f5bfd7b3b7603969e70d4c57fcf8b5697  data/morphology.sqlite
 # morphology.sqlite.provenance
 #   Derived from Morpheus Greek Unicode XML dumps (inputs no longer
 #   obtainable; see data/README.md "Provenance"). Curated glosses applied via

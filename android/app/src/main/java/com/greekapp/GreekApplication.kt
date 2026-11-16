@@ -145,9 +145,10 @@ class GreekApplication : Application() {
          * Version of the bundled morphology.sqlite lexicon asset.
          * Bump whenever the asset changes (curated gloss overrides, schema
          * fixes) so existing installs re-copy on upgrade. v1 = Morpheus
-         * baseline (July); v2 = +88 curated gloss fixes (Oct 2026).
+         * baseline (July); v2 = +88 curated gloss fixes (Oct 2026);
+         * v3 = reader lookup ranking/override gloss refresh (Nov 2026).
          */
-        private const val MORPHOLOGY_DB_VERSION = 2
+        private const val MORPHOLOGY_DB_VERSION = 3
 
         var greekCore: GreekCore? = null
             private set
