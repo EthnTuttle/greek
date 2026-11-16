@@ -171,6 +171,27 @@ skip-and-count DROPPED, never partially stored:
   emits NFC already — morphology lookups NFC-normalize input lemmas — but
   ingress may not rely on sender behavior.)
 
+### 2.1b Backups and deliberate identity recovery
+
+Normal JSON backups and platform/syncthing backups intentionally **exclude the
+`secrets` vault and every secret value**. A backup can therefore be transported
+and merged without also silently copying the credential that decrypts a user's
+entire relay history or lets its holder publish as that user. For the same
+reason `sync_export_backup_json` never contains `nostr_nsec`, regardless of
+whether the key is in current or legacy storage.
+
+Identity recovery is instead a separate, deliberate local action: Android Sync
+→ Relay sync → **Back up identity key**. An explicit warning confirmation
+(any holder can impersonate the identity; the key must be stored offline) is
+required before reveal. The revealed
+secret can be manually selected or copied; the app does not auto-share it to
+other apps. Rust exposes this narrowly as
+`GreekCore::sync_export_nostr_nsec()`, which uses the migration-aware vault
+accessor and errors when no identity exists. A legacy plaintext key is migrated
+into the vault when read; it is not added to the ordinary backup. Users should
+complete this export before rotating an identity, because rotation makes old
+relay ciphertext unreadable under the new key.
+
 ### 2.1a iroh note
 
 The iroh-docs transport (§3) is **event-level**: it carries one

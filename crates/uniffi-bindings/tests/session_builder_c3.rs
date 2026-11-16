@@ -56,18 +56,21 @@ fn session_builder_single_budget_across_curricula() {
     let session = core.build_review_session(20).unwrap();
 
     // The gate is satisfied and no reviews exist, so the whole session is new
-    // cards, and its new-card count is EXACTLY the remaining budget — not
-    // one budget per chapter.
-    let new_count = session.iter().filter(|c| c.is_new).count() as u32;
-    assert_eq!(new_count, remaining);
+    // cards. Only vocabulary consumes the budget: 7 free letters + 10
+    // Athenaze, not one allowance per chapter or letters charging the cap.
+    let vocabulary_new = session
+        .iter()
+        .filter(|c| c.is_new && !c.card.id.starts_with("letters-"))
+        .count() as u32;
+    assert_eq!(vocabulary_new, remaining);
     assert!(session.len() <= 20);
 
-    // Filling order preserved: letters ch.1 (7 cards) first, then Athenaze
-    // ch.1 for the leftover allowance (3), JACT cut off by the spent budget.
+    // Filling order preserved: all 7 vowels, then 10 Athenaze. JACT waits
+    // because the vocabulary allowance (not the letter allowance) is spent.
     let letters = session.iter().filter(|c| c.card.id.starts_with("letters-")).count();
     let ath = session.iter().filter(|c| c.card.id.starts_with("ath1-")).count();
     let jact = session.iter().filter(|c| c.card.id.starts_with("jact1-")).count();
-    assert_eq!((letters, ath, jact), (7, 3, 0), "7+3, not the repro's 7+10+3");
+    assert_eq!((letters, ath, jact), (7, 10, 0), "7 free letters + 10 capped vocabulary");
     assert!(session[0].card.id.starts_with("letters-"));
 
     // The per-chapter path still caps per call; the SESSION builder is the
@@ -81,9 +84,13 @@ fn session_builder_single_budget_across_curricula() {
     assert!(core.new_cards_today() <= 10);
     assert_eq!(core.new_cards_today(), remaining);
 
-    // Budget spent: a second session this same day introduces nothing new.
+    // Vocabulary budget spent: the second session can still introduce the
+    // next letter chapter, but no additional vocabulary.
     let session2 = core.build_review_session(20).unwrap();
-    assert!(session2.iter().all(|c| !c.is_new));
+    let fresh2: Vec<_> = session2.iter().filter(|c| c.is_new).collect();
+    assert!(fresh2.iter().all(|c| c.card.id.starts_with("letters-")));
+    assert!(fresh2.iter().any(|c| c.card.chapter == 2));
+    assert_eq!(core.new_cards_remaining_today(), 0);
 }
 
 #[test]
@@ -126,11 +133,17 @@ fn session_builder_due_first_then_new() {
     let first_new = session.iter().position(|c| c.is_new).expect("new cards follow");
     assert_eq!(first_new, 2);
 
-    // Due reviews never consume the new-card budget: still the full 10 new
-    // (7 letters + 3 Athenaze; the two planted ath1 cards are excluded as
-    // already-known), 12 cards total.
-    assert_eq!(session.iter().filter(|c| c.is_new).count(), 10);
-    assert_eq!(session.len(), 12);
+    // Due reviews never consume the new-card budget: 2 due, then 7 free
+    // letters + 10 capped vocabulary (the two due Ath cards are not NEW).
+    assert_eq!(session.iter().filter(|c| c.is_new).count(), 17);
+    assert_eq!(
+        session
+            .iter()
+            .filter(|c| c.is_new && !c.card.id.starts_with("letters-"))
+            .count(),
+        10
+    );
+    assert_eq!(session.len(), 19);
 
     // Full submission of the built queue stays within the day's cap.
     for sc in &session {
@@ -151,4 +164,63 @@ fn session_builder_respects_alphabet_gate() {
     assert!(!session.is_empty());
     assert!(session.iter().all(|c| c.card.id.starts_with("letters-")));
     assert_eq!(session.len(), 7, "only letters ch.1 is unlocked by default");
+}
+
+#[test]
+fn all_letters_still_surface_after_vocabulary_budget_is_exhausted() {
+    let core = GreekCore::new_with_cards(
+        temp_db_path("letters-cap-exempt"),
+        None,
+        repro_deck_json(),
+    )
+    .unwrap();
+    assert!(core.declare_alphabet_known());
+
+    // Spend all ten vocabulary introductions through real reviews.
+    let vocab = core.get_new_cards("athenaze".to_string(), 1, 50);
+    assert_eq!(vocab.len(), 10);
+    for card in vocab {
+        assert!(core.submit_review(card.id, 3));
+    }
+    assert_eq!(core.new_cards_today(), 10);
+    assert_eq!(core.new_cards_remaining_today(), 0);
+
+    // A queued unreviewed lookup cannot spend another slot or prevent the
+    // later letters lane from being reached when the builder skips lookups.
+    core.add_card_from_lookup(
+        "λόγος".to_string(),
+        "".to_string(),
+        "word".to_string(),
+    )
+    .unwrap();
+    assert_eq!(core.get_new_cards("letters".to_string(), 1, 50).len(), 7);
+
+    let mut introduced = std::collections::HashSet::new();
+    for _ in 0..12 {
+        let fresh: Vec<_> = core
+            .build_review_session(100)
+            .unwrap()
+            .into_iter()
+            .filter(|card| card.is_new)
+            .collect();
+        assert!(fresh.iter().all(|card| card.card.id.starts_with("letters-")));
+        assert!(!fresh.is_empty(), "letter progression stalled: {introduced:?}");
+        for card in fresh {
+            assert!(
+                introduced.insert(card.card.id.clone()),
+                "any physical card must be introduced at most once"
+            );
+            assert!(core.submit_review(card.card.id, 3));
+        }
+        assert_eq!(core.new_cards_today(), 10, "letters are cap-exempt");
+        assert_eq!(core.new_cards_remaining_today(), 0);
+        if introduced.len() == 43 {
+            break;
+        }
+    }
+    assert_eq!(introduced.len(), 43, "every letter variant is introduced");
+    // The cap-specific metric stayed at 10 vocabulary cards, while the full
+    // durable history honestly reports all 53 reviews submitted today.
+    assert_eq!(core.get_review_stats().reviewed_today, 53);
+    assert_eq!(core.new_cards_remaining_today(), 0);
 }

@@ -44,7 +44,8 @@ fn open_core(tag: &str) -> std::sync::Arc<GreekCore> {
 
 #[test]
 fn alphabet_gate_end_to_end() {
-    let core = open_core("e2e");
+    let db_path = temp_db_path("e2e");
+    let core = GreekCore::new_with_cards(db_path.clone(), None, gate_cards_json()).unwrap();
 
     // Fresh install: the gate is unmet, counting 43 loaded letters cards.
     let state = core.get_alphabet_gate_state();
@@ -58,8 +59,19 @@ fn alphabet_gate_end_to_end() {
     assert!(core.get_new_cards("dcc".to_string(), 0, 10).is_empty());
     assert!(!core.get_new_cards("letters".to_string(), 1, 10).is_empty());
 
-    // unlock_chapter is refused for vocabulary tracks, allowed for letters.
+    // unlock_chapter refuses both an alphabet-gated vocabulary chapter and
+    // a letters chapter whose own prerequisite mastery is still unmet (C11).
     assert!(!core.unlock_chapter("athenaze".to_string(), 2));
+    assert!(!core.unlock_chapter("letters".to_string(), 2));
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    for n in 1..=6 {
+        conn.execute(
+            "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+             VALUES (?1, 30.0, 5.0, '2020-01-01T00:00:00Z', 2, 0)",
+            [format!("letters-{n:03}")],
+        )
+        .unwrap();
+    }
     assert!(core.unlock_chapter("letters".to_string(), 2));
 
     // Vocab chapters all report locked; the default chapter ch.1 carries the
@@ -71,7 +83,7 @@ fn alphabet_gate_end_to_end() {
         .contains("pass the Alphabet Check"));
     assert!(chapters[1]
         .unlock_hint
-        .starts_with("Master 80% of Chapter 1"));
+        .starts_with("Learn 80% of Chapter 1"));
 
     // The Alphabet Check itself: 24 items, 4 choices, both polarities.
     let check = core.generate_alphabet_check();
@@ -98,8 +110,27 @@ fn alphabet_gate_end_to_end() {
     assert!(state.satisfied);
     assert_eq!(state.method, "check_passed");
 
-    // After the pass: vocabulary introduction and manual unlocks flow.
+    // After the pass: ch.1 introduction flows, but ch.2 still requires its
+    // own prerequisite mastery. The gate is not a progression bypass (C11).
     assert!(!core.get_new_cards("athenaze".to_string(), 1, 10).is_empty());
+    assert!(!core.unlock_chapter("athenaze".to_string(), 2));
+    for n in 1..=5 {
+        let id = format!("ath1-{n:03}");
+        conn.execute(
+            "INSERT INTO memory_states (card_id, stability, difficulty, due_date, reps, lapses)
+             VALUES (?1, 30.0, 5.0, '2020-01-01T00:00:00Z', 5, 0)",
+            [&id],
+        )
+        .unwrap();
+        for day in ["2020-01-01", "2020-01-02"] {
+            conn.execute(
+                "INSERT INTO review_logs (card_id, timestamp, rating, elapsed_days, scheduled_days)
+                 VALUES (?1, ?2, 3, 0.0, 0.0)",
+                rusqlite::params![id, format!("{day}T12:00:00Z")],
+            )
+            .unwrap();
+        }
+    }
     assert!(core.unlock_chapter("athenaze".to_string(), 2));
     let chapters = core.get_chapters("athenaze".to_string());
     assert!(chapters[0].unlocked);

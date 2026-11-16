@@ -9,6 +9,28 @@ use crate::identity::ShareKeys;
 use crate::outbox::{self, OutboxState};
 use crate::publisher::{OkClass, PublishResult, Publisher};
 use crate::templates::{self, TemplateLang};
+use greek_core::Database;
+use std::sync::Mutex;
+
+/// Database access for a flush. Each callback is a short, self-contained
+/// critical section: no `MutexGuard` can live across a network await. The
+/// `&Database` implementation keeps direct engine tests lightweight, while
+/// the facade uses `&Mutex<Database>` so learning operations stay responsive.
+pub trait FlushDb {
+    fn with_db<R>(&self, f: impl FnOnce(&Database) -> R) -> R;
+}
+
+impl FlushDb for &Database {
+    fn with_db<R>(&self, f: impl FnOnce(&Database) -> R) -> R {
+        f(self)
+    }
+}
+
+impl FlushDb for &Mutex<Database> {
+    fn with_db<R>(&self, f: impl FnOnce(&Database) -> R) -> R {
+        f(&self.lock().unwrap())
+    }
+}
 
 /// The settings key (HLC-LWW-synced) gating ALL sharing network activity.
 pub const ENABLED_KEY: &str = "share.enabled";
@@ -127,7 +149,11 @@ pub fn enqueue_milestone(
     if caps::already_recorded(db, dedupe_key)? {
         return Ok(EnqueueOutcome::AlreadyRecorded);
     }
-    let content = templates::render_content(db, slug, lang, count, suffix)?;
+    let content = if slug == templates::SLUG_CHAPTER_MASTERED {
+        templates::render_chapter_content(db, lang, visible_id, suffix)?
+    } else {
+        templates::render_content(db, slug, lang, count, suffix)?
+    };
     let event = keys.sign_note(&content)?;
     let event_json = serde_json::to_string(&event).map_err(ShareError::Json)?;
 
@@ -164,24 +190,26 @@ pub struct FlushReport {
 /// `posting` marker, pre-publish read-back, per-relay publish + OK-prefix
 /// classification, marker/outbox updates. Shares NOTHING with the sync
 /// client; refuses ALL network activity while disabled.
-pub async fn flush(
-    db: &greek_core::Database,
+pub async fn flush<D: FlushDb>(
+    db: D,
     publisher: &Publisher,
     now_ms: i64,
 ) -> Result<FlushReport> {
     let mut report = FlushReport::default();
-    if !is_enabled(db) {
+    if !db.with_db(is_enabled) {
         return Ok(report); // zero network activity while disabled
     }
-    outbox::expire_stale(db, now_ms)?;
-    let rows = outbox::due_rows(db)?;
+    db.with_db(|db| outbox::expire_stale(db, now_ms))?;
+    let rows = db.with_db(outbox::due_rows)?;
 
     for row in &rows {
         // --- Caps -------------------------------------------------------
-        match caps::check_caps(db, now_ms)? {
+        match db.with_db(|db| caps::check_caps(db, now_ms))? {
             CapStatus::DailyExhausted { .. } => {
                 // Day is full (see Caps docs): record as deliberate overflow.
-                outbox::set_state(db, &row.dedupe_key, OutboxState::SkippedCap, None)?;
+                db.with_db(|db| {
+                    outbox::set_state(db, &row.dedupe_key, OutboxState::SkippedCap, None)
+                })?;
                 continue;
             }
             CapStatus::TooSoon { retry_after_ms } => {
@@ -198,12 +226,14 @@ pub async fn flush(
         }
 
         // --- Write-ahead posting marker ---------------------------------
-        outbox::set_state(db, &row.dedupe_key, OutboxState::Posting, None)?;
+        db.with_db(|db| outbox::set_state(db, &row.dedupe_key, OutboxState::Posting, None))?;
 
         let event = match row.event() {
             Ok(ev) => ev,
             Err(e) => {
-                outbox::set_state(db, &row.dedupe_key, OutboxState::FailedPerma, None)?;
+                db.with_db(|db| {
+                    outbox::set_state(db, &row.dedupe_key, OutboxState::FailedPerma, None)
+                })?;
                 report
                     .failed
                     .push(("local".to_string(), format!("stored event unparsable: {e}")));
@@ -211,7 +241,9 @@ pub async fn flush(
             }
         };
         if event.verify().is_err() {
-            outbox::set_state(db, &row.dedupe_key, OutboxState::FailedPerma, None)?;
+            db.with_db(|db| {
+                outbox::set_state(db, &row.dedupe_key, OutboxState::FailedPerma, None)
+            })?;
             report
                 .failed
                 .push(("local".to_string(), "stored event fails signature verification".to_string()));
@@ -219,7 +251,9 @@ pub async fn flush(
         }
         // Publish-time validation (same policy as save-time).
         if let Err(e) = templates::validate_content(&event.content) {
-            outbox::set_state(db, &row.dedupe_key, OutboxState::FailedPerma, None)?;
+            db.with_db(|db| {
+                outbox::set_state(db, &row.dedupe_key, OutboxState::FailedPerma, None)
+            })?;
             report.failed.push((
                 "local".to_string(),
                 format!("publish-time content validation: {e}"),
@@ -230,14 +264,16 @@ pub async fn flush(
         // --- Pre-publish read-back: same content already on a relay? ----
         match publisher.content_already_posted(&event.content).await {
             Ok(true) => {
-                handle_delivered(
-                    db,
-                    &row.dedupe_key,
-                    &event.id.to_hex(),
-                    &[],
-                    Some(&row.per_relay),
-                    now_ms,
-                )?;
+                db.with_db(|db| {
+                    handle_delivered(
+                        db,
+                        &row.dedupe_key,
+                        &event.id.to_hex(),
+                        &[],
+                        Some(&row.per_relay),
+                        now_ms,
+                    )
+                })?;
                 report.duplicates += 1;
                 continue;
             }
@@ -257,12 +293,14 @@ pub async fn flush(
                 // flush, and the failure surfaces in the report.
                 let mut per_relay = row.per_relay_map();
                 per_relay.insert("_transport".to_string(), format!("failed:{e}"));
-                outbox::set_state(
-                    db,
-                    &row.dedupe_key,
-                    OutboxState::Queued,
-                    Some(&serde_json::to_string(&per_relay).map_err(ShareError::Json)?),
-                )?;
+                db.with_db(|db| {
+                    outbox::set_state(
+                        db,
+                        &row.dedupe_key,
+                        OutboxState::Queued,
+                        Some(&serde_json::to_string(&per_relay).map_err(ShareError::Json)?),
+                    )
+                })?;
                 report.failed.push(("_transport".to_string(), e.to_string()));
                 report.deferred += 1;
                 continue;
@@ -282,14 +320,16 @@ pub async fn flush(
         if result.any_delivered() && !any_retryable {
             // Fully converged with delivery somewhere.
             let delivered = result.delivered_relays();
-            handle_delivered(
-                db,
-                &row.dedupe_key,
-                &result.event_id,
-                &delivered,
-                Some(&per_relay_json),
-                now_ms,
-            )?;
+            db.with_db(|db| {
+                handle_delivered(
+                    db,
+                    &row.dedupe_key,
+                    &result.event_id,
+                    &delivered,
+                    Some(&per_relay_json),
+                    now_ms,
+                )
+            })?;
             if result
                 .outcomes
                 .iter()
@@ -303,14 +343,41 @@ pub async fn flush(
             // Delivered somewhere BUT a transient failure remains on another
             // relay: stay queued so the identical bytes are retried; relays
             // that already have it answer `duplicate:` → treated delivered.
-            outbox::set_state(db, &row.dedupe_key, OutboxState::Queued, Some(&per_relay_json))?;
+            db.with_db(|db| {
+                // Acceptance somewhere is already a real public delivery:
+                // consume cap/spacing budget immediately even though other
+                // relays still need retries. The final read-back/convergence
+                // path refreshes this same marker without double counting.
+                caps::write_marker(
+                    db,
+                    &row.dedupe_key,
+                    &result.event_id,
+                    &result.delivered_relays(),
+                    now_ms,
+                )?;
+                outbox::set_state(
+                    db,
+                    &row.dedupe_key,
+                    OutboxState::Queued,
+                    Some(&per_relay_json),
+                )
+            })?;
             report.deferred += 1;
         } else if any_retryable {
-            outbox::set_state(db, &row.dedupe_key, OutboxState::Queued, Some(&per_relay_json))?;
+            db.with_db(|db| {
+                outbox::set_state(db, &row.dedupe_key, OutboxState::Queued, Some(&per_relay_json))
+            })?;
             report.deferred += 1;
         } else {
             // All outcomes terminal and none delivered.
-            outbox::set_state(db, &row.dedupe_key, OutboxState::FailedPerma, Some(&per_relay_json))?;
+            db.with_db(|db| {
+                outbox::set_state(
+                    db,
+                    &row.dedupe_key,
+                    OutboxState::FailedPerma,
+                    Some(&per_relay_json),
+                )
+            })?;
         }
     }
     Ok(report)

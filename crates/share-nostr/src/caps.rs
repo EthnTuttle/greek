@@ -122,7 +122,17 @@ fn deliveries(db: &greek_core::Database) -> Result<Vec<(String, i64)>> {
     }
 
     for row in crate::outbox::history(db)? {
-        if row.state == crate::outbox::OutboxState::Posted
+        // A queued/posting row with an accepted relay is PARTIALLY delivered
+        // and must consume budget too. Normally flush has already written its
+        // precise marker above; this fallback covers upgraded rows and the
+        // outbox-only crash window, using creation time as the conservative
+        // lower bound just like posted rows without markers.
+        let partially_delivered = row.state.live()
+            && row
+                .per_relay_map()
+                .values()
+                .any(|state| state == "accepted");
+        if (row.state == crate::outbox::OutboxState::Posted || partially_delivered)
             && !by_key.contains_key(&row.dedupe_key)
         {
             by_key.insert(row.dedupe_key, row.created_ms);
@@ -298,6 +308,34 @@ mod tests {
         );
         // A day later: budget refreshes.
         assert_eq!(check_caps(&db, T0 + DAY_MS).unwrap(), CapStatus::Allowed);
+    }
+
+    #[test]
+    fn live_partial_outbox_delivery_consumes_caps_without_a_marker() {
+        let db = Database::open(":memory:", None).unwrap();
+        let keys = crate::identity::ShareKeys::derive_from_sync(&[0xBC; 32]).unwrap();
+        let ev = serde_json::to_string(&keys.sign_note("x").unwrap()).unwrap();
+        crate::outbox::enqueue(&db, "partial", "streak.7", &ev, "v", T0).unwrap();
+        crate::outbox::set_state(
+            &db,
+            "partial",
+            crate::outbox::OutboxState::Queued,
+            Some(r#"{"wss://accepted":"accepted","wss://retry":"failed:rate-limited: wait"}"#),
+        )
+        .unwrap();
+
+        assert!(read_marker(&db, "partial").unwrap().is_none());
+        assert_eq!(
+            check_caps(&db, T0 + 30_000).unwrap(),
+            CapStatus::TooSoon {
+                retry_after_ms: MIN_SPACING_MS - 30_000
+            }
+        );
+        greek_core::sync::pair_device(&db, "peer", "phone").unwrap();
+        assert_eq!(
+            check_caps(&db, T0 + 7 * HOUR_MS).unwrap(),
+            CapStatus::DailyExhausted { used: 1, cap: 1 }
+        );
     }
 
     #[test]

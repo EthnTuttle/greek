@@ -186,7 +186,15 @@ pub fn set_milestone_enabled(db: &Database, slug: &str, enabled: bool) -> Result
 }
 
 pub fn preview(db: &Database, slug: &str, suffix: &str) -> Result<String> {
-    templates::render_content(db, slug, post_lang(db), None, Some(suffix)).map_err(anyhow::Error::from)
+    let lang = post_lang(db);
+    if slug == templates::SLUG_CHAPTER_MASTERED {
+        // Representative full occurrence id; actual posts substitute their
+        // own track/chapter id so even same-numbered chapters cannot collide.
+        templates::render_chapter_content(db, lang, "athenaze/1", Some(suffix))
+    } else {
+        templates::render_content(db, slug, lang, None, Some(suffix))
+    }
+    .map_err(anyhow::Error::from)
 }
 
 // --- REQ-B12..B14: flush + outbox views ---------------------------------------
@@ -198,39 +206,23 @@ pub async fn flush_now(db: &Mutex<Database>) -> Result<ops::FlushReport> {
             return Ok(ops::FlushReport::default());
         }
     }
-    // The engine's flush future holds the sqlite connection (a !Sync guard)
-    // across awaits internally — legal only if it never migrates threads.
-    // UniFFI runs this export on a MULTI-thread tokio runtime and requires
-    // the returned future to be Send, so we pin a current-thread runtime
-    // inside block_in_place: every guard stays on one OS thread, and the
-    // outer future only ever awaits a plain (Send) result.
-    // NOTE: block_in_place panics on a current-thread outer runtime; the
-    // desktop/harness callers must use multi_thread (sync-peer does).
-    tokio::task::block_in_place(|| {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("flush runtime");
-        rt.block_on(async {
-            let (keys, relays) = {
-                let db = db.lock().unwrap();
-                let relays = relays_get(&db);
-                if relays.is_empty() {
-                    return Err(anyhow!("no sharing relays configured"));
-                }
-                (ShareKeys::from_db(&db)?, relays)
-            };
-            let publisher = Publisher::connect(&keys, &relays)
-                .await
-                .map_err(|e| anyhow!("connecting to sharing relays: {e}"))?;
-            let report = {
-                let db = db.lock().unwrap();
-                ops::flush(&db, &publisher, now_ms()).await
-            };
-            publisher.disconnect().await;
-            report.map_err(|e| anyhow!("flush: {e}"))
-        })
-    })
+    // Inputs are copied under short locks. All relay connect/read-back/publish
+    // waits run unlocked; `ops::flush` re-acquires only to inspect or apply
+    // local state, so reviews and other learning reads never wait on network.
+    let (keys, relays) = {
+        let db = db.lock().unwrap();
+        let relays = relays_get(&db);
+        if relays.is_empty() {
+            return Err(anyhow!("no sharing relays configured"));
+        }
+        (ShareKeys::from_db(&db)?, relays)
+    };
+    let publisher = Publisher::connect(&keys, &relays)
+        .await
+        .map_err(|e| anyhow!("connecting to sharing relays: {e}"))?;
+    let report = ops::flush(db, &publisher, now_ms()).await;
+    publisher.disconnect().await;
+    report.map_err(|e| anyhow!("flush: {e}"))
 }
 
 pub fn pending_count(db: &Database) -> u32 {

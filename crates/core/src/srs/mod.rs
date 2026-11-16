@@ -1,5 +1,5 @@
 use crate::db::Database;
-use fsrs::{FSRS, ItemState, MemoryState, NextStates};
+use fsrs::{ItemState, MemoryState, NextStates, FSRS};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,10 +52,11 @@ pub struct IntervalPreview {
 // Without this, FSRS schedules a NEW card rated Again ~0.40 days (≈9h40m)
 // out — it can never resurface in the session it failed in.
 // "In (re)learning" is history-derived: `reps == lapses`, i.e. every review
-// so far was Again (a brand-new card trivially so). An established card
-// (reps > lapses) that lapses keeps its own longer FSRS relearn interval,
-// per the same doc paragraph. Any non-Again rating graduates the card;
-// Easy is deliberately not on the ladder (it graduates immediately).
+// so far was Again (a brand-new card trivially so). Graduated is the exact
+// complement used by chapter pacing. Any non-Again rating graduates the card;
+// Easy is deliberately not on the ladder (it graduates immediately). EVERY
+// Again gets a one-minute relearning due step (P2.14), while preserving the
+// FSRS Again memory state even for a graduated card.
 const STEP_AGAIN_SECS: u64 = 60; // 1 min
 const STEP_HARD_SECS: u64 = 300; // 5 min
 const STEP_GOOD_SECS: u64 = 600; // 10 min
@@ -103,11 +104,7 @@ impl SrsEngine {
 
     /// Get cards that are due for review (due_date <= now), ordered by most overdue first.
     /// Propagates SQL errors instead of panicking so callers can surface a recoverable error.
-    pub fn get_due_cards(
-        &self,
-        db: &Database,
-        limit: usize,
-    ) -> anyhow::Result<Vec<CardWithState>> {
+    pub fn get_due_cards(&self, db: &Database, limit: usize) -> anyhow::Result<Vec<CardWithState>> {
         let now = self.clock.now();
         let mut stmt = db.conn().prepare(
             "SELECT card_id, stability, difficulty, last_review, due_date, reps, lapses
@@ -187,9 +184,9 @@ impl SrsEngine {
             difficulty: s.difficulty,
         });
 
-        let next_states = self
-            .fsrs
-            .next_states(memory_state, self.desired_retention, elapsed_days)?;
+        let next_states =
+            self.fsrs
+                .next_states(memory_state, self.desired_retention, elapsed_days)?;
 
         let mut preview = IntervalPreview {
             again_secs: interval_days_to_secs(next_states.again.interval),
@@ -204,8 +201,11 @@ impl SrsEngine {
             .as_ref()
             .map(|s| (s.reps, s.lapses))
             .unwrap_or((0, 0));
+        // P2.14: EVERY Again has a one-minute relearning step, including a
+        // lapse on a graduated card. Other step previews apply only while
+        // learning; all ratings still retain their FSRS next memory state.
+        preview.again_secs = STEP_AGAIN_SECS as u32;
         if is_learning(prior_reps, prior_lapses) {
-            preview.again_secs = STEP_AGAIN_SECS as u32;
             preview.hard_secs = STEP_HARD_SECS as u32;
             preview.good_secs = STEP_GOOD_SECS as u32;
             // easy: graduates immediately, schedules via FSRS.
@@ -222,7 +222,10 @@ impl SrsEngine {
     /// Submit a review tagged with its origin (`source`), e.g. "flashcard"
     /// for the self-rated review flow or "practice" for measured-assessment
     /// questions. The tag lands in `review_logs.source` so accuracy metrics
-    /// can be computed per activity type; scheduling itself is identical.
+    /// can be computed per activity type. A practice miss on a graduated card
+    /// preserves its prior FSRS memory while retaining the normal lapse count
+    /// and one-minute relearning step; every other rating/source combination
+    /// uses the selected FSRS next state.
     pub fn submit_review_with_source(
         &self,
         db: &Database,
@@ -245,6 +248,11 @@ impl SrsEngine {
         // whole-day gaps.
         let elapsed_days: u32 = elapsed_days_since(current_state.as_ref(), &now);
 
+        let (prior_reps, prior_lapses) = current_state
+            .as_ref()
+            .map(|s| (s.reps, s.lapses))
+            .unwrap_or((0, 0));
+
         // Build FSRS memory state
         let memory_state = current_state.as_ref().map(|s| MemoryState {
             stability: s.stability,
@@ -252,9 +260,9 @@ impl SrsEngine {
         });
 
         // Get next states for all ratings
-        let next_states: NextStates = self
-            .fsrs
-            .next_states(memory_state, self.desired_retention, elapsed_days)?;
+        let next_states: NextStates =
+            self.fsrs
+                .next_states(memory_state, self.desired_retention, elapsed_days)?;
 
         // Pick the state corresponding to the user's rating
         let chosen_state: &ItemState = match rating {
@@ -265,18 +273,25 @@ impl SrsEngine {
             _ => &next_states.good, // default to Good for invalid ratings
         };
 
-        let new_stability = chosen_state.memory.stability;
-        let new_difficulty = chosen_state.memory.difficulty;
+        let (new_stability, new_difficulty) = if preserve_memory_for_practice_miss(
+            source,
+            rating,
+            prior_reps,
+            prior_lapses,
+        ) {
+            let prior = current_state
+                .as_ref()
+                .expect("graduated practice miss requires a prior memory state");
+            (prior.stability, prior.difficulty)
+        } else {
+            (chosen_state.memory.stability, chosen_state.memory.difficulty)
+        };
         let interval_days = chosen_state.interval;
 
         // Compute new due date (C6): through the PURE `step_due` — history
         // (prior reps/lapses), rating, and the review timestamp go in; no
         // wall clock. The sync fold replays this exact function against
         // each event's timestamp, so both paths schedule identically.
-        let (prior_reps, prior_lapses) = current_state
-            .as_ref()
-            .map(|s| (s.reps, s.lapses))
-            .unwrap_or((0, 0));
         let due_date = step_due(prior_reps, prior_lapses, rating, interval_days, &now);
 
         // Update reps/lapses
@@ -370,28 +385,31 @@ pub fn now_iso8601() -> String {
     chrono_now()
 }
 
-/// Count of cards introduced (first-ever review) on today's UTC date.
-/// A card counts as "new today" iff its EARLIEST `review_logs` timestamp
-/// falls on the current UTC date; cards first reviewed on an earlier day do
-/// not count even if reviewed again today. Returns 0 if the query fails.
+/// Count of VOCABULARY cards counting against today's new-introduction cap.
+/// A non-letters card counts when its EARLIEST `review_logs` timestamp falls
+/// on the current UTC date; later reviews never introduce it again. Letters
+/// are exempt from the cap and therefore excluded here, while their complete
+/// review history remains in `review_logs` for organic-gate evidence.
 pub fn new_cards_today(db: &Database) -> u32 {
     let now = chrono_now();
     let today = &now[..10]; // "YYYY-MM-DD"
     db.conn()
         .query_row(
             "SELECT COUNT(*) FROM (
-                 SELECT MIN(timestamp) AS first_ts
+                 SELECT card_id, MIN(timestamp) AS first_ts
                  FROM review_logs
                  GROUP BY card_id
-             ) WHERE substr(first_ts, 1, 10) = ?1",
+             ) WHERE substr(first_ts, 1, 10) = ?1
+               AND card_id NOT LIKE 'letters-%'",
             [today],
             |row| row.get::<_, i64>(0),
         )
         .unwrap_or(0) as u32
 }
 
-/// Remaining new-card allowance for today: the daily cap minus the number of
-/// cards already introduced today (saturates at 0 if the cap was exceeded).
+/// Remaining VOCABULARY new-card allowance for today: the daily cap minus
+/// non-letters first reviews today (saturates at 0). Letters do not consume
+/// this allowance and are admitted independently of it.
 pub fn new_cards_remaining_today(db: &Database) -> u32 {
     DEFAULT_DAILY_NEW_CAP.saturating_sub(new_cards_today(db))
 }
@@ -404,8 +422,9 @@ pub fn new_cards_remaining_today(db: &Database) -> u32 {
 /// looping chapters (the old Android session builder) saw the SAME unspent
 /// budget on every chapter — a 10/day cap admitted a 7+10+3 multi-curriculum
 /// session. `SessionBudget` consults the remaining allowance ONCE and hands
-/// out admissions one card at a time, so one whole session build can never
-/// exceed the day's true remainder.
+/// out VOCABULARY admissions one card at a time, so one whole session build
+/// can never exceed the day's true remainder. Letters bypass consumption via
+/// [`SessionBudget::try_admit_for_textbook`].
 ///
 /// Race note: this is a planning SNAPSHOT, not a reservation. The durable
 /// `new_cards_today` counter only advances when a review is actually
@@ -420,8 +439,8 @@ pub struct SessionBudget {
 }
 
 impl SessionBudget {
-    /// Snapshot today's remaining new-card allowance (cap minus the cards
-    /// already first-reviewed today, saturating at 0).
+    /// Snapshot today's remaining VOCABULARY new-card allowance (cap minus
+    /// non-letters cards first reviewed today, saturating at 0).
     pub fn open(db: &Database) -> Self {
         Self {
             remaining: new_cards_remaining_today(db),
@@ -441,6 +460,12 @@ impl SessionBudget {
         }
         self.remaining -= 1;
         true
+    }
+
+    /// Track-aware admission: letters never consume the vocabulary snapshot;
+    /// every other track uses the ordinary consuming operation above.
+    pub fn try_admit_for_textbook(&mut self, textbook: &str) -> bool {
+        textbook == "letters" || self.try_admit()
     }
 }
 
@@ -619,7 +644,11 @@ fn interval_days_to_secs(days: f32) -> u32 {
 /// whose day count would go negative. Callers normally pass values
 /// already validated by `parse_iso_ymd`.
 fn ymd_to_days(year: u64, month: u64, day: u64) -> Option<u64> {
-    let y = if month <= 2 { year.checked_sub(1)? } else { year };
+    let y = if month <= 2 {
+        year.checked_sub(1)?
+    } else {
+        year
+    };
     let m = if month <= 2 { month + 9 } else { month - 3 };
     let era = y / 400;
     let yoe = y - era * 400;
@@ -664,6 +693,19 @@ pub(crate) fn is_learning(prior_reps: i32, prior_lapses: i32) -> bool {
     prior_reps == prior_lapses
 }
 
+/// A wrong measured-practice answer on an already graduated card records a
+/// lapse and triggers relearning but does not collapse its FSRS memory.
+/// Shared by incremental submission and sync fold so source-aware replay is
+/// exact. In-learning cards and flashcard self-ratings still use FSRS Again.
+pub(crate) fn preserve_memory_for_practice_miss(
+    source: &str,
+    rating: u8,
+    prior_reps: i32,
+    prior_lapses: i32,
+) -> bool {
+    source == "practice" && rating == 1 && prior_reps > prior_lapses
+}
+
 /// PURE due-date decision for one review (C6): given only history-derived
 /// inputs — the card's rep/lapse counts BEFORE this review, the rating, the
 /// FSRS next-state interval, and the review's own timestamp — return the due
@@ -675,8 +717,9 @@ pub(crate) fn is_learning(prior_reps: i32, prior_lapses: i32) -> bool {
 /// While the card is in (re)learning (see [`is_learning`]), the FSRS `due`
 /// is overridden by the step ladder (docs/guide.html:109-114):
 /// Again→1min, Hard→5min, Good→10min, all as durations from `review_ts`.
-/// Easy — and any rating once the card has graduated — uses the FSRS
-/// interval unmodified.
+/// Every Again, including a graduated-card lapse, uses the one-minute step.
+/// Easy — and passing ratings once the card has graduated — use FSRS
+/// intervals unmodified.
 pub(crate) fn step_due(
     prior_reps: i32,
     prior_lapses: i32,
@@ -684,6 +727,12 @@ pub(crate) fn step_due(
     fsrs_interval_days: f32,
     review_ts: &str,
 ) -> String {
+    // P2.14: Again on ANY card returns in one minute. The caller still
+    // stores the Again memory from FSRS `next_states`; only its due interval
+    // is replaced. Sync replay calls this same pure function.
+    if rating == 1 {
+        return add_secs_to(review_ts, STEP_AGAIN_SECS);
+    }
     if is_learning(prior_reps, prior_lapses) {
         let step = match rating {
             1 => Some(STEP_AGAIN_SECS),
@@ -1104,10 +1153,13 @@ mod tests {
         insert_log("new-b", &format!("{today}T12:00:00Z"));
 
         assert_eq!(new_cards_today(&db), 2);
-        assert_eq!(
-            new_cards_remaining_today(&db),
-            DEFAULT_DAILY_NEW_CAP - 2
-        );
+        assert_eq!(new_cards_remaining_today(&db), DEFAULT_DAILY_NEW_CAP - 2);
+
+        // Letters are still logged, but never count against the vocabulary
+        // counter or its remaining allowance.
+        insert_log("letters-001", &format!("{today}T13:00:00Z"));
+        assert_eq!(new_cards_today(&db), 2);
+        assert_eq!(new_cards_remaining_today(&db), DEFAULT_DAILY_NEW_CAP - 2);
     }
 
     /// C3: the session budget consults the daily allowance ONCE and hands
@@ -1124,8 +1176,14 @@ mod tests {
         for _ in 0..DEFAULT_DAILY_NEW_CAP {
             assert!(budget.try_admit());
         }
-        assert!(!budget.try_admit(), "the snapshot must be exhausted at the cap");
+        assert!(
+            !budget.try_admit(),
+            "the snapshot must be exhausted at the cap"
+        );
         assert_eq!(budget.remaining(), 0);
+        assert!(budget.try_admit_for_textbook("letters"));
+        assert!(budget.try_admit_for_textbook("letters"));
+        assert_eq!(budget.remaining(), 0, "letters consume no vocabulary slots");
 
         // Planning admits nothing durable: only successful submissions move
         // the counter a LATER snapshot consults.
@@ -1282,6 +1340,182 @@ mod tests {
         );
     }
 
+    /// P2.14: a lapse on a graduated card reuses the one-minute due step,
+    /// not the mature FSRS retention interval. Its stability/difficulty are
+    /// still FSRS's Again next-state and full sync replay is byte-exact.
+    #[test]
+    fn test_graduated_again_relearns_in_one_minute_and_replays_exactly() {
+        let db = Database::open(":memory:", None).unwrap();
+        let clock = ManualClock::new(fixed_now());
+        let engine = engine_with_clock(&clock);
+        engine.submit_review(&db, "mature-lapse", 4).unwrap();
+        clock.advance(86400);
+        engine.submit_review(&db, "mature-lapse", 3).unwrap();
+        let stability_before: f32 = db
+            .conn()
+            .query_row(
+                "SELECT stability FROM memory_states WHERE card_id = 'mature-lapse'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        clock.advance(86400);
+        engine.submit_review(&db, "mature-lapse", 1).unwrap();
+        assert_eq!(
+            due_date_of(&db, "mature-lapse"),
+            secs_to_iso(clock.secs() + STEP_AGAIN_SECS)
+        );
+        assert_eq!(
+            step_due(8, 2, 1, 30.0, &clock.now()),
+            secs_to_iso(clock.secs() + STEP_AGAIN_SECS),
+            "graduated Again must not copy the mature FSRS interval"
+        );
+        assert_eq!(
+            engine
+                .preview_intervals(&db, "mature-lapse")
+                .unwrap()
+                .unwrap()
+                .again_secs,
+            STEP_AGAIN_SECS as u32
+        );
+        let stability_after: f32 = db
+            .conn()
+            .query_row(
+                "SELECT stability FROM memory_states WHERE card_id = 'mature-lapse'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(stability_after > 0.0 && stability_after != stability_before);
+
+        let expected: (f32, f32, Option<String>, String, i32, i32) = db
+            .conn()
+            .query_row(
+                "SELECT stability, difficulty, last_review, due_date, reps, lapses
+                 FROM memory_states WHERE card_id = 'mature-lapse'",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .unwrap();
+        let events = crate::sync::events_since(&db, None).unwrap();
+        let replica = Database::open(":memory:", None).unwrap();
+        crate::sync::apply_review_events(&replica, &events).unwrap();
+        let replayed: (f32, f32, Option<String>, String, i32, i32) = replica
+            .conn()
+            .query_row(
+                "SELECT stability, difficulty, last_review, due_date, reps, lapses
+                 FROM memory_states WHERE card_id = 'mature-lapse'",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(replayed, expected, "incremental lapse == sync fold");
+
+        // The next passing preview is FSRS again (not a copied long Again
+        // interval), while every Again preview stays one minute.
+        assert!(
+            engine
+                .preview_intervals(&db, "mature-lapse")
+                .unwrap()
+                .unwrap()
+                .good_secs
+                > STEP_GOOD_SECS as u32
+        );
+    }
+
+    #[test]
+    fn test_graduated_practice_miss_preserves_memory_but_relearns_in_one_minute() {
+        let db = Database::open(":memory:", None).unwrap();
+        let clock = ManualClock::new(fixed_now());
+        let engine = engine_with_clock(&clock);
+        engine.submit_review(&db, "practice-lapse", 3).unwrap();
+        let before: (f32, f32, i32, i32) = db
+            .conn()
+            .query_row(
+                "SELECT stability, difficulty, reps, lapses
+                 FROM memory_states WHERE card_id = 'practice-lapse'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert!(before.2 > before.3, "fixture must be graduated");
+
+        clock.advance(86400);
+        engine
+            .submit_review_with_source(&db, "practice-lapse", 1, "practice")
+            .unwrap();
+        let after: (f32, f32, i32, i32) = db
+            .conn()
+            .query_row(
+                "SELECT stability, difficulty, reps, lapses
+                 FROM memory_states WHERE card_id = 'practice-lapse'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!((after.0, after.1), (before.0, before.1));
+        assert_eq!((after.2, after.3), (before.2 + 1, before.3 + 1));
+        assert_eq!(
+            due_date_of(&db, "practice-lapse"),
+            secs_to_iso(clock.secs() + STEP_AGAIN_SECS)
+        );
+        assert_eq!(
+            engine
+                .preview_intervals(&db, "practice-lapse")
+                .unwrap()
+                .unwrap()
+                .again_secs,
+            STEP_AGAIN_SECS as u32
+        );
+
+        // In-learning practice misses still select FSRS Again normally.
+        engine
+            .submit_review_with_source(&db, "learning-practice", 1, "practice")
+            .unwrap();
+        let learning_before: (f32, f32) = db
+            .conn()
+            .query_row(
+                "SELECT stability, difficulty FROM memory_states
+                 WHERE card_id = 'learning-practice'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        clock.advance(STEP_AGAIN_SECS + 1);
+        engine
+            .submit_review_with_source(&db, "learning-practice", 1, "practice")
+            .unwrap();
+        let learning_after: (f32, f32) = db
+            .conn()
+            .query_row(
+                "SELECT stability, difficulty FROM memory_states
+                 WHERE card_id = 'learning-practice'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_ne!(learning_after, learning_before);
+    }
+
     /// C6 defense-in-depth: a malformed/epoch-broken stored timestamp must
     /// NOT silently succeed against the wall clock (that fallback made the
     /// sync fold device-dependent). It now clamps deterministically to the
@@ -1290,10 +1524,7 @@ mod tests {
     #[test]
     fn test_add_days_to_now_malformed_clamps_to_epoch() {
         // Garbage input: epoch + 1 day, no wall-clock involvement.
-        assert_eq!(
-            add_days_to_now("not a date", 1.0),
-            "1970-01-02T00:00:00Z"
-        );
+        assert_eq!(add_days_to_now("not a date", 1.0), "1970-01-02T00:00:00Z");
         // Epoch-broken stored date (year 0 is ASCII-valid but unparseable):
         // deterministic clamp, and demonstrably not "today".
         let clamped = add_days_to_now("0000-01-01T00:00:00Z", 0.0);
@@ -1373,10 +1604,7 @@ mod tests {
         assert_eq!(days_to_ymd(0), (1970, 1, 1));
         // Round-trip
         assert_eq!(ymd_to_days(1970, 1, 1), Some(0));
-        assert_eq!(
-            ymd_to_days(2024, 6, 15),
-            iso_to_days("2024-06-15")
-        );
+        assert_eq!(ymd_to_days(2024, 6, 15), iso_to_days("2024-06-15"));
     }
 
     #[test]
@@ -1388,10 +1616,7 @@ mod tests {
 
     #[test]
     fn test_parse_iso_ymd_valid() {
-        assert_eq!(
-            parse_iso_ymd("2024-06-15T12:00:00Z"),
-            Some((2024, 6, 15))
-        );
+        assert_eq!(parse_iso_ymd("2024-06-15T12:00:00Z"), Some((2024, 6, 15)));
         // Date-only input (no time part) parses too.
         assert_eq!(parse_iso_ymd("1970-01-01"), Some((1970, 1, 1)));
     }
@@ -1456,9 +1681,8 @@ mod tests {
         // whole path (parse -> ymd_to_days -> days_between) is panic-free.
         let result = catch_unwind(|| {
             bad.iter().fold(0u32, |acc, from| {
-                bad.iter().fold(acc, |acc2, to| {
-                    acc2.saturating_add(days_between(from, to))
-                })
+                bad.iter()
+                    .fold(acc, |acc2, to| acc2.saturating_add(days_between(from, to)))
             })
         });
         assert!(result.is_ok(), "days_between must never panic on bad input");

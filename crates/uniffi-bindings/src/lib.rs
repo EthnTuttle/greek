@@ -1,9 +1,9 @@
 use greek_core::{
-    now_iso8601, Analysis, Card, CardWithState, ChapterInfo, Curriculum, CurriculumInfo, Database,
-    MorphologyDb, Reader, SearchEngine, SearchResult, SrsEngine, TextSection, Token,
-    AlphabetGateMethod, ALPHABET_CHECK_N,
+    now_iso8601, AlphabetGateMethod, Analysis, Card, CardWithState, ChapterInfo, Curriculum,
+    CurriculumInfo, Database, MorphologyDb, Reader, SearchEngine, SearchResult, SrsEngine,
+    TextSection, Token, ALPHABET_CHECK_N,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 uniffi::setup_scaffolding!();
@@ -14,23 +14,21 @@ uniffi::setup_scaffolding!();
 pub enum GreekError {
     #[error("database error: {msg}")]
     Database { msg: String },
+    #[error("invalid card deck: {0}")]
+    InvalidCards(String),
     #[error("sync error: {0}")]
     Sync(String),
 }
 
 impl From<anyhow::Error> for GreekError {
     fn from(e: anyhow::Error) -> Self {
-        GreekError::Database {
-            msg: e.to_string(),
-        }
+        GreekError::Database { msg: e.to_string() }
     }
 }
 
 impl From<rusqlite::Error> for GreekError {
     fn from(e: rusqlite::Error) -> Self {
-        GreekError::Database {
-            msg: e.to_string(),
-        }
+        GreekError::Database { msg: e.to_string() }
     }
 }
 
@@ -72,6 +70,8 @@ pub struct AnalysisView {
     pub postag_human: String,
     pub definition: String,
     pub confidence: f32,
+    /// Lemma POS used to display and distinguish dictionary candidates.
+    pub pos: String,
 }
 
 #[derive(uniffi::Record)]
@@ -94,6 +94,7 @@ pub struct ChapterView {
     pub chapter: i32,
     pub title: String,
     pub card_count: i32,
+    pub learning_count: i32,
     pub mastered_count: i32,
     pub unlocked: bool,
     pub available: bool,
@@ -122,6 +123,10 @@ pub struct ReviewStats {
     pub reviewed_today: i32,
     pub streak_days: i32,
     pub total_cards: i32,
+    /// Introduced cards (memory_states count), not reader known-word marks.
+    pub learning_count: i32,
+    /// Introduced cards with at least 30 days of FSRS stability.
+    pub mastered_count: i32,
 }
 
 #[derive(uniffi::Record)]
@@ -138,6 +143,9 @@ pub struct McqView {
     pub prompt_gloss: String,
     pub choices: Vec<String>,
     pub correct_index: u8,
+    /// True when this item may be rendered as typed practice; otherwise use
+    /// the multiple-choice fallback regardless of the caller's alternation.
+    pub typeable: bool,
 }
 
 #[derive(uniffi::Record)]
@@ -172,6 +180,10 @@ pub struct AlphabetGateStateView {
     pub letters_practice_correct: u32,
     pub letters_active_days: u32,
     pub letters_chapters_met: u32,
+    pub letters_practice_accuracy: f64,
+    pub letters_practice_required: u32,
+    pub letters_accuracy_required: f64,
+    pub letters_active_days_required: u32,
 }
 
 // --- Conversion helpers ---
@@ -220,7 +232,38 @@ fn analysis_to_view(a: &Analysis) -> AnalysisView {
         postag_human: a.postag_human.clone(),
         definition: a.definition.clone(),
         confidence: a.confidence,
+        pos: a.pos.clone(),
     }
+}
+
+/// Normalize the headword portion of loaded course fronts (including the
+/// noun's article) without hard-coding any particular course. Stable deck
+/// promotion retains the core's exact/closed-class order within each tier.
+fn deck_headwords(cards: &[Card]) -> HashSet<String> {
+    cards
+        .iter()
+        .flat_map(|card| {
+            card.front
+                .split(',')
+                .next()
+                .unwrap_or_default()
+                .split_whitespace()
+                .map(|word| word.trim_matches(|c: char| !c.is_alphabetic()))
+                .filter(|word| !word.is_empty())
+                .map(greek_core::morphology::normalize_form)
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn rank_lookup_candidates(
+    mut analyses: Vec<Analysis>,
+    deck_headwords: &HashSet<String>,
+) -> Vec<Analysis> {
+    analyses.sort_by_key(|analysis| {
+        !deck_headwords.contains(&greek_core::morphology::normalize_form(&analysis.lemma))
+    });
+    analyses
 }
 
 fn search_result_to_view(r: &SearchResult) -> SearchResultView {
@@ -245,6 +288,7 @@ fn chapter_to_view(c: &ChapterInfo) -> ChapterView {
         chapter: c.chapter,
         title: c.title.clone(),
         card_count: c.card_count,
+        learning_count: c.learning_count,
         mastered_count: c.mastered_count,
         unlocked: c.unlocked,
         available: c.available,
@@ -262,6 +306,10 @@ fn gate_state_to_view(s: &greek_core::AlphabetGateState) -> AlphabetGateStateVie
         letters_practice_correct: s.letters_practice_correct,
         letters_active_days: s.letters_active_days,
         letters_chapters_met: s.letters_chapters_met,
+        letters_practice_accuracy: s.letters_practice_accuracy,
+        letters_practice_required: s.letters_practice_required,
+        letters_accuracy_required: s.letters_accuracy_required,
+        letters_active_days_required: s.letters_active_days_required,
     }
 }
 
@@ -302,6 +350,28 @@ pub struct GreekCore {
     card_index: HashMap<String, usize>,
 }
 
+/// Parse and validate the embedded deck before any database is opened.
+/// A malformed payload is an initialization error, never an empty deck: an
+/// empty in-memory deck would otherwise hide existing due cards' content.
+fn parse_cards_json(cards_json: &str) -> Result<Vec<Card>, GreekError> {
+    let cards: Vec<Card> = serde_json::from_str(cards_json)
+        .map_err(|e| GreekError::InvalidCards(format!("malformed JSON: {e}")))?;
+    for (index, card) in cards.iter().enumerate() {
+        for (field, value) in [
+            ("id", card.id.as_str()),
+            ("front", card.front.as_str()),
+            ("back", card.back.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                return Err(GreekError::InvalidCards(format!(
+                    "card at index {index} has an empty {field}"
+                )));
+            }
+        }
+    }
+    Ok(cards)
+}
+
 /// Build a card id -> index map for O(1) lookups.
 fn build_card_index(cards: &[Card]) -> HashMap<String, usize> {
     cards
@@ -309,6 +379,89 @@ fn build_card_index(cards: &[Card]) -> HashMap<String, usize> {
         .enumerate()
         .map(|(i, c)| (c.id.clone(), i))
         .collect()
+}
+
+/// Lookup-only wrapper around the core's diacritic-preserving vocabulary
+/// key. `morphology::normalize_form` remains accent-lenient for search and
+/// typed grading but is deliberately NOT used to construct these keys.
+fn normalized_headword(front: &str) -> String {
+    greek_core::curriculum::normalized_headword_preserving_diacritics(front)
+}
+
+fn lookup_lemma_key(card_id: &str, front: &str) -> String {
+    card_id
+        .strip_prefix("lookup-")
+        .map(normalized_headword)
+        .filter(|key| !key.is_empty())
+        .unwrap_or_else(|| normalized_headword(front))
+}
+
+fn persist_lookup_card(
+    db: &Database,
+    lemma: String,
+    form: String,
+    definition: String,
+    context: String,
+) -> Result<String, GreekError> {
+    let card_id = format!("lookup-{}", lemma);
+    let surface = if form.is_empty() { lemma.clone() } else { form };
+    // Content is written once (C13). New callers may capture the source
+    // sentence with the additive context API; older three-argument callers
+    // retain the same surface-only behavior.
+    let front = if context.trim().is_empty() {
+        surface
+    } else {
+        format!("{surface}\n\n{context}")
+    };
+    let back = if lemma.is_empty() {
+        definition
+    } else {
+        format!("{lemma}\n{definition}")
+    };
+    db.conn().execute(
+        "INSERT INTO lookup_cards (card_id, front, back)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(card_id) DO NOTHING",
+        rusqlite::params![card_id, front, back],
+    )?;
+    Ok(card_id)
+}
+
+impl GreekCore {
+    /// Normalized learning units with ANY existing memory state, including
+    /// user-created lookup cards. Due cards remain independent: this set is
+    /// consulted only for NEW-card admission.
+    fn state_lemma_keys(&self, db: &Database) -> std::collections::HashSet<String> {
+        let state_ids: std::collections::HashSet<String> = db
+            .conn()
+            .prepare("SELECT card_id FROM memory_states")
+            .ok()
+            .map(|mut stmt| {
+                stmt.query_map([], |row| row.get::<_, String>(0))
+                    .ok()
+                    .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+        let mut keys = std::collections::HashSet::new();
+        for id in state_ids {
+            let key = if let Some(&index) = self.card_index.get(&id) {
+                greek_core::curriculum::learning_unit_key(&self.cards[index]).unwrap_or_default()
+            } else if let Ok(front) = db.conn().query_row(
+                "SELECT front FROM lookup_cards WHERE card_id = ?1",
+                [&id],
+                |row| row.get::<_, String>(0),
+            ) {
+                lookup_lemma_key(&id, &front)
+            } else {
+                String::new()
+            };
+            if !key.is_empty() {
+                keys.insert(key);
+            }
+        }
+        keys
+    }
 }
 
 #[uniffi::export]
@@ -341,12 +494,13 @@ impl GreekCore {
         morphology_db_path: Option<String>,
         cards_json: String,
     ) -> Result<Arc<Self>, GreekError> {
+        // Validate first: corrupt deck JSON must not even create/open the DB.
+        let cards = parse_cards_json(&cards_json)?;
+        let card_index = build_card_index(&cards);
         let db = Database::open(&db_path, morphology_db_path.as_deref())?;
         let srs = SrsEngine::new();
         let morphology = MorphologyDb::new();
         let search = SearchEngine::new();
-        let cards: Vec<Card> = serde_json::from_str(&cards_json).unwrap_or_default();
-        let card_index = build_card_index(&cards);
 
         Ok(Arc::new(Self {
             db: Mutex::new(db),
@@ -396,21 +550,32 @@ impl GreekCore {
     pub fn get_new_cards(&self, textbook: String, chapter: i32, limit: i32) -> Vec<CardView> {
         let db = self.db.lock().unwrap();
 
-        // Alphabet gate: vocabulary new-card introduction is refused until
-        // the learner proves alphabet fluency. (Due reviews via
-        // get_due_cards are never gated.) The refusal lives here in the core
-        // so every current and future UI path is capped consistently.
-        if textbook != "letters" && !Curriculum::alphabet_gate_state(&db, &self.cards).satisfied {
+        // C11: use the exact chapter state shown by get_chapters. This one
+        // check enforces both the alphabet gate and sequential learning;
+        // direct chapter-scoped calls cannot bypass build_review_session.
+        // (Due reviews via get_due_cards are never gated.)
+        let chapter_available = Curriculum::get_chapters(&db, &textbook, &self.cards)
+            .into_iter()
+            .find(|c| c.chapter == chapter)
+            .map(|c| c.unlocked && c.available)
+            .unwrap_or(false);
+        if !chapter_available {
             return Vec::new();
         }
 
-        // Enforce the daily new-card cap at the Rust layer so every UI path
-        // is capped consistently.
+        // Enforce the daily vocabulary new-card cap at the Rust layer so
+        // every UI path is capped consistently; letters are exempt.
         let remaining = greek_core::srs::new_cards_remaining_today(&db);
-        if remaining == 0 {
+        if textbook != "letters" && remaining == 0 {
             return Vec::new();
         }
-        let effective_limit = (limit.max(0) as u32).min(remaining) as usize;
+        // Letters are cap-exempt; all vocabulary/lookup introductions retain
+        // the daily allowance enforced by this same chapter-scoped path.
+        let effective_limit = if textbook == "letters" {
+            limit.max(0) as usize
+        } else {
+            (limit.max(0) as u32).min(remaining) as usize
+        };
 
         let chapter_cards: Vec<&Card> = self
             .cards
@@ -430,12 +595,27 @@ impl GreekCore {
             })
             .unwrap_or_default();
 
-        chapter_cards
-            .into_iter()
-            .filter(|c| !has_state.contains(&c.id))
-            .take(effective_limit)
-            .map(|c| card_to_view(c))
-            .collect()
+        let mut lemma_keys = self.state_lemma_keys(&db);
+        let mut result = Vec::new();
+        for card in chapter_cards {
+            if result.len() >= effective_limit {
+                break;
+            }
+            if has_state.contains(&card.id) {
+                continue;
+            }
+            let key = greek_core::curriculum::learning_unit_key(card);
+            // Check before taking a slot: duplicates consume neither the
+            // caller's limit nor (indirectly) the daily introduction budget.
+            if key.as_ref().is_some_and(|key| lemma_keys.contains(key)) {
+                continue;
+            }
+            if let Some(key) = key {
+                lemma_keys.insert(key);
+            }
+            result.push(card_to_view(card));
+        }
+        result
     }
 
     /// Build a full review session in ONE pass (C3 fix).
@@ -444,10 +624,12 @@ impl GreekCore {
     /// loop, in which every chapter call re-saw the full unspent daily budget.
     /// UI-visible ordering matches the old semantics: due cards first (most
     /// overdue first, never gated, never counting toward the new-card cap),
-    /// then new cards in curriculum order (letters → athenaze → jact → dcc),
+    /// then never-reviewed lookup cards, then new cards in curriculum order
+    /// (letters → athenaze → jact → dcc),
     /// chapter order within a curriculum, deck order within a chapter —
-    /// consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`]),
-    /// so one session introduces at most the day's true remaining allowance.
+    /// consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`])
+    /// for lookup/vocabulary cards. Letters are cap-exempt but still respect
+    /// the overall session size, chapter unlocks, and ID de-duplication.
     pub fn build_review_session(
         &self,
         session_size: u32,
@@ -482,11 +664,11 @@ impl GreekCore {
             return Ok(result);
         }
 
-        // 2. New cards across curricula from ONE budget snapshot (C3): the
-        //    daily allowance is consulted once here and decremented per
-        //    admitted card, so spanning chapters/curricula cannot re-arm it.
+        // 2. New cards from ONE budget snapshot: reader-created lookup cards
+        //    first, then bundled decks. The same normalized lemma keys are
+        //    used throughout, so duplicates are skipped BEFORE consuming a
+        //    session slot or any daily new-card allowance.
         let mut budget = greek_core::srs::SessionBudget::open(&db);
-
         let has_state: std::collections::HashSet<String> = db
             .conn()
             .prepare("SELECT card_id FROM memory_states")
@@ -498,10 +680,61 @@ impl GreekCore {
                     .unwrap_or_default()
             })
             .unwrap_or_default();
+        let mut lemma_keys = self.state_lemma_keys(&db);
+
+        let new_lookups: Vec<(String, String, String)> = db
+            .conn()
+            .prepare(
+                "SELECT lc.card_id, lc.front, lc.back
+                 FROM lookup_cards lc
+                 LEFT JOIN memory_states ms ON ms.card_id = lc.card_id
+                 WHERE ms.card_id IS NULL
+                 ORDER BY lc.rowid",
+            )
+            .ok()
+            .map(|mut stmt| {
+                stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+                    .ok()
+                    .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+        for (card_id, front, back) in new_lookups {
+            if result.len() >= size {
+                return Ok(result);
+            }
+            if seen.contains(&card_id) {
+                continue;
+            }
+            let key = lookup_lemma_key(&card_id, &front);
+            if !key.is_empty() && lemma_keys.contains(&key) {
+                continue;
+            }
+            if !budget.try_admit() {
+                // Lookup/vocabulary capacity is exhausted, but letters later
+                // in curriculum order remain independently admissible.
+                break;
+            }
+            if !key.is_empty() {
+                lemma_keys.insert(key);
+            }
+            seen.insert(card_id.clone());
+            result.push(card_with_state_to_view(&CardWithState {
+                card: Card {
+                    id: card_id,
+                    front,
+                    back,
+                    chapter: 0,
+                    card_type: "Lookup".to_string(),
+                    pos: String::new(),
+                    tags: vec!["lookup".to_string()],
+                },
+                memory: None,
+            }));
+        }
 
         'chapters: for textbook in Curriculum::get_textbooks() {
             let name = textbook.textbook;
-            // Alphabet gate per track (same rule as get_new_cards).
             if name != "letters" && !Curriculum::alphabet_gate_state(&db, &self.cards).satisfied {
                 continue;
             }
@@ -514,19 +747,21 @@ impl GreekCore {
                     .iter()
                     .filter(|c| c.chapter == ch.chapter && greek_core::card_in_textbook(c, &name))
                 {
-                    if result.len() >= size
-                        || has_state.contains(&card.id)
-                        || seen.contains(&card.id)
-                    {
-                        if result.len() >= size {
-                            break 'chapters;
-                        }
+                    if result.len() >= size {
+                        break 'chapters;
+                    }
+                    if has_state.contains(&card.id) || seen.contains(&card.id) {
                         continue;
                     }
-                    if !budget.try_admit() {
-                        // Daily new-card budget spent: no later chapter can
-                        // admit either — stop the whole build.
+                    let key = greek_core::curriculum::learning_unit_key(card);
+                    if key.as_ref().is_some_and(|key| lemma_keys.contains(key)) {
+                        continue;
+                    }
+                    if !budget.try_admit_for_textbook(&name) {
                         return Ok(result);
+                    }
+                    if let Some(key) = key {
+                        lemma_keys.insert(key);
                     }
                     result.push(card_with_state_to_view(&CardWithState {
                         card: card.clone(),
@@ -590,12 +825,24 @@ impl GreekCore {
         share_hook_stats_refresh(&db, &self.cards);
 
         let total_cards = self.cards.len() as i32;
+        let (learning_count, mastered_count): (i32, i32) = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*),
+                        COALESCE(SUM(CASE WHEN stability >= ?1 THEN 1 ELSE 0 END), 0)
+                 FROM memory_states",
+                [greek_core::curriculum::MASTERY_STABILITY_DAYS],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap_or((0, 0));
 
         ReviewStats {
             due_count,
             reviewed_today,
             streak_days,
             total_cards,
+            learning_count,
+            mastered_count,
         }
     }
 
@@ -617,13 +864,15 @@ impl GreekCore {
             })
     }
 
-    /// Number of cards introduced (first-ever review) on today's date.
+    /// Number of cap-counting VOCABULARY cards first reviewed today. Letters
+    /// are cap-exempt and excluded from this Home/budget metric only; their
+    /// review logs and organic-gate history are unchanged.
     pub fn new_cards_today(&self) -> u32 {
         let db = self.db.lock().unwrap();
         greek_core::srs::new_cards_today(&db)
     }
 
-    /// Remaining new-card allowance for today under the daily cap.
+    /// Remaining vocabulary new-card allowance for today under the daily cap.
     pub fn new_cards_remaining_today(&self) -> u32 {
         let db = self.db.lock().unwrap();
         greek_core::srs::new_cards_remaining_today(&db)
@@ -669,11 +918,31 @@ impl GreekCore {
             })
             .unwrap_or_default();
 
+        // Topups may not peek into locked chapters. Reviewed cards remain
+        // eligible even if an old policy introduced them before the lock was
+        // enforced; only the UNSEEN prompt tier gets this additional filter.
+        let mut open_chapters = std::collections::HashSet::new();
+        for textbook in Curriculum::get_textbooks() {
+            for chapter in Curriculum::get_chapters(&db, &textbook.textbook, &self.cards) {
+                if chapter.unlocked && chapter.available {
+                    open_chapters.insert((textbook.textbook.clone(), chapter.chapter));
+                }
+            }
+        }
+        let chapter_is_open = |card: &Card| {
+            open_chapters.iter().any(|(textbook, chapter)| {
+                *chapter == card.chapter && greek_core::card_in_textbook(card, textbook)
+            })
+        };
+
         // Reviewed cards first, then unseen — one generator call per tier
-        // (C5) over a SHARED distractor pool: prompts come only from the
-        // tier, distractors from the whole eligible set, so a small
-        // reviewed tier never starves its own distractors.
-        let pool: Vec<Card> = eligible.iter().map(|c| (*c).clone()).collect();
+        // (C5) over a SHARED distractor pool. The pool also excludes unseen
+        // locked cards, so they cannot leak into the four visible choices.
+        let pool: Vec<Card> = eligible
+            .iter()
+            .filter(|c| have_state.contains(&c.id) || chapter_is_open(c))
+            .map(|c| (*c).clone())
+            .collect();
         let reviewed: Vec<Card> = eligible
             .iter()
             .filter(|c| have_state.contains(&c.id))
@@ -681,7 +950,7 @@ impl GreekCore {
             .collect();
         let unseen: Vec<Card> = eligible
             .iter()
-            .filter(|c| !have_state.contains(&c.id))
+            .filter(|c| !have_state.contains(&c.id) && chapter_is_open(c))
             .map(|c| (*c).clone())
             .collect();
 
@@ -706,6 +975,7 @@ impl GreekCore {
                 prompt_gloss: m.prompt_gloss,
                 choices: m.choices,
                 correct_index: m.correct_index as u8,
+                typeable: m.typeable,
             })
             .collect()
     }
@@ -735,20 +1005,17 @@ impl GreekCore {
     }
 
     /// Record a practice outcome as an SRS review tagged source="practice":
-    /// wrong -> 1 (Again), correct -> 3 (Good), correct + exact -> 4 (Easy).
+    /// wrong -> 1 (Again), correct -> 3 (Good). `exact` remains in the public
+    /// signature for UI feedback/compat data, but NEVER promotes to Easy:
+    /// measured practice follows the design's Miss→Again / Hit→Good policy.
     /// Returns false on error, or when the card fails the alphabet-gate
     /// practice policy (C4 belt): a practice-source memory state for an
     /// ineligible vocabulary card would fabricate "vocab history" and
     /// falsely trip the gate's Lane-C grandfather. Card ids outside the
     /// loaded deck keep legacy behavior (no policy data to judge them).
     pub fn submit_practice_result(&self, card_id: String, correct: bool, exact: bool) -> bool {
-        let rating: u8 = if !correct {
-            1
-        } else if exact {
-            4
-        } else {
-            3
-        };
+        let _ = exact; // UI-only under the practice rating contract.
+        let rating: u8 = if correct { 3 } else { 1 };
         let db = self.db.lock().unwrap();
         let srs = self.srs.lock().unwrap();
         if let Some(&i) = self.card_index.get(&card_id) {
@@ -769,10 +1036,13 @@ impl GreekCore {
 
     // --- Morphology Operations ---
 
+    /// Return distinct lemma/gloss candidates rather than asking callers to
+    /// infer a dictionary entry from the first parse row. Course knowledge is
+    /// supplied here (the morphology layer does not know the loaded decks).
     pub fn lookup_word(&self, form: String) -> Vec<AnalysisView> {
         let db = self.db.lock().unwrap();
-        self.morphology
-            .lookup(db.conn(), &form)
+        let analyses = self.morphology.lookup(db.conn(), &form);
+        rank_lookup_candidates(analyses, &deck_headwords(&self.cards))
             .iter()
             .map(analysis_to_view)
             .collect()
@@ -808,9 +1078,12 @@ impl GreekCore {
 
     pub fn unlock_chapter(&self, textbook: String, chapter: i32) -> bool {
         let db = self.db.lock().unwrap();
-        // Alphabet gate: manual unlocks on vocabulary tracks are refused
-        // while the gate is unmet.
-        if textbook != "letters" && !Curriculum::alphabet_gate_state(&db, &self.cards).satisfied {
+        // C11: the write is allowed only when the same chapter predicate
+        // exposed to the UI says it is unlocked or unlock-eligible. For a
+        // locked chapter that means loaded cards, an empty unlock_hint, the
+        // previous chapter's learning threshold met, and (for vocabulary)
+        // the alphabet gate satisfied.
+        if !Curriculum::can_unlock_chapter(&db, &textbook, chapter, &self.cards) {
             return false;
         }
         Curriculum::unlock_chapter(&db, &textbook, chapter).is_ok()
@@ -871,10 +1144,7 @@ impl GreekCore {
     // --- Reader Operations ---
 
     pub fn get_text_sections(&self) -> Vec<TextSectionView> {
-        Reader::get_sections()
-            .iter()
-            .map(section_to_view)
-            .collect()
+        Reader::get_sections().iter().map(section_to_view).collect()
     }
 
     // --- Known-words tracking (reader) ---
@@ -921,7 +1191,8 @@ impl GreekCore {
 
     /// Create a new SRS card for a word looked up in the reader. The card id
     /// is derived from the lemma so repeated lookups of the same word are
-    /// idempotent (the content row upserts, nothing else is written).
+    /// idempotent: an existing content row is returned untouched, preserving
+    /// the first captured front and back alongside any scheduling history.
     ///
     /// C2: NO `memory_states` row is created here. A row's *presence* means
     /// "this card has a learned FSRS state replayable from `review_logs`";
@@ -936,21 +1207,25 @@ impl GreekCore {
         form: String,
         definition: String,
     ) -> Result<String, GreekError> {
-        let card_id = format!("lookup-{}", lemma);
         let db = self.db.lock().unwrap();
+        // Re-adding an existing lemma is a pure no-op: neither a later
+        // inflected form nor a different gloss may rewrite content beneath
+        // the card's existing review history (C13).
+        persist_lookup_card(&db, lemma, form, definition, String::new())
+    }
 
-        // Persist the card content (front = the Greek word, back = definition)
-        // so it survives restarts and can be shown when the card is studied.
-        // The lemma headword is preferred for the front; fall back to the form.
-        let front = if form.is_empty() { lemma.clone() } else { form };
-        db.conn().execute(
-            "INSERT INTO lookup_cards (card_id, front, back)
-             VALUES (?1, ?2, ?3)
-             ON CONFLICT(card_id) DO UPDATE SET front = excluded.front, back = excluded.back",
-            rusqlite::params![card_id, front, definition],
-        )?;
-
-        Ok(card_id)
+    /// Additive reader API that also captures the source sentence. The stored
+    /// front is the tapped form followed by that context; the back retains
+    /// both lemma and gloss. Existing content remains stable under re-add.
+    pub fn add_card_from_lookup_with_context(
+        &self,
+        lemma: String,
+        form: String,
+        definition: String,
+        context: String,
+    ) -> Result<String, GreekError> {
+        let db = self.db.lock().unwrap();
+        persist_lookup_card(&db, lemma, form, definition, context)
     }
 }
 
@@ -1092,10 +1367,7 @@ fn nostr_destination_fingerprint(keys: &nostr_sdk::prelude::Keys, relays: &[Stri
         .collect();
     normalized.sort();
     normalized.dedup();
-    greek_core::sync::destination_fingerprint(&[
-        &normalized.join(","),
-        &keys.public_key().to_hex(),
-    ])
+    greek_core::sync::destination_fingerprint(&[&normalized.join(","), &keys.public_key().to_hex()])
 }
 
 fn sync_err(e: impl std::fmt::Display) -> GreekError {
@@ -1227,6 +1499,21 @@ impl GreekCore {
     pub fn sync_nostr_pubkey(&self) -> Option<String> {
         let db = self.db.lock().unwrap();
         nostr_keys(&db).ok().map(|k| k.public_key().to_hex())
+    }
+
+    /// Deliberately export the sync identity secret for an explicit,
+    /// user-confirmed offline backup. This is the ONLY identity-secret export
+    /// path: ordinary JSON backups continue to exclude all vault values.
+    /// Uses the same migration-aware accessor as push/pull, so a legacy key
+    /// is moved into the vault before being returned.
+    pub fn sync_export_nostr_nsec(&self) -> Result<String, GreekError> {
+        let db = self.db.lock().unwrap();
+        load_nostr_nsec(&db).ok_or_else(|| {
+            GreekError::Sync(
+                "nostr sync identity not configured; there is no identity key to back up"
+                    .to_string(),
+            )
+        })
     }
 
     /// Set the relay list (comma-separated `wss://…` URLs).
@@ -1713,8 +2000,8 @@ impl GreekCore {
     pub fn share_config_get(&self) -> ShareConfigView {
         let db = self.db.lock().unwrap();
         ShareConfigView {
-            enabled: share_nostr::is_enabled(&db),      // REQ-B1
-            relays: share_nostr::relays_get(&db),       // REQ-B2
+            enabled: share_nostr::is_enabled(&db), // REQ-B1
+            relays: share_nostr::relays_get(&db),  // REQ-B2
             share_pubkey_hex: share_nostr::share_pubkey_hex(&db) // REQ-B3
                 .unwrap_or_default(),
         }
@@ -1726,7 +2013,8 @@ impl GreekCore {
     /// The UI must show the Appendix-R disclosure screen before calling this.
     pub fn share_enable(&self, relays: Vec<String>) -> Result<(), GreekError> {
         let db = self.db.lock().unwrap();
-        share_nostr::facade::enable(&db, &relays, &self.cards).map_err(share_err) // REQ-B4 (facade, cards for seeding)
+        share_nostr::facade::enable(&db, &relays, &self.cards).map_err(share_err)
+        // REQ-B4 (facade, cards for seeding)
     }
 
     /// Disable sharing: stops the publisher and clears queued outbox rows.
@@ -1787,7 +2075,8 @@ impl GreekCore {
         text: String,
     ) -> Result<(), GreekError> {
         let db = self.db.lock().unwrap();
-        share_nostr::set_template(&db, &slug, &locale, &text).map_err(share_err) // REQ-B8
+        share_nostr::set_template(&db, &slug, &locale, &text).map_err(share_err)
+        // REQ-B8
     }
 
     /// Restore the shipped preset for one milestone + locale ("reset to
@@ -1952,6 +2241,62 @@ mod tests {
         (dir, path.to_string_lossy().into_owned())
     }
 
+    fn ranking_candidate(lemma_id: i64, lemma: &str, definition: &str) -> Analysis {
+        Analysis {
+            lemma: lemma.to_string(),
+            lemma_id,
+            postag: "v3spia---".to_string(),
+            postag_human: "verb 3rd singular present indicative active".to_string(),
+            definition: definition.to_string(),
+            confidence: 1.0,
+            pos: "verb".to_string(),
+        }
+    }
+
+    #[test]
+    fn normalized_learning_unit_keys_preserve_meaning_diacritics() {
+        assert_eq!(normalized_headword("ὁ ΛΌΓΟΣ, -ου"), "λόγοσ");
+        assert_eq!(normalized_headword("λόγοσ"), "λόγοσ");
+        assert_ne!(normalized_headword("εἷς"), normalized_headword("εἰς"));
+        assert_ne!(normalized_headword("ἀ"), normalized_headword("ά"));
+        assert_ne!(normalized_headword("τις"), normalized_headword("τίς"));
+        assert_eq!(
+            normalized_headword("το πλοῖον"),
+            normalized_headword("πλοῖον")
+        );
+    }
+
+    #[test]
+    fn deck_lemmas_are_promoted_without_reordering_their_tier() {
+        let candidates = vec![
+            ranking_candidate(1, "οἰκεύς", "an inmate"),
+            ranking_candidate(2, "οἰκέω", "to inhabit"),
+            ranking_candidate(3, "οἰκέω", "to dwell"),
+        ];
+        let deck = HashSet::from([greek_core::morphology::normalize_form("οἰκέω")]);
+        let ranked = rank_lookup_candidates(candidates, &deck);
+        assert_eq!(
+            ranked.iter().map(|a| a.lemma_id).collect::<Vec<_>>(),
+            [2, 3, 1]
+        );
+    }
+
+    #[test]
+    fn course_front_headwords_include_bare_verbs_and_noun_articles() {
+        let cards: Vec<Card> = serde_json::from_str(
+            r#"[
+                {"id":"v","front":"οἰκέω, οἰκήσω","back":"inhabit","chapter":1,"card_type":"Vocab","pos":"verb","tags":[]},
+                {"id":"n","front":"ὁ ἀγρός","back":"field","chapter":1,"card_type":"Vocab","pos":"noun","tags":[]}
+            ]"#,
+        )
+        .unwrap();
+        let headwords = deck_headwords(&cards);
+        for expected in ["οἰκέω", "ὁ", "ἀγρός"] {
+            assert!(headwords.contains(&greek_core::morphology::normalize_form(expected)));
+        }
+        assert!(!headwords.contains(&greek_core::morphology::normalize_form("οἰκήσω")));
+    }
+
     // --- C2: lookup cards carry NO memory_states row until first review ---
 
     /// The full stored row, for exact incremental-vs-replay comparison.
@@ -1976,6 +2321,366 @@ mod tests {
                 },
             )
             .ok()
+    }
+
+    #[test]
+    fn practice_unseen_topup_respects_locked_chapters() {
+        let (dir, path) = tmp_db_path("practice-locked-topup");
+        let core = GreekCore::new_with_cards(
+            path,
+            None,
+            include_str!("../../../data/cards/letters.json").to_string(),
+        )
+        .unwrap();
+
+        let questions = core.generate_practice_mcq(20);
+        assert!(!questions.is_empty(), "unlocked chapter 1 can top up");
+        let open_fronts: std::collections::HashSet<&str> = core
+            .cards
+            .iter()
+            .filter(|card| card.chapter == 1)
+            .map(|card| card.front.as_str())
+            .collect();
+        assert!(questions.iter().all(|question| {
+            let index = core.card_index[&question.card_id];
+            core.cards[index].chapter == 1
+                && question
+                    .choices
+                    .iter()
+                    .all(|choice| open_fronts.contains(choice.as_str()))
+        }));
+
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn practice_correct_and_exact_both_log_good() {
+        let (dir, path) = tmp_db_path("practice-good-rating");
+        let card = serde_json::json!({
+            "id": "word-1",
+            "front": "λόγος",
+            "back": "word",
+            "chapter": 1,
+            "card_type": "Vocab",
+            "pos": "noun",
+            "tags": ["athenaze-i"]
+        });
+        let core =
+            GreekCore::new_with_cards(path, None, serde_json::to_string(&vec![card]).unwrap())
+                .unwrap();
+        for exact in [false, true] {
+            assert!(core.submit_practice_result("word-1".to_string(), true, exact));
+        }
+
+        let db = core.db.lock().unwrap();
+        let ratings: Vec<(i32, String)> = db
+            .conn()
+            .prepare("SELECT rating, source FROM review_logs ORDER BY rowid")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            ratings,
+            vec![(3, "practice".to_string()), (3, "practice".to_string())]
+        );
+        drop(db);
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn typed_binding_routes_through_derived_answer_key() {
+        let (dir, path) = tmp_db_path("practice-answer-key");
+        let cards = vec![
+            serde_json::json!({
+                "id": "adjective", "front": "μακρός, -ά, -όν", "back": "long",
+                "chapter": 1, "card_type": "Vocab", "pos": "adjective",
+                "tags": ["athenaze-i"]
+            }),
+            serde_json::json!({
+                "id": "alpha", "front": "Α α", "back": "alpha",
+                "chapter": 1, "card_type": "Letter", "pos": "letter",
+                "tags": ["letters"]
+            }),
+        ];
+        let core =
+            GreekCore::new_with_cards(path, None, serde_json::to_string(&cards).unwrap()).unwrap();
+        assert!(core.check_typed_answer("adjective".to_string(), "μακρόσ".to_string()));
+        assert!(core.typed_answer_exact("adjective".to_string(), "μακρόσ".to_string()));
+        assert!(core.check_typed_answer("alpha".to_string(), "α".to_string()));
+        assert!(core.typed_answer_exact("alpha".to_string(), "α".to_string()));
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn new_with_cards_rejects_malformed_json_before_opening_db() {
+        let (dir, path) = tmp_db_path("c7-malformed");
+        let err = match GreekCore::new_with_cards(path.clone(), None, "{not JSON".to_string()) {
+            Err(err) => err,
+            Ok(_) => panic!("garbage deck JSON must fail initialization"),
+        };
+        assert!(matches!(err, GreekError::InvalidCards(_)));
+        assert!(
+            !std::path::Path::new(&path).exists(),
+            "DB must not be created"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn new_with_cards_rejects_empty_required_card_fields() {
+        for field in ["id", "front", "back"] {
+            let (dir, path) = tmp_db_path(&format!("c7-empty-{field}"));
+            let mut card = serde_json::json!({
+                "id": "ath1-001",
+                "front": "λόγος",
+                "back": "word",
+                "chapter": 1,
+                "card_type": "Vocab",
+                "pos": "noun",
+                "tags": ["athenaze-i"]
+            });
+            card[field] = serde_json::json!("  ");
+            let payload = serde_json::to_string(&vec![card]).unwrap();
+            let err = match GreekCore::new_with_cards(path.clone(), None, payload) {
+                Err(err) => err,
+                Ok(_) => panic!("an empty required card field must fail initialization"),
+            };
+            match err {
+                GreekError::InvalidCards(msg) => assert!(msg.contains(field), "{msg}"),
+                other => panic!("expected InvalidCards, got {other:?}"),
+            }
+            assert!(
+                !std::path::Path::new(&path).exists(),
+                "DB must not be created"
+            );
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    #[test]
+    fn new_with_cards_rejects_missing_card_fields() {
+        for field in ["id", "front"] {
+            let (dir, path) = tmp_db_path(&format!("c7-missing-{field}"));
+            let mut card = serde_json::json!({
+                "id": "ath1-001",
+                "front": "λόγος",
+                "back": "word",
+                "chapter": 1,
+                "card_type": "Vocab",
+                "pos": "noun",
+                "tags": ["athenaze-i"]
+            });
+            card.as_object_mut().unwrap().remove(field);
+            let payload = serde_json::to_string(&vec![card]).unwrap();
+            let result = GreekCore::new_with_cards(path.clone(), None, payload);
+            assert!(matches!(result, Err(GreekError::InvalidCards(_))));
+            assert!(
+                !std::path::Path::new(&path).exists(),
+                "DB must not be created"
+            );
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    #[test]
+    fn new_with_cards_loads_the_real_deck() {
+        let (dir, path) = tmp_db_path("c7-valid");
+        let cards_json = include_str!("../../../data/cards/athenaze-i.json");
+        let expected = serde_json::from_str::<Vec<Card>>(cards_json).unwrap().len();
+        let core = GreekCore::new_with_cards(path, None, cards_json.to_string())
+            .expect("the shipped Athenaze deck must initialize");
+        assert_eq!(core.get_review_stats().total_cards as usize, expected);
+        assert!(!core.get_new_cards("athenaze".to_string(), 1, 10).is_empty());
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Mark up to `take` chapter cards learned (and 30d-stable for display).
+    /// Old-dated logs provide the vocabulary two-day evidence without spending
+    /// today's cap. Letters deliberately need no logs under single-pass
+    /// familiarity, which keeps the one-review S1 wire fixture unchanged.
+    fn mark_chapter_mastered(core: &GreekCore, chapter: i32, take: usize) {
+        let ids: Vec<String> = core
+            .cards
+            .iter()
+            .filter(|c| c.chapter == chapter)
+            .take(take)
+            .map(|c| c.id.clone())
+            .collect();
+        let db = core.db.lock().unwrap();
+        for id in ids {
+            db.conn()
+                .execute(
+                    "INSERT INTO memory_states
+                         (card_id, stability, difficulty, last_review, due_date, reps, lapses)
+                     VALUES (?1, 30.0, 5.0, '2024-01-01T00:00:00Z',
+                             '2024-01-02T00:00:00Z', 5, 0)
+                     ON CONFLICT(card_id) DO UPDATE SET stability = 30.0",
+                    [&id],
+                )
+                .unwrap();
+            if !id.starts_with("letters-") {
+                for day in ["2024-01-01", "2024-01-02"] {
+                    db.conn()
+                        .execute(
+                            "INSERT INTO review_logs
+                                 (card_id, timestamp, rating, elapsed_days, scheduled_days)
+                             VALUES (?1, ?2, 3, 0.0, 0.0)",
+                            rusqlite::params![id, format!("{day}T12:00:00Z")],
+                        )
+                        .unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn locked_athenaze_chapter_refuses_unlock_and_new_card_admission() {
+        let (dir, path) = tmp_db_path("c11-locked");
+        let core = GreekCore::new_with_cards(
+            path,
+            None,
+            include_str!("../../../data/cards/athenaze-i.json").to_string(),
+        )
+        .unwrap();
+        let prerequisite_count = core.cards.iter().filter(|c| c.chapter == 1).count();
+
+        assert!(!core.unlock_chapter("athenaze".to_string(), 2));
+        assert!(core.get_new_cards("athenaze".to_string(), 2, 10).is_empty());
+        let locked_session = core.build_review_session(100).unwrap();
+        assert!(locked_session.iter().all(|c| c.card.chapter != 2));
+
+        // The exact 80% boundary makes the UI hint empty and authorizes the
+        // backend write; the previously locked chapter can then admit cards.
+        let needed = (0.8 * prerequisite_count as f32).ceil() as usize;
+        mark_chapter_mastered(&core, 1, needed);
+        let ch2 = core
+            .get_chapters("athenaze".to_string())
+            .into_iter()
+            .find(|c| c.chapter == 2)
+            .unwrap();
+        assert!(
+            ch2.unlocked,
+            "first satisfied read auto-unlocks and latches"
+        );
+        assert_eq!(ch2.unlock_hint, "");
+        assert!(core.unlock_chapter("athenaze".to_string(), 2));
+        assert_eq!(core.get_new_cards("athenaze".to_string(), 2, 10).len(), 10);
+
+        // Exclude all ch.1 cards from the NEW pool, proving the unified
+        // session builder (not only the chapter-scoped getter) admits ch.2.
+        mark_chapter_mastered(&core, 1, prerequisite_count);
+        let unlocked_session = core.build_review_session(100).unwrap();
+        assert!(unlocked_session
+            .iter()
+            .any(|c| c.is_new && c.card.chapter == 2));
+
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sequential_unlock_requires_each_prerequisites_mastery() {
+        let (dir, path) = tmp_db_path("c11-chain");
+        let cards: Vec<serde_json::Value> = (1..=3)
+            .flat_map(|chapter| {
+                (1..=5).map(move |n| {
+                    serde_json::json!({
+                        "id": format!("ath{chapter}-{n}"),
+                        "front": format!("λόγος-{chapter}-{n}"),
+                        "back": "word",
+                        "chapter": chapter,
+                        "card_type": "Vocab",
+                        "pos": "noun",
+                        "tags": ["athenaze-i"]
+                    })
+                })
+            })
+            .collect();
+        let core =
+            GreekCore::new_with_cards(path, None, serde_json::to_string(&cards).unwrap()).unwrap();
+
+        mark_chapter_mastered(&core, 1, 4);
+        assert!(core.unlock_chapter("athenaze".to_string(), 2));
+        assert!(!core.unlock_chapter("athenaze".to_string(), 3));
+        assert!(core.get_new_cards("athenaze".to_string(), 3, 10).is_empty());
+
+        mark_chapter_mastered(&core, 2, 4);
+        assert!(core.unlock_chapter("athenaze".to_string(), 3));
+        assert_eq!(core.get_new_cards("athenaze".to_string(), 3, 10).len(), 5);
+
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn repeated_lookup_add_preserves_first_content_and_memory_state() {
+        let (dir, path) = tmp_db_path("c13-idempotent");
+        let core = GreekCore::new(path, None).unwrap();
+        let first_id = core
+            .add_card_from_lookup(
+                "λόγος".to_string(),
+                "λόγου".to_string(),
+                "first gloss".to_string(),
+            )
+            .unwrap();
+        assert!(core.submit_review(first_id.clone(), 3));
+        let state_before = {
+            let db = core.db.lock().unwrap();
+            memory_state_snapshot(&db, &first_id).unwrap()
+        };
+
+        let second_id = core
+            .add_card_from_lookup(
+                "λόγος".to_string(),
+                "λόγῳ".to_string(),
+                "replacement gloss".to_string(),
+            )
+            .unwrap();
+        assert_eq!(second_id, first_id);
+        {
+            let db = core.db.lock().unwrap();
+            let content: (String, String) = db
+                .conn()
+                .query_row(
+                    "SELECT front, back FROM lookup_cards WHERE card_id = ?1",
+                    [&first_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap();
+            assert_eq!(
+                content,
+                ("λόγου".to_string(), "λόγος\nfirst gloss".to_string())
+            );
+            assert_eq!(memory_state_snapshot(&db, &first_id), Some(state_before));
+        }
+
+        // The same insert-once path still creates genuinely fresh lookups.
+        let fresh_id = core
+            .add_card_from_lookup(
+                "λέξις".to_string(),
+                "λέξεως".to_string(),
+                "speech".to_string(),
+            )
+            .unwrap();
+        let db = core.db.lock().unwrap();
+        let fresh_front: String = db
+            .conn()
+            .query_row(
+                "SELECT front FROM lookup_cards WHERE card_id = ?1",
+                [&fresh_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(fresh_front, "λέξεως");
+        drop(db);
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // C2 regression: adding a lookup card must NOT create a zero-state
@@ -2192,7 +2897,8 @@ mod tests {
         let (dir, path) = tmp_db_path("export");
         let core = GreekCore::new(path, None).unwrap();
         let secret = format!("nsec1{}", "q".repeat(58));
-        core.secret_put("nostr_nsec".to_string(), secret.clone()).unwrap();
+        core.secret_put("nostr_nsec".to_string(), secret.clone())
+            .unwrap();
         core.sync_set_nostr_relays("wss://relay.example.com".to_string());
 
         let json = core.sync_export_backup_json();
@@ -2224,6 +2930,37 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn test_explicit_identity_export_requires_identity_and_migrates_legacy() {
+        let (dir, path) = tmp_db_path("nsec-export");
+        let core = GreekCore::new(path.clone(), None).unwrap();
+        let err = core
+            .sync_export_nostr_nsec()
+            .expect_err("export without an identity must fail");
+        assert!(matches!(err, GreekError::Sync(_)));
+
+        let legacy = "cd".repeat(32);
+        {
+            let db = core.db.lock().unwrap();
+            db.conn()
+                .execute(
+                    "INSERT INTO user_settings (key, value) VALUES ('nostr_nsec', ?1)",
+                    [&legacy],
+                )
+                .unwrap();
+        }
+        assert_eq!(core.sync_export_nostr_nsec().unwrap(), legacy);
+        assert_eq!(
+            core.secret_get("nostr_nsec".to_string()).as_deref(),
+            Some(legacy.as_str())
+        );
+        let backup = core.sync_export_backup_json();
+        assert!(!backup.contains("nostr_nsec") && !backup.contains(&legacy));
+
+        drop(core);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     // Legacy pre-v4 location: the reader falls back, then migrates the
     // value into the vault and purges both synced/plaintext copies.
     #[test]
@@ -2242,7 +2979,9 @@ mod tests {
         let db = Database::open(&path, None).unwrap();
         assert_eq!(load_nostr_nsec(&db).as_deref(), Some(hex_nsec.as_str()));
         assert_eq!(
-            greek_core::secret_get(&db, "nostr_nsec").unwrap().as_deref(),
+            greek_core::secret_get(&db, "nostr_nsec")
+                .unwrap()
+                .as_deref(),
             Some(hex_nsec.as_str()),
             "value must land in the secrets vault"
         );
@@ -2390,6 +3129,10 @@ mod tests {
         assert_eq!(card_id, "lookup-λόγος");
         assert!(a.submit_review(card_id.clone(), 3), "one review lands");
         a.mark_word_known("λόγος".to_string(), true).unwrap();
+        // C11: manual unlock follows the same 80% prerequisite rule in the
+        // sync fixture too. Direct memory rows avoid adding unrelated reviews
+        // to this test's one-review wire payload.
+        mark_chapter_mastered(&a, 1, 6);
         assert!(a.unlock_chapter("letters".to_string(), 2), "manual unlock");
 
         let state_a = {
@@ -2432,7 +3175,7 @@ mod tests {
                 .expect("lookup_cards content row must be restored");
             assert_eq!(
                 (front, back),
-                ("λόγος".to_string(), "word; reason".to_string())
+                ("λόγος".to_string(), "λόγος\nword; reason".to_string())
             );
         }
 

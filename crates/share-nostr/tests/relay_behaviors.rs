@@ -202,8 +202,13 @@ async fn socket_close_mid_publish_keeps_row_queued_without_panicking() {
         outbox::get(&db, "close:1").unwrap().unwrap().state,
         OutboxState::Queued
     );
-    // The relay heals; the row publishes on a later flush.
+    // The relay heals; the next facade-style flush has a fresh pool (as
+    // production does), and the row publishes with identical signed bytes.
     relay.set_script(EventScript::AcceptAll);
+    publisher.disconnect().await;
+    let publisher = Publisher::connect(&keys, &[relay.url.clone()])
+        .await
+        .expect("reconnect to healed relay");
     let r2 = ops::flush(&db, &publisher, T0).await.unwrap();
     assert_eq!(r2.posted, 1, "queued row retries identically: {r2:?}");
     publisher.disconnect().await;
@@ -236,10 +241,32 @@ async fn partial_relay_acceptance_retries_then_converges() {
         "accepting relay recorded: {map:?}"
     );
     assert!(map.values().any(|v| v.starts_with("failed:rate-limited")));
+    // Partial fan-out is still a real public delivery: its marker consumes
+    // both today's cap slot and the six-hour spacing budget while queued.
+    let marker = caps::read_marker(&db, "multi:1").unwrap().unwrap();
+    assert!(!marker.event_id.is_empty());
+    assert_eq!(marker.relays.len(), 1);
+    assert!(matches!(
+        caps::check_caps(&db, T0 + 1).unwrap(),
+        caps::CapStatus::TooSoon { .. }
+    ));
+    greek_core::sync::pair_device(&db, "peer", "peer").unwrap();
+    assert!(matches!(
+        caps::check_caps(&db, T0 + 7 * HOUR).unwrap(),
+        caps::CapStatus::DailyExhausted { used: 1, cap: 1 }
+    ));
+    db.conn()
+        .execute("DELETE FROM sync_devices WHERE device_id = 'peer'", [])
+        .unwrap();
 
-    // Second flush: pre-publish read-back sees the accepting relay already
-    // serving the content → converged without re-sending.
-    let r2 = ops::flush(&db, &publisher, T0).await.unwrap();
+    // A too-early retry observes the new spacing marker right at the cap
+    // gate, without any read-back traffic. Six hours later the same queued
+    // row converges through the accepting relay's read-back.
+    let early_reqs = accepting.req_count() + limiting.req_count();
+    let early = ops::flush(&db, &publisher, T0 + 1).await.unwrap();
+    assert_eq!(early.deferred, 1);
+    assert_eq!(accepting.req_count() + limiting.req_count(), early_reqs);
+    let r2 = ops::flush(&db, &publisher, T0 + 6 * HOUR).await.unwrap();
     assert_eq!(r2.duplicates, 1, "read-back convergence: {r2:?}");
     assert_eq!(outbox::get(&db, "multi:1").unwrap().unwrap().state, OutboxState::Posted);
     // The accepting relay saw the event exactly once (no redundant resend).
@@ -272,6 +299,42 @@ async fn pre_existing_content_marks_posted_without_resending() {
         "read-back hit ⇒ nothing resent"
     );
     assert_eq!(outbox::get(&db, "rb:1").unwrap().unwrap().state, OutboxState::Posted);
+    publisher.disconnect().await;
+    relay.stop().await;
+}
+
+#[tokio::test]
+async fn repeated_chapter_template_readback_distinguishes_the_new_occurrence() {
+    let db = db_enabled();
+    let keys = keys();
+    let relay = FakeRelay::start(EventScript::AcceptAll).await;
+    let publisher = publisher(&keys, &relay).await;
+
+    for (chapter, at) in [(1, T0), (2, T0 + 6 * HOUR)] {
+        let id = format!("chapter.mastered:athenaze/{chapter}");
+        let outcome = ops::enqueue_milestone(
+            &db,
+            templates::SLUG_CHAPTER_MASTERED,
+            &id,
+            &format!("athenaze/{chapter}"),
+            TemplateLang::En,
+            None,
+            None,
+            &keys,
+            at,
+        )
+        .unwrap();
+        assert_eq!(outcome, EnqueueOutcome::Enqueued);
+        let report = ops::flush(&db, &publisher, at).await.unwrap();
+        assert_eq!(report.posted, 1, "chapter {chapter} must really publish: {report:?}");
+        assert_eq!(report.duplicates, 0, "chapter {chapter} is not chapter 1: {report:?}");
+    }
+
+    let stored = relay.stored();
+    assert_eq!(stored.len(), 2);
+    assert_ne!(stored[0]["content"], stored[1]["content"]);
+    assert!(stored[0]["content"].as_str().unwrap().contains('1'));
+    assert!(stored[1]["content"].as_str().unwrap().contains('2'));
     publisher.disconnect().await;
     relay.stop().await;
 }
@@ -354,7 +417,7 @@ async fn flush_caps_spacing_and_daily_overflow() {
             &db,
             templates::SLUG_CHAPTER_MASTERED,
             key,
-            key,
+            &format!("athenaze/{i}"),
             TemplateLang::En,
             None,
             Some(&format!("suffix {i}")),
@@ -500,8 +563,15 @@ async fn retroactivity_enable_seeds_past_crossings_but_posts_new_ones() {
     assert_eq!(relay.received_count(), 1);
     assert_eq!(
         relay.stored()[0]["content"].as_str().unwrap(),
-        templates::preset(templates::SLUG_CHAPTER_MASTERED, TemplateLang::El).unwrap(),
-        "EL preset on the wire"
+        templates::render(
+            &templates::preset(templates::SLUG_CHAPTER_MASTERED, TemplateLang::El)
+                .unwrap()
+                .replace("{n}", "athenaze/1"),
+            None,
+            None,
+        )
+        .unwrap(),
+        "EL preset with its visible chapter occurrence on the wire"
     );
     publisher.disconnect().await;
     relay.stop().await;

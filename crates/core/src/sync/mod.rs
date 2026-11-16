@@ -888,11 +888,12 @@ pub fn apply_settings(db: &Database, kv: &[(String, String, String)]) -> Result<
 /// whole-day elapsed gaps against the previous event's timestamp, default
 /// desired retention 0.9, rating outside 1-4 treated as Good, due date =
 /// event timestamp + interval, overridden by the learning-step ladder
-/// (`srs::step_due`) for in-learning cards — identical to the incremental
-/// submit path. `source` is mirrored as recorded (today the
-/// incremental path schedules 'practice' rows identically to flashcards —
-/// the fold mirrors that). Writes the resulting memory_states rows; rows for
-/// cards with NO review history are untouched. Idempotent.
+/// (`srs::step_due`) for Again ratings — identical to the incremental submit
+/// path. `source` participates in replay: a graduated-card practice miss
+/// preserves its prior memory exactly as in the incremental path. All other
+/// review/source combinations select their normal FSRS next state. Writes
+/// the resulting memory_states rows; rows for cards with NO review history
+/// are untouched. Idempotent.
 pub fn rebuild_memory_states(db: &Database) -> Result<u32> {
     let fsrs = fsrs::FSRS::new(Some(&[]))
         .map_err(|e| anyhow::anyhow!("default FSRS parameters should be valid: {e}"))?;
@@ -910,14 +911,16 @@ pub fn rebuild_memory_states(db: &Database) -> Result<u32> {
 
     let mut rewritten = 0u32;
     for card_id in &card_ids {
-        let events: Vec<(String, i64)> = {
+        let events: Vec<(String, i64, String)> = {
             let mut stmt = db.conn().prepare(
-                "SELECT timestamp, rating FROM review_logs
+                "SELECT timestamp, rating, source FROM review_logs
                  WHERE card_id = ?1
                  ORDER BY hlc, uuid, id",
             )?;
             let v = stmt
-                .query_map([card_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .query_map([card_id], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                })?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             v
         };
@@ -932,7 +935,7 @@ pub fn rebuild_memory_states(db: &Database) -> Result<u32> {
         let mut reps: i64 = 0;
         let mut lapses: i64 = 0;
 
-        for (ts, rating) in &events {
+        for (ts, rating, source) in &events {
             let elapsed_days = last_review
                 .as_deref()
                 .map(|prev| crate::srs::days_between(prev, ts))
@@ -950,8 +953,15 @@ pub fn rebuild_memory_states(db: &Database) -> Result<u32> {
                 4 => &next.easy,
                 _ => &next.good,
             };
-            stability = chosen.memory.stability;
-            difficulty = chosen.memory.difficulty;
+            if !crate::srs::preserve_memory_for_practice_miss(
+                source,
+                *rating as u8,
+                reps as i32,
+                lapses as i32,
+            ) {
+                stability = chosen.memory.stability;
+                difficulty = chosen.memory.difficulty;
+            }
             // Learning-step mirror: use pre-review rep/lapse counts exactly
             // like the incremental submit path, so a card whose final review
             // was an in-learning Again converges to the same short-step due.
@@ -1700,9 +1710,8 @@ mod tests {
     }
 
     // 7. Practice-source rows flow through events/apply and mirror the
-    // incremental submit path on both sides: today's incremental path runs
-    // 'practice' rows through the same FSRS scheduling as flashcards, and
-    // the fold reproduces exactly that (verified against A).
+    // incremental submit path on both sides, including source-aware practice
+    // lapse policy, and the fold reproduces exactly that (verified against A).
     #[test]
     fn test_practice_rows_sync_and_fold_like_incremental() {
         let db_a = Database::open(":memory:", None).unwrap();
@@ -1747,6 +1756,53 @@ mod tests {
                 .unwrap()
         };
         assert_eq!(sources_b, ["flashcard", "practice", "practice"]);
+    }
+
+    #[test]
+    fn test_graduated_practice_miss_rebuild_and_shuffled_sync_preserve_memory() {
+        let db_a = Database::open(":memory:", None).unwrap();
+        let engine = SrsEngine::new();
+        engine.submit_review(&db_a, "practice-lapse", 3).unwrap();
+        let before: (f32, f32) = db_a
+            .conn()
+            .query_row(
+                "SELECT stability, difficulty FROM memory_states
+                 WHERE card_id = 'practice-lapse'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        engine
+            .submit_review_with_source(&db_a, "practice-lapse", 1, "practice")
+            .unwrap();
+
+        let expected = memory_snapshot(&db_a);
+        assert_eq!((expected[0].1, expected[0].2), (before.0 as f64, before.1 as f64));
+        assert_eq!((expected[0].5, expected[0].6), (2, 1));
+        let last_review = expected[0].3.as_deref().unwrap();
+        let gap = crate::srs::iso_to_secs(&expected[0].4).unwrap()
+            - crate::srs::iso_to_secs(last_review).unwrap();
+        assert_eq!(gap, 60);
+
+        // A direct full rebuild must be a byte-exact no-op.
+        rebuild_memory_states(&db_a).unwrap();
+        assert_eq!(memory_snapshot(&db_a), expected);
+
+        let mut shuffled = events_since(&db_a, None).unwrap();
+        shuffled.reverse();
+        let db_b = Database::open(":memory:", None).unwrap();
+        assert_eq!(apply_review_events(&db_b, &shuffled).unwrap(), 2);
+        assert_eq!(memory_snapshot(&db_b), expected);
+
+        // Applying each shuffled event separately exercises intermediate folds
+        // and collision handling; replaying the complete set again is a no-op.
+        let db_c = Database::open(":memory:", None).unwrap();
+        for event in &shuffled {
+            assert_eq!(apply_review_events(&db_c, &[event.clone()]).unwrap(), 1);
+        }
+        assert_eq!(memory_snapshot(&db_c), expected);
+        assert_eq!(apply_review_events(&db_c, &shuffled).unwrap(), 0);
+        assert_eq!(memory_snapshot(&db_c), expected);
     }
 
     // 8. Foreign-injected garbage (a compromised peer writing plaintext events)

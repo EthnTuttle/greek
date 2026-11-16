@@ -9,10 +9,12 @@
 //! clusters require); refuse URLs, image extensions, `nostr:` URIs, `@`
 //! mentions, `nsec1…`-style bech32 patterns, and empty content.
 //!
-//! Shipped presets NEVER name a textbook, chapter, or any curriculum proper
-//! noun — the bounded-vocabulary milestone set already says the only thing
-//! worth saying. A lint test ([`tests::shipped_presets_contain_no_curriculum_proper_nouns`])
-//! enforces this mechanically.
+//! Shipped presets NEVER name a textbook, a chapter title, or any curriculum
+//! proper noun in the static preset bodies. Chapter milestones substitute a
+//! visible track/chapter occurrence id (for example `athenaze/2`): that makes
+//! relay read-back milestone-aware instead of confusing occurrences that
+//! rendered the same generic text (including same-numbered textbook chapters).
+//! The proper-noun lint test enforces the remaining privacy rule mechanically.
 
 use unicode_normalization::UnicodeNormalization;
 use unicode_segmentation::UnicodeSegmentation;
@@ -91,9 +93,9 @@ impl Default for TemplateLang {
 // --- Shipped presets -------------------------------------------------------
 
 /// The exact shipped template body for `(slug, lang)`, if the slug exists.
-/// `streak.*` bodies contain a `{n}` placeholder for the day count; other
-/// bodies are complete sentences. None of these strings contains a
-/// curriculum proper noun (see the lint test in this module).
+/// `streak.*` bodies carry the day-count `{n}`; `chapter.mastered` carries
+/// the visible occurrence id. Other bodies are complete sentences. None of
+/// these static strings contains a curriculum proper noun (linted below).
 pub fn preset(slug: &str, lang: TemplateLang) -> Option<&'static str> {
     let body = match (slug, lang) {
         (SLUG_GATE_PASSED_CHECK, TemplateLang::En) => {
@@ -109,10 +111,10 @@ pub fn preset(slug: &str, lang: TemplateLang) -> Option<&'static str> {
             "Έφτασα μετρήσιμη ακρίβεια στα ελληνικά γράμματα 🦉 το αλφάβητο αρχίζει να μπαίνει για τα καλά."
         }
         (SLUG_CHAPTER_MASTERED, TemplateLang::En) => {
-            "Mastered a chapter of my Greek textbook 📖"
+            "Mastered chapter {n} of my Greek textbook 📖"
         }
         (SLUG_CHAPTER_MASTERED, TemplateLang::El) => {
-            "Ολοκλήρωσα ένα ακόμη κεφάλαιο ελληνικών 📖"
+            "Ολοκλήρωσα το κεφάλαιο {n} ελληνικών 📖"
         }
         (s @ (SLUG_STREAK_7 | SLUG_STREAK_30 | SLUG_STREAK_100), TemplateLang::En) => {
             let _ = s;
@@ -335,6 +337,25 @@ pub fn set_template_override(
     Ok(())
 }
 
+/// Render a chapter-mastered occurrence. The public track/chapter id replaces
+/// `{n}`, so `athenaze/2`, `athenaze/3`, and `jact/2` are three distinct exact
+/// read-back targets. Legacy generic overrides receive the same visible id on
+/// an appended line; no invisible markers are added to public posts.
+pub fn render_chapter_content(
+    db: &greek_core::Database,
+    lang: TemplateLang,
+    visible_id: &str,
+    suffix: Option<&str>,
+) -> Result<String> {
+    let body = template_for(db, SLUG_CHAPTER_MASTERED, lang)?;
+    let body = if body.contains("{n}") {
+        body
+    } else {
+        format!("{body}\n\nChapter {{n}}")
+    };
+    render(&body.replace("{n}", visible_id), None, suffix)
+}
+
 /// Render the final note content for a milestone occurrence: override-aware
 /// template, `{n}` substitution, optional validated custom suffix.
 pub fn render_content(
@@ -536,6 +557,32 @@ mod tests {
             render_content(&db, SLUG_STREAK_7, TemplateLang::En, Some(7), None).unwrap(),
             "7 days of Greek!"
         );
+    }
+
+    #[test]
+    fn chapter_content_has_a_distinct_visible_occurrence_for_every_chapter() {
+        let db = Database::open(":memory:", None).unwrap();
+        let chapter1 = render_chapter_content(&db, TemplateLang::En, "athenaze/1", None)
+            .unwrap();
+        let chapter2 = render_chapter_content(&db, TemplateLang::En, "athenaze/2", None)
+            .unwrap();
+        assert_ne!(chapter1, chapter2);
+        let other_book_chapter1 = render_chapter_content(&db, TemplateLang::En, "jact/1", None)
+            .unwrap();
+        assert_ne!(chapter1, other_book_chapter1);
+        assert!(chapter1.contains("athenaze/1") && chapter2.contains("athenaze/2"));
+
+        // A legacy generic override cannot reintroduce the collision: the
+        // renderer appends a public occurrence line when {n} is absent.
+        set_template_override(&db, SLUG_CHAPTER_MASTERED, TemplateLang::En, "Chapter done")
+            .unwrap();
+        let legacy1 = render_chapter_content(&db, TemplateLang::En, "athenaze/1", None)
+            .unwrap();
+        let legacy2 = render_chapter_content(&db, TemplateLang::En, "athenaze/2", None)
+            .unwrap();
+        assert_ne!(legacy1, legacy2);
+        assert!(legacy1.ends_with("Chapter athenaze/1"));
+        assert!(legacy2.ends_with("Chapter athenaze/2"));
     }
 
     #[test]
