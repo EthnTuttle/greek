@@ -163,7 +163,13 @@ class RustCoreAdapter(private val core: GreekCore) : GreekCoreApi {
         if (!newApiAvailable) return emptyList()
         return runCatching {
             core.generatePracticeMcq(limit).map {
-                McqData(it.cardId, it.promptGloss, it.choices, it.correctIndex.toInt())
+                McqData(
+                    it.cardId,
+                    it.promptGloss,
+                    it.choices,
+                    it.correctIndex.toInt(),
+                    typeable = it.typeable
+                )
             }
         }.getOrElse { markApiUnavailable("generatePracticeMcq", it); emptyList() }
     }

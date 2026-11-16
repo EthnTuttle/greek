@@ -288,7 +288,9 @@ data class McqData(
     val cardId: String,
     val promptGloss: String,
     val choices: List<String>,
-    val correctIndex: Int
+    val correctIndex: Int,
+    /** False for old/absent metadata: safely serves multiple choice, never typed. */
+    val typeable: Boolean = false
 ) {
     /** The correct full Greek form (always present at [correctIndex]). */
     val correctForm: String

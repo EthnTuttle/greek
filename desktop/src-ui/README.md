@@ -23,23 +23,36 @@ Object-returning commands resolve with a JSON **string** that the UI
 string error message. Commands used (frozen set):
 
 `home_stats`, `review_current`, `review_rate` (args `{rating: 1..4}`),
-`curriculum`, `dict_search` (`{q}`), `sync_status`, `sync_ticket`,
-`sync_join` (`{ticket}`), `sync_now`, `nostr_identity_ensure`,
-`nostr_relays_set` (`{csv}`), `backup_export`, `backup_import` (`{json}`).
+`curriculum`, `alphabet_check_generate`, `alphabet_check_answer` (`{cardId, correct}`),
+`alphabet_check_verdict` (`{correct, total}`), `alphabet_declare_known`,
+`chapter_unlock` (`{textbook, chapter}`), `dict_search` (`{q}`), `dict_status`,
+`sync_status`, `sync_ticket`, `sync_join` (`{ticket}`), `sync_now`,
+`nostr_identity_ensure`, `nostr_relays_set` (`{csv}`), `backup_export`,
+`backup_import` (`{json}`).
 
 Review flow: `review_current` on entering the Review tab; clicking a rating
 calls `review_rate` immediately (answer+rate in one step) and renders the
-returned next-card payload. `card: null` → "All caught up" empty state.
+returned next-card payload. Ratings scheduled within 15 minutes are appended
+at the end of the queue (60 total admissions maximum), except that a lone card
+is not immediately re-served. `card: null` plus `returningSoonCount > 0` →
+"Cards come back soon" with `minutesUntilNext`; otherwise "All caught up".
+
+The desktop is deliberately a review/dictionary companion to Android, not a
+claim of reader or typed-practice parity. `guide.html` states that scope.
+`home_stats.wordsLearned` is the core count of cards introduced into review;
+chapter `learningCount` and `masteredCount` remain separate in the UI.
 
 ### Element expectations (ids the UI drives)
 
-- Tabs: `#tab-nav .tab-btn[data-tab]` ∈ home/review/curriculum/dictionary/sync,
-  sections `#screen-<tab>`.
-- Home: `#stat-due-num`, `#stat-new`, `#stat-streak`, `#stat-accuracy(-num)`,
-  `#gate-banner` + `#gate-progress`.
+- Tabs: `#tab-nav .tab-btn[data-tab]` ∈ home/review/curriculum/dictionary;
+  sections `#screen-<tab>` also include sync. Sync opens through the secondary
+  `#btn-open-sync` footer link, not the primary tab row.
+- Home: `#stat-due-num`, `#stat-new`, `#stat-streak`, `#stat-learned-num`,
+  `#gate-banner` + `#gate-progress`, `#btn-alphabet-known`.
 - Review: `#review-front`, `#review-back`, `#review-remaining`,
   `#review-new-badge`, `#btn-show-answer`, `#rating-row .rate-btn[data-rating=1..4]`
-  with `.rate-preview` children, `#review-empty`.
+  with `.rate-preview` children, `#review-empty`, `#review-empty-title`,
+  `#review-empty-detail`.
   Keyboard `Space` = show answer, `1..4` = rate.
 - Curriculum: `#curr-gate`, `#curr-list` (accordion rendered into innerHTML).
 - Dictionary: `#dict-input` (200 ms debounce), `#dict-results`, `#dict-status`.

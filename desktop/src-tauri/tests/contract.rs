@@ -47,9 +47,16 @@ fn home_stats_shape() {
     assert!(v["streakDays"].is_number());
     assert!(v["practiceCorrect"].is_number());
     assert!(v["practiceTotal"].is_number());
+    assert_eq!(v["wordsLearned"], 0, "fresh profile has no cards in review");
     // Fresh install: gate unsatisfied (letters deck loaded, no progress).
     assert_eq!(v["gateSatisfied"], false);
     assert_eq!(v["lettersChaptersMet"], 0);
+
+    assert!(s.core.submit_review("letters-001".to_string(), 3));
+    let after: serde_json::Value =
+        serde_json::from_str(&commands::home_stats(&s.core).unwrap()).unwrap();
+    assert_eq!(after["wordsLearned"], 1, "introduced card enters review count");
+    std::fs::remove_dir_all(&s.data_dir).ok();
 }
 
 #[test]
@@ -80,19 +87,80 @@ fn review_rate_pops_and_validates() {
     assert!(commands::review_rate(&s, 0).is_err());
     assert!(commands::review_rate(&s, 5).is_err());
 
-    let next = commands::review_rate(&s, 3).unwrap();
+    // Easy schedules beyond the same-session window, so this test exercises
+    // the plain pop path independently from short-step requeueing.
+    let next = commands::review_rate(&s, 4).unwrap();
     assert_eq!(next["remaining"].as_u64().unwrap() + 1, remaining0);
 
     // Drain the session; the final payload is the completion shape and
     // rating beyond that errors.
     loop {
-        let cur = commands::review_rate(&s, 3).unwrap();
+        let cur = commands::review_rate(&s, 4).unwrap();
         if cur["remaining"].as_u64().unwrap() == 0 {
             assert!(cur["card"].is_null());
             break;
         }
     }
     assert!(commands::review_rate(&s, 3).is_err());
+    std::fs::remove_dir_all(&s.data_dir).ok();
+}
+
+#[test]
+fn review_requeues_again_at_end_and_finishes_lone_card_honestly() {
+    let s = fresh_state();
+    let first = commands::review_current(&s).unwrap();
+    let first_id = first["card"]["cardId"].as_str().unwrap().to_string();
+    let remaining0 = first["remaining"].as_u64().unwrap();
+
+    // Again is a one-minute learning step. The missed card goes BEHIND all
+    // other content rather than becoming an instant one-card loop.
+    let next = commands::review_rate(&s, 1).unwrap();
+    assert_ne!(next["card"]["cardId"], first_id);
+    assert_eq!(next["remaining"], remaining0);
+    {
+        let session = s.session.lock().unwrap();
+        assert_eq!(session.queue.back().unwrap().card_id, first_id);
+        assert_eq!(session.admitted, remaining0 as usize + 1);
+    }
+
+    // Pass the intervening cards. The missed card is seen again later in
+    // this same batch, at the end of the queue.
+    loop {
+        let current = commands::review_current(&s).unwrap();
+        if current["card"]["cardId"] == first_id {
+            break;
+        }
+        commands::review_rate(&s, 4).unwrap();
+    }
+    assert_eq!(commands::review_current(&s).unwrap()["remaining"], 1);
+
+    // With no other content, another Again ends the batch instead of tightly
+    // re-serving the same card. The payload says why this is not "all done".
+    let done = commands::review_rate(&s, 1).unwrap();
+    assert!(done["card"].is_null());
+    assert!(done["returningSoonCount"].as_u64().unwrap() >= 1);
+    assert!(done["minutesUntilNext"].as_u64().unwrap() <= 1);
+    std::fs::remove_dir_all(&s.data_dir).ok();
+}
+
+#[test]
+fn review_requeue_respects_total_session_cap() {
+    let s = fresh_state();
+    let first = commands::review_current(&s).unwrap();
+    let first_id = first["card"]["cardId"].as_str().unwrap().to_string();
+    let remaining0 = first["remaining"].as_u64().unwrap();
+    // Simulate the tail of a batch that has already admitted 20 + 40 cards.
+    s.session.lock().unwrap().admitted = 60;
+    let next = commands::review_rate(&s, 1).unwrap();
+    assert_eq!(next["remaining"].as_u64().unwrap() + 1, remaining0);
+    assert!(!s
+        .session
+        .lock()
+        .unwrap()
+        .queue
+        .iter()
+        .any(|c| c.card_id == first_id));
+    assert_eq!(s.session.lock().unwrap().admitted, 60);
     std::fs::remove_dir_all(&s.data_dir).ok();
 }
 
@@ -106,9 +174,45 @@ fn curriculum_shape() {
     assert!(!books.is_empty());
     assert!(books.iter().any(|b| b["id"] == "letters"));
     let ch = &books[0]["chapters"][0];
-    for key in ["index", "title", "totalCards", "masteredCount", "unlocked", "hint"] {
+    for key in [
+        "index",
+        "title",
+        "totalCards",
+        "learningCount",
+        "masteredCount",
+        "unlocked",
+        "hint",
+    ] {
         assert!(ch.get(key).is_some(), "missing chapter field {key}");
     }
+    std::fs::remove_dir_all(&s.data_dir).ok();
+}
+
+#[test]
+fn declared_alphabet_command_unlocks_vocabulary_flow() {
+    let s = fresh_state();
+    let refused: serde_json::Value = serde_json::from_str(
+        &commands::chapter_unlock(&s.core, "athenaze", 1).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(refused["unlocked"], false);
+
+    let declared: serde_json::Value =
+        serde_json::from_str(&commands::alphabet_declare_known(&s.core).unwrap()).unwrap();
+    assert_eq!(declared["gateSatisfied"], true);
+    let home: serde_json::Value =
+        serde_json::from_str(&commands::home_stats(&s.core).unwrap()).unwrap();
+    assert_eq!(home["gateSatisfied"], true);
+
+    let unlocked: serde_json::Value = serde_json::from_str(
+        &commands::chapter_unlock(&s.core, "athenaze", 1).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(unlocked["unlocked"], true);
+    assert!(!s
+        .core
+        .get_new_cards("athenaze".to_string(), 1, 20)
+        .is_empty());
     std::fs::remove_dir_all(&s.data_dir).ok();
 }
 
@@ -168,16 +272,15 @@ fn alphabet_check_command_loop_latches_gate() {
     std::fs::remove_dir_all(&s.data_dir).ok();
 }
 
-/// D1 regression, audit repro INVERTED: fresh profile → review the seven
-/// vowel cards twice (letters mastery = reps>=2) → Letters ch.2 shows an
-/// EMPTY hint (requirement met) → the new chapter_unlock command opens it →
-/// the next review-session build (GreekCore::build_review_session) yields
-/// non-vowel cards. Before the fix every one of these was a dead end.
+/// D1 regression, updated for core pacing: reviewing the seven vowels makes
+/// them LEARNED, not 30-day mature. Curriculum::get_chapters now persists the
+/// earned Letters ch.2 unlock automatically; the next one-pass session build
+/// can therefore serve non-vowel cards without a hidden manual dead end.
 #[test]
-fn d1_letters_ch2_unlock_yields_non_vowel_cards() {
+fn d1_letters_ch2_auto_unlock_yields_non_vowel_cards() {
     let s = fresh_state();
 
-    // Audit repro state: the seven vowel cards seen twice → mastery 7/7.
+    // Audit repro state: seven vowels seen twice → learning 7/7, maturity 0/7.
     for n in 1..=7u32 {
         let id = format!("letters-{n:03}");
         assert!(s.core.submit_review(id.clone(), 3));
@@ -187,18 +290,18 @@ fn d1_letters_ch2_unlock_yields_non_vowel_cards() {
         serde_json::from_str(&commands::curriculum(&s.core).unwrap()).unwrap();
     let books = cur["textbooks"].as_array().unwrap();
     let letters = books.iter().find(|b| b["id"] == "letters").unwrap();
-    assert_eq!(letters["chapters"][0]["masteredCount"], 7, "7/7 vowels mastered");
-    let ch2 = &letters["chapters"][1];
-    assert_eq!(ch2["unlocked"], false);
+    assert_eq!(letters["chapters"][0]["learningCount"], 7, "7/7 vowels learning");
     assert_eq!(
-        ch2["hint"], "",
-        "mastery requirement met → hint empty → row is tappable in the UI"
+        letters["chapters"][0]["masteredCount"], 0,
+        "fresh low-stability vowels are learned, not long-term mastered"
     );
+    let ch2 = &letters["chapters"][1];
+    assert_eq!(ch2["unlocked"], true, "earned unlock is persisted by the core");
 
-    // The row tap → chapter_unlock (the missing command that caused D1).
+    // The explicit command remains harmless for existing UI callers.
     let r: serde_json::Value =
         serde_json::from_str(&commands::chapter_unlock(&s.core, "letters", 2).unwrap()).unwrap();
-    assert_eq!(r["unlocked"], true, "Letters ch.2 must unlock");
+    assert_eq!(r["unlocked"], true, "Letters ch.2 stays unlocked");
 
     // The next session build must now serve non-vowel cards (letters ch.2 =
     // stops). Daily cap check: 7 introduced today, 3 remain — enough to see one.
@@ -377,7 +480,7 @@ fn d3_backup_restore_carries_full_user_state() {
     assert_eq!(card_id, "lookup-λόγος");
     assert!(a.core.submit_review(card_id.clone(), 3), "lookup card reviewed");
 
-    // Chapter unlock: master the 7 vowels so Letters ch.2 unlocks (D1 flow).
+    // Chapter unlock: learn the 7 vowels so Letters ch.2 unlocks (D1 flow).
     for n in 1..=7u32 {
         let id = format!("letters-{n:03}");
         assert!(a.core.submit_review(id.clone(), 3));
@@ -424,9 +527,12 @@ fn d3_backup_restore_carries_full_user_state() {
         .find(|c| c["card_id"] == card_id)
         .unwrap_or_else(|| panic!("B must hold the lookup content row for {card_id}"));
     assert_eq!(row["front"], "λόγος");
-    assert_eq!(row["back"], "word, reason");
+    assert_eq!(
+        row["back"], "λόγος\nword, reason",
+        "lookup review content carries the lemma alongside its gloss"
+    );
 
-    // 3. Chapter unlock present: B never mastered the vowels, yet ch.2 is
+    // 3. Chapter unlock present: B never learned the vowels, yet ch.2 is
     //    open because the unlock row travelled in the backup.
     let cur: serde_json::Value =
         serde_json::from_str(&commands::curriculum(&b.core).unwrap()).unwrap();
@@ -464,8 +570,8 @@ fn d6_home_budget_matches_session_admission() {
     assert_eq!(before["newCap"], 10, "cap derived from the core, not hardcoded 20");
     let remaining = before["newCap"].as_u64().unwrap() - before["newToday"].as_u64().unwrap();
 
-    // A session build must admit AT MOST the remaining daily budget of new
-    // cards, never session-size-many (20) new cards.
+    // A session started on fresh install is letters-only: those are exempt
+    // from the cap, unlike vocabulary cards below.
     let session = commands::fill_session(&s.core);
     let admitted_new = session.iter().filter(|c| c.is_new).count() as u64;
     assert!(
@@ -477,8 +583,8 @@ fn d6_home_budget_matches_session_admission() {
         "the 10-cap must hold even when 20 session slots are free"
     );
 
-    // Study the whole batch: every introduced card must show up in the Home
-    // counter, and the cap must stay at the core-enforced 10 (not grow to 20).
+    // Study the whole batch: letters are cap-exempt now (owner decision),
+    // so Home's vocabulary-only counter must NOT change.
     for c in &session {
         assert!(s.core.submit_review(c.card_id.clone(), 3));
     }
@@ -487,16 +593,61 @@ fn d6_home_budget_matches_session_admission() {
     assert_eq!(after["newCap"], 10, "cap stays core-enforced after studying");
     assert_eq!(
         after["newToday"].as_u64().unwrap(),
-        before["newToday"].as_u64().unwrap() + admitted_new,
-        "Home's newToday must count exactly the cards the session admitted"
+        before["newToday"].as_u64().unwrap(),
+        "letters must not consume the vocabulary-only newToday counter"
     );
 
-    // The admitted cards are now ineligible as "new": a fresh session build
-    // serves no new card twice in a day.
+    // The admitted cards are now ineligible as "new". Other still-unseen
+    // cards may be admitted with any remaining daily budget (notably the
+    // next letters chapter auto-unlocks), but an introduced ID never returns
+    // as new the same day.
     let next = commands::fill_session(&s.core);
     assert!(
-        !next.iter().any(|c| c.is_new),
-        "introduced cards must not be re-served as new the same day"
+        !next.iter().any(|next_card| {
+            next_card.is_new
+                && session
+                    .iter()
+                    .any(|studied| studied.card_id == next_card.card_id)
+        }),
+        "an introduced card must not be re-served as new the same day"
     );
+    std::fs::remove_dir_all(&s.data_dir).ok();
+}
+
+/// Vocabulary cap (letters exempt): with the alphabet declared known, a fill
+/// draws the ungated letters then at most `remaining` NEW vocabulary cards.
+#[test]
+fn d6_vocabulary_budget_matches_session_admission_with_letters_exempt() {
+    let s = fresh_state();
+    s.core.declare_alphabet_known();
+    let before: serde_json::Value =
+        serde_json::from_str(&commands::home_stats(&s.core).unwrap()).unwrap();
+    let remaining = before["newCap"].as_u64().unwrap() - before["newToday"].as_u64().unwrap();
+
+    let session = commands::fill_session(&s.core);
+    let new_vocab: Vec<_> = session
+        .iter()
+        .filter(|c| c.is_new && !c.card_id.starts_with("letters-"))
+        .collect();
+    assert!(
+        (new_vocab.len() as u64) <= remaining,
+        "vocabulary admitted {} new against remaining {remaining}",
+        new_vocab.len()
+    );
+    assert!(
+        !new_vocab.is_empty(),
+        "declared gate must let the vocabulary test exercise the cap"
+    );
+    for c in &session {
+        assert!(s.core.submit_review(c.card_id.clone(), 3));
+    }
+    let after: serde_json::Value =
+        serde_json::from_str(&commands::home_stats(&s.core).unwrap()).unwrap();
+    assert_eq!(
+        after["newToday"].as_u64().unwrap(),
+        before["newToday"].as_u64().unwrap() + new_vocab.len() as u64,
+        "newToday must count exactly the vocabulary cards admitted"
+    );
+    assert_eq!(after["newCap"].as_u64().unwrap(), 10);
     std::fs::remove_dir_all(&s.data_dir).ok();
 }

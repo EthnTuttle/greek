@@ -26,10 +26,8 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "6"
-# nostr-sdk: used ONLY by nostr_identity_ensure to derive the existing
-# identity's pubkey hex from the secrets vault (GreekCore now exposes
-# `sync_nostr_pubkey()` — a later change can switch to it and drop this dep).
-nostr-sdk = { version = "0.44.1", default-features = false, features = ["nip44"] }
+# Nostr identity parsing stays in uniffi-bindings (`sync_nostr_pubkey`);
+# desktop has no direct nostr-sdk dependency.
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

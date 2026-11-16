@@ -20,7 +20,25 @@ import org.json.JSONObject
 data class Card(
     val id: String,
     val front: String,
-    val back: String
+    val back: String,
+    /** Core scheduling flags retained so a restored session keeps the same lesson UI. */
+    val isNew: Boolean = false,
+    val reps: Int = 1
+) {
+    val isFirstExposure: Boolean
+        get() = ReviewViewModel.isFirstExposure(reps = reps, isNew = isNew)
+}
+
+data class ScheduledReturn(
+    val cardId: String,
+    val returnAtMs: Long
+)
+
+/** What the learner can honestly do after finishing the current queue. */
+data class ReviewCompletion(
+    val remainingDue: Int = 0,
+    val returningSoonCount: Int = 0,
+    val minutesUntilNext: Int? = null
 )
 
 data class ReviewState(
@@ -32,7 +50,11 @@ data class ReviewState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     /** Next-interval preview for the current card; null → plain rating labels. */
-    val intervalPreview: IntervalPreviewData? = null
+    val intervalPreview: IntervalPreviewData? = null,
+    /** Honest end-of-queue guidance, populated from live core stats and rating previews. */
+    val completion: ReviewCompletion = ReviewCompletion(),
+    /** Epoch-ms return times predicted by the exact intervals shown on rating buttons. */
+    val pendingReturns: List<ScheduledReturn> = emptyList()
 )
 
 class ReviewViewModel(
@@ -159,10 +181,22 @@ class ReviewViewModel(
         loadCards()
     }
 
+    /** Build another due-first batch without inventing or reordering cards in the UI. */
+    fun continueReview() {
+        _state.value = ReviewState(isLoading = true)
+        loadCards()
+    }
+
     fun answerCard(difficulty: Int) {
         val currentState = _state.value
         if (currentState.isSubmitting) return
         val card = currentCard ?: return
+        val answeredAtMs = System.currentTimeMillis()
+        val returnAtMs = nextReturnAt(
+            preview = currentState.intervalPreview,
+            difficulty = difficulty,
+            answeredAtMs = answeredAtMs
+        )
 
         _state.value = currentState.copy(isSubmitting = true, errorMessage = null)
 
@@ -210,17 +244,54 @@ class ReviewViewModel(
                 for (dc in dueAgain) {
                     if (cards.size >= MAX_SESSION_CARDS) break
                     if (dc.card.id !in remainingIds) {
-                        cards = cards + Card(dc.card.id, dc.card.front, dc.card.back)
+                        cards = cards + Card(
+                            id = dc.card.id,
+                            front = dc.card.front,
+                            back = dc.card.back,
+                            isNew = dc.isNew,
+                            reps = dc.reps
+                        )
                     }
                 }
             }
             val sessionGrew = cards.size != s.cards.size
 
             val complete = nextIndex >= cards.size
-            _state.value = if (complete) {
-                s.copy(cards = cards, isComplete = true, isSubmitting = false, isAnswerRevealed = false)
+            val pendingReturns = s.pendingReturns.filterNot { it.cardId == card.id } +
+                listOfNotNull(returnAtMs?.let { ScheduledReturn(card.id, it) })
+            val completion = if (complete) {
+                val remainingDue = try {
+                    core.getReviewStats().dueCount.coerceAtLeast(0)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not count remaining due cards", e)
+                    0
+                }
+                completionStatus(
+                    remainingDue = remainingDue,
+                    pendingReturns = pendingReturns.map { it.returnAtMs },
+                    nowMs = System.currentTimeMillis()
+                )
             } else {
-                s.copy(cards = cards, currentIndex = nextIndex, isSubmitting = false, isAnswerRevealed = false, intervalPreview = null)
+                s.completion
+            }
+            _state.value = if (complete) {
+                s.copy(
+                    cards = cards,
+                    isComplete = true,
+                    isSubmitting = false,
+                    isAnswerRevealed = false,
+                    completion = completion,
+                    pendingReturns = pendingReturns
+                )
+            } else {
+                s.copy(
+                    cards = cards,
+                    currentIndex = nextIndex,
+                    isSubmitting = false,
+                    isAnswerRevealed = false,
+                    intervalPreview = null,
+                    pendingReturns = pendingReturns
+                )
             }
             if (complete) {
                 // Session finished. Drop BOTH session copies, in-memory FIRST:
@@ -325,6 +396,8 @@ class ReviewViewModel(
                     .put("id", c.id)
                     .put("front", c.front)
                     .put("back", c.back)
+                    .put("isNew", c.isNew)
+                    .put("reps", c.reps)
             )
         }
         return arr.toString()
@@ -335,7 +408,15 @@ class ReviewViewModel(
             val arr = JSONArray(json)
             (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
-                Card(o.getString("id"), o.getString("front"), o.getString("back"))
+                Card(
+                    id = o.getString("id"),
+                    front = o.getString("front"),
+                    back = o.getString("back"),
+                    isNew = o.optBoolean("isNew", false),
+                    // Older saved sessions have no scheduling flags; never
+                    // reinterpret one of their cards as a first exposure.
+                    reps = o.optInt("reps", 1)
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse saved session", e)
@@ -363,9 +444,59 @@ class ReviewViewModel(
         internal fun sessionCards(core: GreekCoreApi, sessionSize: UInt): List<Card> {
             val queue = LinkedHashMap<String, Card>()
             for (sc in core.buildReviewSession(sessionSize)) {
-                queue.getOrPut(sc.card.id) { Card(sc.card.id, sc.card.front, sc.card.back) }
+                queue.getOrPut(sc.card.id) {
+                    Card(
+                        id = sc.card.id,
+                        front = sc.card.front,
+                        back = sc.card.back,
+                        isNew = sc.isNew,
+                        reps = sc.reps
+                    )
+                }
             }
             return queue.values.toList()
+        }
+
+        /** A lesson is offered only for the core's never-reviewed, new-card state. */
+        internal fun isFirstExposure(reps: Int, isNew: Boolean): Boolean = isNew && reps == 0
+
+        /** Use the same preview the learner saw; no hand-built schedule or rating policy. */
+        internal fun nextReturnAt(
+            preview: IntervalPreviewData?,
+            difficulty: Int,
+            answeredAtMs: Long
+        ): Long? {
+            val seconds = when (difficulty) {
+                0 -> preview?.againSecs
+                1 -> preview?.hardSecs
+                2 -> preview?.goodSecs
+                3 -> preview?.easySecs
+                else -> null
+            } ?: return null
+            return answeredAtMs + seconds.toLong() * 1_000L
+        }
+
+        /**
+         * Prefer an actionable due-now continuation. Otherwise report only
+         * returns within the early-step window, with the earliest rounded to
+         * the nearest minute. Long-term scheduled cards do not produce a
+         * misleading "all cards for today" claim.
+         */
+        internal fun completionStatus(
+            remainingDue: Int,
+            pendingReturns: List<Long>,
+            nowMs: Long,
+            earlyStepWindowMs: Long = 15L * 60L * 1_000L
+        ): ReviewCompletion {
+            if (remainingDue > 0) return ReviewCompletion(remainingDue = remainingDue)
+            val soon = pendingReturns.filter { it > nowMs && it <= nowMs + earlyStepWindowMs }.sorted()
+            if (soon.isEmpty()) return ReviewCompletion()
+            val minutes = ((soon.first() - nowMs + 30_000L) / 60_000L)
+                .toInt().coerceAtLeast(1)
+            return ReviewCompletion(
+                returningSoonCount = soon.size,
+                minutesUntilNext = minutes
+            )
         }
 
         /**

@@ -1,6 +1,7 @@
 package com.greekapp.viewmodel
 
 import androidx.lifecycle.SavedStateHandle
+import com.greekapp.core.IntervalPreviewData
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -128,5 +129,75 @@ class ReviewViewModelTest {
         // "first listing wins" — the due-side listing survives the duplicate.
         assertEquals("front-due-1", cards[0].front)
         assertEquals("back-due-1", cards[0].back)
+        assertFalse(cards[0].isFirstExposure)
+        assertTrue(cards[2].isFirstExposure)
+    }
+
+    @Test
+    fun firstExposure_onlyNeverReviewedNewCardsGetTwoButtonLesson() {
+        assertTrue(ReviewViewModel.isFirstExposure(reps = 0, isNew = true))
+        assertFalse(ReviewViewModel.isFirstExposure(reps = 1, isNew = false))
+        assertFalse(ReviewViewModel.isFirstExposure(reps = 1, isNew = true))
+        // A malformed flag cannot turn a reviewed card into a new lesson.
+        assertFalse(ReviewViewModel.isFirstExposure(reps = 2, isNew = true))
+        assertFalse(ReviewViewModel.isFirstExposure(reps = 0, isNew = false))
+    }
+
+    @Test
+    fun nextReturnAt_usesPreviewForChosenRatingOnly() {
+        val preview = IntervalPreviewData(
+            againSecs = 60u,
+            hardSecs = 300u,
+            goodSecs = 600u,
+            easySecs = 86400u
+        )
+
+        assertEquals(66_000L, ReviewViewModel.nextReturnAt(preview, 0, 6_000L))
+        assertEquals(606_000L, ReviewViewModel.nextReturnAt(preview, 2, 6_000L))
+        assertEquals(86_406_000L, ReviewViewModel.nextReturnAt(preview, 3, 6_000L))
+        assertNull(ReviewViewModel.nextReturnAt(null, 2, 6_000L))
+    }
+
+    @Test
+    fun completion_dueNowContinuationTakesPriorityOverEarlyReturns() {
+        val completion = ReviewViewModel.completionStatus(
+            remainingDue = 7,
+            pendingReturns = listOf(120_000L),
+            nowMs = 0L
+        )
+
+        assertEquals(7, completion.remainingDue)
+        assertEquals(0, completion.returningSoonCount)
+        assertNull(completion.minutesUntilNext)
+    }
+
+    @Test
+    fun completion_countsEarlyStepCardsAndRoundsEarliestMinutes() {
+        val now = 1_000_000L
+        val completion = ReviewViewModel.completionStatus(
+            remainingDue = 0,
+            pendingReturns = listOf(
+                now + 8L * 60_000L - 10_000L, // about 8 minutes
+                now + 10L * 60_000L,
+                now + 16L * 60_000L,           // outside the early-step window
+                now - 1L                        // already due, not pending
+            ),
+            nowMs = now
+        )
+
+        assertEquals(0, completion.remainingDue)
+        assertEquals(2, completion.returningSoonCount)
+        assertEquals(8, completion.minutesUntilNext)
+    }
+
+    @Test
+    fun completion_onlyLongTermCards_hasHonestGenericBatchEnding() {
+        val completion = ReviewViewModel.completionStatus(
+            remainingDue = 0,
+            pendingReturns = listOf(16L * 60_000L),
+            nowMs = 0L
+        )
+
+        assertEquals(ReviewCompletion(), completion)
     }
 }

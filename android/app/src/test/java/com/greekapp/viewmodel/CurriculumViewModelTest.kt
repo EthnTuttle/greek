@@ -1,7 +1,9 @@
 package com.greekapp.viewmodel
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -52,5 +54,39 @@ class CurriculumViewModelTest {
         // Unknown textbooks / chapter numbers are no-ops, as before.
         assertNull(CurriculumViewModel.resolveChapter(sections, "jact", 2))
         assertNull(CurriculumViewModel.resolveChapter(sections, "athenaze", 99))
+    }
+
+    @Test
+    fun chapter_showsSeparateLearningAndMasteredNumbers() {
+        val chapter = Chapter(
+            number = 2,
+            title = "Consonants",
+            cardCount = 9,
+            completedCount = 0,
+            learnedCount = 7
+        )
+
+        assertEquals(7, chapter.learnedCount)
+        assertEquals(0, chapter.masteredCount)
+        assertEquals(7f / 9f, chapter.progress)
+    }
+
+    @Test
+    fun lockedChapter_isReadyOnlyWithNoOutstandingRequirement() {
+        val ready = Chapter(
+            number = 2,
+            title = "Consonants",
+            cardCount = 9,
+            completedCount = 0,
+            unlocked = false,
+            unlockHint = ""
+        )
+        val blocked = ready.copy(unlockHint = "Learn 7 more cards")
+
+        assertTrue(ready.readyToUnlock)
+        assertFalse(blocked.readyToUnlock)
+        assertFalse(ready.copy(unlocked = true).readyToUnlock)
+        assertFalse(ready.copy(available = false).readyToUnlock)
+        assertEquals("Chapter 2 unlocked", CurriculumViewModel.chapterUnlockedMessage(2))
     }
 }

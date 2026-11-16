@@ -12,7 +12,11 @@
     <!-- Home Screen -->
     <string name="home_due_today">Due today</string>
     <string name="home_cards_count">%d cards</string>
+    <string name="home_welcome_back">Welcome back!</string>
+    <string name="home_first_run_heading">Start here: the alphabet</string>
     <string name="home_start_review">Start Review</string>
+    <string name="home_learn_letters_with_count">Learn letters (%1$d new)</string>
+    <string name="home_cards_introduced">Cards introduced</string>
     <string name="home_continue_reading">Continue Reading</string>
     <string name="home_streak">Day streak</string>
     <string name="home_streak_count">%d days</string>
@@ -24,6 +28,27 @@
     <string name="review_hard">Hard</string>
     <string name="review_good">Good</string>
     <string name="review_easy">Easy</string>
+    <string name="review_new_badge">New</string>
+    <string name="review_new_again">Show again soon (1m)</string>
+    <string name="review_new_good">Got it (10m)</string>
+    <string name="review_empty_title">No cards ready right now</string>
+    <string name="review_empty_message">This review batch is clear. Come back when your next cards are due.</string>
+    <string name="review_complete_title">Review batch complete</string>
+    <string name="review_complete_message">No cards are due right now.</string>
+    <string name="review_return_soon_title">Nice work — a short return is next</string>
+    <string name="review_about_one_minute">about 1 minute</string>
+    <string name="review_about_minutes">about %1$d minutes</string>
+    <plurals name="review_return_soon_message">
+        <item quantity="one">%1$d card comes back in %2$s — return then to keep learning.</item>
+        <item quantity="other">%1$d cards come back in %2$s — return then to keep learning.</item>
+    </plurals>
+    <string name="review_more_due_title">More cards are ready</string>
+    <string name="review_more_due_message">This batch is finished. Continue with the cards that are still due.</string>
+    <plurals name="review_more_due_continue">
+        <item quantity="one">%1$d more due — continue</item>
+        <item quantity="other">%1$d more due — continue</item>
+    </plurals>
+    <string name="review_done">Done</string>
 
     <!-- Reader Screen -->
     <string name="reader_title">Reader</string>
@@ -34,6 +59,9 @@
     <string name="curriculum_title">Curriculum</string>
     <string name="curriculum_cards">%d cards</string>
     <string name="curriculum_progress">%d%% complete</string>
+    <string name="curriculum_chapter_stats">%1$d/%2$d learning · %3$d mastered</string>
+    <string name="curriculum_locked">Locked</string>
+    <string name="curriculum_unlock">Unlock</string>
 
     <!-- Dictionary Screen -->
     <string name="dictionary_subtitle">Morpheus glosses (LSJ pending)</string>
@@ -50,7 +78,7 @@
     <string name="practice_progress">Question %1$d of %2$d</string>
     <string name="practice_loading">Loading practice questions…</string>
     <string name="practice_empty_title">Nothing to practice yet</string>
-    <string name="practice_empty_message">Practice unlocks after some review — your rated cards feed the question pool.</string>
+    <string name="practice_empty_message">Practice needs an unlocked chapter with enough cards. Open Progress to unlock more.</string>
     <string name="practice_back">Back</string>
     <string name="practice_typed_label">Type the Greek</string>
     <string name="practice_typed_supporting">Accents optional — bonus for exact Greek</string>
@@ -77,6 +105,12 @@
     <string name="home_gate_title">Read Greek first.</string>
     <string name="home_gate_body">Vocabulary unlocks when you can recognize the alphabet.</string>
     <string name="home_gate_progress">Letters %1$d/5 stages · Practice accuracy: %2$s (goal 85%%)</string>
+    <string name="home_gate_checklist_title">Organic route to vocabulary</string>
+    <string name="home_gate_introduced">Letters introduced: %1$d/%2$d</string>
+    <string name="home_gate_attempts">Practice answers: %1$d/%2$d</string>
+    <string name="home_gate_accuracy">Accuracy: %1$d%% (goal %2$d%%)</string>
+    <string name="home_gate_accuracy_unknown">Accuracy: — (goal 85%%)</string>
+    <string name="home_gate_days">Active days: %1$d/%2$d</string>
     <string name="home_gate_continue">Continue letters</string>
     <string name="home_gate_take_check">Take the Alphabet Check (~3 min)</string>
     <string name="home_gate_skip_hint">Already know it? Skip with the check — passing counts instantly.</string>
@@ -90,8 +124,11 @@
     <string name="alphabet_check_direction_glyph_to_name">Name this letter</string>
     <string name="alphabet_check_direction_name_to_glyph">Pick the matching letter</string>
     <string name="alphabet_check_pass">✅ %1$d/%2$d — the alphabet is yours. Vocabulary is unlocked.</string>
-    <string name="alphabet_check_fail">Not yet — %1$d/%2$d (need %3$d). The ones you missed are already scheduled for review.</string>
-    <string name="alphabet_check_study_letters">Study letters</string>
+    <string name="alphabet_check_fail">Not yet — %1$d/%2$d (need %3$d). Your missed letters are listed below and scheduled for review.</string>
+    <string name="alphabet_check_missed_title">Review these letters</string>
+    <string name="alphabet_check_missed_item">%1$s — %2$s</string>
+    <string name="alphabet_check_daily_cap_note">Check attempts are unlimited. Letter introductions are not capped; the 10-new-card daily allowance applies to vocabulary.</string>
+    <string name="alphabet_check_study_letters">Review these now</string>
     <string name="alphabet_check_try_again">Try again</string>
     <string name="alphabet_check_done">Done</string>
 
@@ -146,9 +183,16 @@
     <string name="sync_identity_generated">Identity ready</string>
     <string name="sync_rotate_identity">Rotate identity</string>
     <string name="sync_rotate_identity_title">Rotate identity?</string>
-    <string name="sync_rotate_identity_message">This permanently replaces your current sync identity. Relay history encrypted under the old key becomes unreadable, and relays will treat this device as a brand-new peer.\n\nThe old key cannot currently be viewed or exported from the app — do not rotate unless you no longer need the history under the old identity.</string>
+    <string name="sync_rotate_identity_message">This permanently replaces your current sync identity. Relay history encrypted under the old key becomes unreadable, and relays will treat this device as a brand-new peer.\n\nBack up the current identity key first if you need its history. Store the key offline before rotating.</string>
     <string name="sync_rotate_identity_confirm">Rotate identity</string>
     <string name="sync_rotate_identity_cancel">Cancel</string>
+    <string name="sync_backup_identity_key">Back up identity key</string>
+    <string name="sync_backup_identity_title">Back up identity key?</string>
+    <string name="sync_backup_identity_message">Anyone holding this key can impersonate you and read relay history encrypted to this identity. Store it offline in a secure place. The key will only be revealed after you confirm; nothing is shared automatically.</string>
+    <string name="sync_backup_identity_reveal">Reveal key</string>
+    <string name="sync_backup_identity_reveal_title">Identity key</string>
+    <string name="sync_copy_once">Copy key</string>
+    <string name="sync_backup_identity_unavailable">No identity key to back up</string>
     <string name="sync_import_nsec">Import nsec</string>
     <string name="sync_nsec_label">Paste nsec secret</string>
     <string name="sync_push_now">Push now</string>

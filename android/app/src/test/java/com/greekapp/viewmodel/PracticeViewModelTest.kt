@@ -1,5 +1,6 @@
 package com.greekapp.viewmodel
 
+import com.greekapp.core.McqData
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -21,6 +22,18 @@ import org.junit.Test
  *    computed result must never silently be treated as final.
  */
 class PracticeViewModelTest {
+
+    @Test
+    fun untypeableItemsAlwaysFallBackToMcq() {
+        for (index in 0..9) {
+            assertTrue(isMcqQuestion(index, typeable = false))
+        }
+        assertFalse(isMcqQuestion(0, typeable = true))
+        assertTrue(isMcqQuestion(1, typeable = true))
+        assertFalse(isMcqQuestion(2, typeable = true))
+        // Older restored/generated records have no metadata and use safe MCQ.
+        assertFalse(McqData("card", "prompt", listOf("answer"), 0).typeable)
+    }
 
     private val result = PracticeResult(
         cardId = "card-1",
@@ -126,6 +139,30 @@ class PracticeViewModelTest {
         assertEquals(
             VerdictSaveStatus.Persisted,
             PracticeViewModel.classifyVerdictSave(outcome = false, locallyPassed = false)
+        )
+    }
+
+    @Test
+    fun failedCheck_listsPromptAndNameForEveryMissInQuestionOrder() {
+        val questions = listOf(
+            McqData("letters-001", "Α α", listOf("alpha", "beta"), 0),
+            McqData("letters-002", "beta", listOf("Α α", "Β β"), 1),
+            McqData("letters-003", "Γ γ", listOf("gamma", "delta"), 0)
+        )
+        val results = listOf(
+            PracticeResult("letters-001", "alpha", correct = false, exact = false),
+            PracticeResult("letters-002", "Β β", correct = true, exact = false),
+            PracticeResult("letters-003", "gamma", correct = false, exact = false)
+        )
+
+        val missed = PracticeViewModel.missedCheckItems(questions, results)
+
+        assertEquals(
+            listOf(
+                MissedCheckItem(prompt = "Α α", answer = "alpha"),
+                MissedCheckItem(prompt = "Γ γ", answer = "gamma")
+            ),
+            missed
         )
     }
 }

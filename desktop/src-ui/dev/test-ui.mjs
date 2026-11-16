@@ -15,6 +15,7 @@ import vm from "node:vm";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "..", "app.js"), "utf8");
+const htmlRaw = readFileSync(join(here, "..", "index.html"), "utf8");
 
 /* ---------------- assertions ---------------- */
 
@@ -56,7 +57,6 @@ const DISPLAY_RULE_BY_ID = {
   "btn-show-answer": ".btn",
   "review-new-badge": ".chip",
   "review-card": ".review-card",
-  "stat-accuracy": ".stat-card",
   "sync-busy": ".spinner",
 };
 
@@ -112,7 +112,7 @@ function makeEl(tag) {
 const registry = Object.create(null);
 const el = (id) => registry[id] || (registry[id] = makeEl());
 
-const tabBtns = ["home", "review", "curriculum", "dictionary", "sync"].map(
+const tabBtns = ["home", "review", "curriculum", "dictionary"].map(
   (t) => {
     const b = makeEl("button");
     b.setAttribute("data-tab", t);
@@ -163,6 +163,7 @@ const ALLOWED = new Set([
   "alphabet_check_generate",
   "alphabet_check_answer",
   "alphabet_check_verdict",
+  "alphabet_declare_known",
   "chapter_unlock",
   "dict_search",
   "dict_status",
@@ -190,7 +191,7 @@ const REVIEWS = [
     isNew: false,
     previews: ["1d", "3d", "6d", "12d"],
   },
-  { card: null, remaining: 0, isNew: false, previews: ["10m", "1d", "3d", "7d"] },
+  { card: null, remaining: 0, isNew: false, previews: [], returningSoonCount: 1, minutesUntilNext: 1 },
 ];
 let reviewIdx = 0;
 
@@ -198,6 +199,7 @@ const PUBKEY = "a".repeat(64);
 let dictFailNext = false;
 let dictInstalledState = true;
 let ch3Unlocked = false; // curriculum canned state: chapter_unlock flips it
+let alphabetKnown = false;
 
 const CHECK_QUESTIONS = [
   { cardId: "letters-002", glyphToName: true, prompt: "Β β", choices: ["beta", "alpha", "gamma", "delta"], correctIndex: 0 },
@@ -214,7 +216,8 @@ const CANNED = {
       streakDays: 4,
       practiceCorrect: 8,
       practiceTotal: 10,
-      gateSatisfied: false,
+      wordsLearned: 17,
+      gateSatisfied: alphabetKnown,
       lettersChaptersMet: 2,
     }),
   review_current: () => JSON.stringify(REVIEWS[reviewIdx]),
@@ -227,23 +230,23 @@ const CANNED = {
   },
   curriculum: () =>
     JSON.stringify({
-      gateNotMet: true,
+      gateNotMet: !alphabetKnown,
       textbooks: [
         {
           id: "letters",
           title: "The Alphabet & Pronunciation",
           chapters: [
-            { index: 1, title: "The Vowels", totalCards: 7, masteredCount: 4, unlocked: true, hint: "" },
-            { index: 2, title: "Stop Consonants", totalCards: 9, masteredCount: 0, unlocked: false, hint: "Master chapter 1 to unlock" },
+            { index: 1, title: "The Vowels", totalCards: 7, learningCount: 4, masteredCount: 2, unlocked: true, hint: "" },
+            { index: 2, title: "Stop Consonants", totalCards: 9, learningCount: 0, masteredCount: 0, unlocked: false, hint: "Learn chapter 1 to unlock" },
             // hint "" on a locked row = requirement met → tappable (D1)
-            { index: 3, title: "Continuants", totalCards: 9, masteredCount: 0, unlocked: ch3Unlocked, hint: "" },
+            { index: 3, title: "Continuants", totalCards: 9, learningCount: 0, masteredCount: 0, unlocked: ch3Unlocked, hint: "" },
           ],
         },
         {
           id: "core",
           title: "Core Vocabulary",
           chapters: [
-            { index: 1, title: "Everyday Words", totalCards: 20, masteredCount: 0, unlocked: false, hint: "" },
+            { index: 1, title: "Everyday Words", totalCards: 20, learningCount: 0, masteredCount: 0, unlocked: false, hint: "" },
           ],
         },
       ],
@@ -261,6 +264,10 @@ const CANNED = {
     }
     // mirror the core contract loosely: mock passes at ≥90%
     return JSON.stringify({ gateSatisfied: args.total > 0 && args.correct * 10 >= args.total * 9 });
+  },
+  alphabet_declare_known: () => {
+    alphabetKnown = true;
+    return JSON.stringify({ gateSatisfied: true });
   },
   chapter_unlock: (args) => {
     if (typeof args.textbook !== "string" || !Number.isInteger(args.chapter)) {
@@ -388,14 +395,20 @@ async function main() {
     assert(Boolean(m), "css self-check: " + sel + " really sets display (D4 map not stale)");
   }
 
+  console.log("== Markup / navigation ==");
+  const navMarkup = /<nav[^>]*id="tab-nav"[\s\S]*?<\/nav>/.exec(htmlRaw);
+  assert(Boolean(navMarkup), "markup: primary nav exists");
+  assert(navMarkup && !navMarkup[0].includes('data-tab="sync"'), "markup: sync absent from primary tabs");
+  assert(htmlRaw.includes('id="btn-open-sync"'), "markup: secondary sync entry present");
+  assert(htmlRaw.includes('href="guide.html"'), "markup: desktop-scoped guide linked");
+  assert(htmlRaw.includes("review and dictionary companion to the Android app"), "markup: companion scope stated");
+
   console.log("== Home ==");
   await App.showTab("home");
   assert(el("stat-due-num").textContent === "3", "home: due count rendered");
   assert(el("stat-new").textContent === "2 / 10", "home: new X/cap rendered");
   assert(el("stat-streak").textContent === "4 days", "home: streak rendered");
-  assert(el("stat-accuracy").hidden === false, "home: accuracy visible when total>0");
-  assert(renderedVisible("stat-accuracy"), "home: accuracy rendered visible (D4)");
-  assert(el("stat-accuracy-num").textContent === "80%", "home: accuracy pct");
+  assert(el("stat-learned-num").textContent === "17", "home: cards in review rendered as words learned");
   assert(el("gate-banner").hidden === false, "home: gate banner shown when !gateSatisfied");
   assert(
     el("gate-progress").textContent.includes("2/5"),
@@ -436,6 +449,8 @@ async function main() {
   await App.rate(2);
   assert(App._review.card === null, "review: queue drains to empty");
   assert(el("review-empty").hidden === false, "review: empty state shown");
+  assert(el("review-empty-title").textContent === "Cards come back soon", "review: pending return is not called completed");
+  assert(el("review-empty-detail").textContent.includes("about 1 minute"), "review: return timing rendered");
   // idempotence guards: rating with no card / without reveal must be a no-op
   const before = calls.length;
   await App.rate(3);
@@ -451,8 +466,9 @@ async function main() {
   const currHtml = el("curr-list").innerHTML;
   assert(currHtml.includes("The Alphabet &amp; Pronunciation"), "curriculum: textbook title");
   assert(currHtml.includes("🔒"), "curriculum: lock icon on locked chapter");
-  assert(currHtml.includes("Master chapter 1 to unlock"), "curriculum: locked hint shown");
-  assert(currHtml.includes("4 / 7 mastered"), "curriculum: mastered/total row");
+  assert(currHtml.includes("Learn chapter 1 to unlock"), "curriculum: locked hint shown");
+  assert(currHtml.includes("4 / 7 learning · 2 mastered"), "curriculum: learning and mastery shown separately");
+  assert(!currHtml.includes("0% complete"), "curriculum: no misleading percentage-only empty progress");
   // D1: interactivity
   assert(currHtml.includes('data-action="check-start"'), "curriculum: check CTA while gate unmet");
   assert(
@@ -468,8 +484,8 @@ async function main() {
   await App.unlockChapterRow("letters", 3);
   assert(calls.includes("chapter_unlock"), "curriculum: chapter_unlock invoked on tap");
   assert(
-    el("curr-list").innerHTML.includes("0 / 9 mastered"),
-    "curriculum: unlocked ch.3 shows progress row after unlock"
+    el("curr-list").innerHTML.includes("0 / 9 learning · 0 mastered"),
+    "curriculum: unlocked ch.3 shows separate progress figures after unlock"
   );
 
   // Alphabet check loop: generate → answer each → verdict → back.
@@ -504,6 +520,11 @@ async function main() {
   assert(el("curr-list").innerHTML.includes("3 / 3"), "check: score rendered");
   await App.exitCheck();
   assert(el("curr-list").innerHTML.includes("The Alphabet"), "check: exit restores curriculum");
+
+  await App.declareAlphabetKnown();
+  assert(calls.includes("alphabet_declare_known"), "gate: declared-known command invoked");
+  assert(el("curr-gate").hidden === true, "gate: declaration refreshes curriculum gate");
+  assert(!el("curr-list").innerHTML.includes('data-action="alphabet-known"'), "gate: declaration CTA removed once satisfied");
 
   console.log("== Dictionary ==");
   await App.showTab("dictionary");

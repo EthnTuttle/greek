@@ -277,6 +277,10 @@ fun SyncScreen(
                         onClick = { viewModel.importNsec(nsec); nsec = "" }
                     ) { Text(stringResource(R.string.sync_import_nsec)) }
                 }
+                OutlinedButton(
+                    enabled = !state.busy && state.hasIdentity,
+                    onClick = viewModel::requestIdentityExport
+                ) { Text(stringResource(R.string.sync_backup_identity_key)) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         enabled = !state.busy,
@@ -354,10 +358,62 @@ fun SyncScreen(
         )
     }
 
+    // Deliberate identity recovery: confirmation gates the core read; after
+    // reveal the key is manually selectable and copyable, never auto-shared.
+    if (state.identityExportConfirmPending) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissIdentityExport,
+            title = { Text(stringResource(R.string.sync_backup_identity_title)) },
+            text = { Text(stringResource(R.string.sync_backup_identity_message)) },
+            confirmButton = {
+                TextButton(
+                    enabled = !state.busy,
+                    onClick = viewModel::confirmIdentityExport
+                ) { Text(stringResource(R.string.sync_backup_identity_reveal)) }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissIdentityExport) {
+                    Text(stringResource(R.string.sync_rotate_identity_cancel))
+                }
+            }
+        )
+    }
+
+    state.exportedNsec?.let { nsec ->
+        val clipboard = LocalClipboardManager.current
+        AlertDialog(
+            onDismissRequest = viewModel::dismissIdentityExport,
+            title = { Text(stringResource(R.string.sync_backup_identity_reveal_title)) },
+            text = {
+                SelectionContainer {
+                    Text(
+                        text = nsec,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !state.identityExportCopied,
+                    onClick = {
+                        viewModel.takeIdentityExportForCopy()?.let {
+                            clipboard.setText(AnnotatedString(it))
+                            scope.launch { snackbarHostState.showSnackbar(msgCopied) }
+                        }
+                    }
+                ) { Text(stringResource(R.string.sync_copy_once)) }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissIdentityExport) {
+                    Text(stringResource(R.string.sync_close))
+                }
+            }
+        )
+    }
+
     // Rotate-identity confirmation (A6): only reachable when an identity
-    // already exists. The old key cannot be exported from the UI (credential
-    // recovery is an un-shipped P2), so the copy states that limitation
-    // plainly instead of offering a "copy first" affordance that lies.
+    // already exists. Backup is offered before the destructive rotation.
     if (state.rotationConfirmPending) {
         AlertDialog(
             onDismissRequest = viewModel::dismissIdentityRotation,
@@ -372,8 +428,13 @@ fun SyncScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::dismissIdentityRotation) {
-                    Text(stringResource(R.string.sync_rotate_identity_cancel))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = viewModel::requestIdentityExport) {
+                        Text(stringResource(R.string.sync_backup_identity_key))
+                    }
+                    TextButton(onClick = viewModel::dismissIdentityRotation) {
+                        Text(stringResource(R.string.sync_rotate_identity_cancel))
+                    }
                 }
             }
         )

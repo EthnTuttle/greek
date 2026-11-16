@@ -6,6 +6,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use uniffi_bindings::GreekCore;
 
@@ -22,12 +23,25 @@ pub struct SessionCard {
     pub is_new: bool,
 }
 
+/// A short-interval return predicted by the same core preview shown on the
+/// rating buttons. Kept so an end-of-queue screen can distinguish "all caught
+/// up" from "this card comes back soon".
+#[derive(Debug, Clone)]
+pub struct ScheduledReturn {
+    pub card_id: String,
+    pub return_at: Instant,
+}
+
 /// In-memory review batch. Unlike Android (which persists the batch to
 /// DataStore so it survives process death), the desktop session is
 /// deliberately in-memory only per the wave-7 spec.
 #[derive(Debug, Default)]
 pub struct ReviewSession {
     pub queue: VecDeque<SessionCard>,
+    /// Total cards admitted to this batch, including requeues. Unlike queue
+    /// length this never shrinks, so the 60-card growth bound is real.
+    pub admitted: usize,
+    pub pending_returns: Vec<ScheduledReturn>,
 }
 
 /// Tauri-managed application state.

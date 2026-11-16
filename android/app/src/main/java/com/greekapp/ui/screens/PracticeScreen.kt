@@ -3,6 +3,8 @@ package com.greekapp.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -215,7 +217,7 @@ fun PracticeScreen(
                 )
                 Spacer(modifier = Modifier.height(32.dp))
 
-                if (isMcqQuestion(state.currentIndex)) {
+                if (isMcqQuestion(state.currentIndex, question.typeable)) {
                     McqChoices(state = state, question = question, onSelect = viewModel::selectChoice)
                 } else {
                     TypedAnswer(
@@ -387,6 +389,7 @@ private fun AlphabetCheckVerdictScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -425,6 +428,35 @@ private fun AlphabetCheckVerdictScreen(
                     style = MaterialTheme.typography.titleMedium
                 )
             }
+        }
+        if (!passed) {
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = stringResource(R.string.alphabet_check_missed_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            PracticeViewModel.missedCheckItems(state.questions, state.results).forEach { miss ->
+                Text(
+                    text = stringResource(
+                        R.string.alphabet_check_missed_item,
+                        miss.prompt,
+                        miss.answer
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontFamily = GreekFontFamily,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.alphabet_check_daily_cap_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
         Spacer(modifier = Modifier.height(32.dp))
         if (passed) {

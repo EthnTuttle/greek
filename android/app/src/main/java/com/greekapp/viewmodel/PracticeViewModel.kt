@@ -15,8 +15,12 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Question-type alternation, 0-based: even index → typed, odd index → MCQ. */
+/** Legacy alternation, retained for the generated/old metadata contract. */
 internal fun isMcqQuestion(index: Int): Boolean = index % 2 == 1
+
+/** Typed only when core marks the item typeable; every other item is MCQ. */
+internal fun isMcqQuestion(index: Int, typeable: Boolean): Boolean =
+    !typeable || isMcqQuestion(index)
 
 /** Classification of one alphabet-check verdict record attempt. */
 internal enum class VerdictSaveStatus {
@@ -33,7 +37,7 @@ data class PracticeResult(
     /** The correct full Greek form shown in feedback and the summary. */
     val greekForm: String,
     val correct: Boolean,
-    /** Accent-exact bonus (typed questions only; MCQ answers always false). */
+    /** Accent-exact feedback (typed only); core still rates every hit Good. */
     val exact: Boolean
 )
 
@@ -41,6 +45,12 @@ data class PracticeResult(
 data class AnswerFeedback(
     val correct: Boolean,
     val exact: Boolean
+)
+
+/** One fully readable remediation card: the prompt and its missed name/glyph. */
+data class MissedCheckItem(
+    val prompt: String,
+    val answer: String
 )
 
 data class PracticeState(
@@ -206,7 +216,7 @@ class PracticeViewModel(
             cardId = question.cardId,
             greekForm = question.correctForm,
             correct = correct,
-            exact = false // MCQ answers never earn the accent-exact bonus
+            exact = false // typed-only feedback; MCQ answers are never exact
         )
         _state.value = s.copy(
             selectedChoiceIndex = choiceIndex,
@@ -503,6 +513,7 @@ class PracticeViewModel(
                     .put("promptGloss", q.promptGloss)
                     .put("choices", choices)
                     .put("correctIndex", q.correctIndex)
+                    .put("typeable", q.typeable)
                     // Check-mode direction; absent/false reads as a normal question.
                     .put("glyphToName", directions.getOrElse(i) { false })
             )
@@ -520,7 +531,9 @@ class PracticeViewModel(
                     cardId = o.getString("cardId"),
                     promptGloss = o.getString("promptGloss"),
                     choices = (0 until choicesArr.length()).map { choicesArr.getString(it) },
-                    correctIndex = o.getInt("correctIndex")
+                    correctIndex = o.getInt("correctIndex"),
+                    // Old snapshots lack the flag and must stay on safe MCQ.
+                    typeable = o.optBoolean("typeable", false)
                 )
             }
             val directions = (0 until arr.length()).map { i ->
@@ -584,6 +597,19 @@ class PracticeViewModel(
          * the core; only the cutoff is mirrored here for scoring + copy.
          */
         const val ALPHABET_CHECK_PASS_SCORE = 22
+
+        /** Keep every miss in question order; either prompt or answer carries the letter name. */
+        internal fun missedCheckItems(
+            questions: List<McqData>,
+            results: List<PracticeResult>
+        ): List<MissedCheckItem> = results.mapIndexedNotNull { index, result ->
+            if (result.correct) return@mapIndexedNotNull null
+            val question = questions.getOrNull(index) ?: return@mapIndexedNotNull null
+            MissedCheckItem(
+                prompt = question.promptGloss,
+                answer = result.greekForm
+            )
+        }
 
         private const val KEY_QUESTIONS = "practice_questions"
         private const val KEY_INDEX = "practice_index"

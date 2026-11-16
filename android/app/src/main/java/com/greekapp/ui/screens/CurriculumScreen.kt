@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +53,13 @@ fun CurriculumScreen(
         if (hint != null) {
             snackbarHostState.showSnackbar(hint)
             viewModel.hintShown()
+        }
+    }
+    LaunchedEffect(state.unlockMessage) {
+        val message = state.unlockMessage
+        if (message != null) {
+            snackbarHostState.showSnackbar(message)
+            viewModel.unlockMessageShown()
         }
     }
 
@@ -249,11 +257,24 @@ private fun ChapterItem(
                     }
                 )
                 if (chapter.available) {
-                    Text(
-                        text = "${chapter.cardCount} cards",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (!chapter.unlocked) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = stringResource(R.string.curriculum_locked),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.curriculum_cards, chapter.cardCount),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 } else {
                     // Coming Soon badge
                     Surface(
@@ -276,7 +297,17 @@ private fun ChapterItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // Progress bar — only meaningful when the chapter has cards.
+            if (chapter.readyToUnlock) {
+                Button(
+                    onClick = onClick,
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Text(stringResource(R.string.curriculum_unlock))
+                }
+            }
+
+            // Progress bar — learning and mastery are deliberately separate.
             if (chapter.available) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -286,7 +317,12 @@ private fun ChapterItem(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        text = "${(chapter.progress * 100).toInt()}% complete (${chapter.completedCount}/${chapter.cardCount})",
+                        text = stringResource(
+                            R.string.curriculum_chapter_stats,
+                            chapter.learnedCount,
+                            chapter.cardCount,
+                            chapter.masteredCount
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

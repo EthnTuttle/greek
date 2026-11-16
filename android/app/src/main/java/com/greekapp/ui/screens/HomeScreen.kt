@@ -1,6 +1,8 @@
 package com.greekapp.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material3.*
@@ -16,6 +18,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.greekapp.R
+import com.greekapp.viewmodel.HomeHeading
+import com.greekapp.viewmodel.HomeReviewLabel
 import com.greekapp.viewmodel.HomeViewModel
 
 @Composable
@@ -28,10 +32,10 @@ fun HomeScreen(
 ) {
     val state by viewModel.state.collectAsState()
 
-    // Re-pull stats every time Home becomes visible so cards added elsewhere
-    // (e.g. "+ Add to SRS" in the reader) are reflected in the due count
-    // without needing a cold start. The ViewModel's init already does the
-    // first load; this keeps it fresh on every return to the tab.
+    // Re-pull stats every time Home becomes visible so review activity and
+    // newly introduced cards are reflected without a cold start. The
+    // ViewModel's init already does the first load. Reader lookup additions
+    // affect this count only when the core actually admits them to a session.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshStats()
     }
@@ -39,11 +43,18 @@ fun HomeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "Welcome back!",
+            text = stringResource(
+                if (state.decision.heading == HomeHeading.START_ALPHABET) {
+                    R.string.home_first_run_heading
+                } else {
+                    R.string.home_welcome_back
+                }
+            ),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
@@ -58,9 +69,9 @@ fun HomeScreen(
                 // UInt multiply-bound: correct * 100 can't overflow UInt at any
                 // plausible practice volume.
                 val accuracy = if (gate.lettersPracticeTotal == 0u) {
-                    "—"
+                    null
                 } else {
-                    "${(gate.lettersPracticeCorrect * 100u / gate.lettersPracticeTotal).toInt()}%"
+                    (gate.lettersPracticeCorrect * 100u / gate.lettersPracticeTotal).toInt()
                 }
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -86,12 +97,42 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                         Text(
-                            text = stringResource(
-                                R.string.home_gate_progress,
-                                gate.lettersChaptersMet.toInt(),
-                                accuracy
-                            ),
+                            text = stringResource(R.string.home_gate_checklist_title),
                             style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        val checklist = listOf(
+                            stringResource(
+                                R.string.home_gate_introduced,
+                                gate.lettersIntroduced.toInt(),
+                                gate.lettersTotal.toInt()
+                            ) to (gate.lettersIntroduced >= gate.lettersTotal),
+                            stringResource(
+                                R.string.home_gate_attempts,
+                                gate.lettersPracticeTotal.toInt(),
+                                20
+                            ) to (gate.lettersPracticeTotal >= 20u),
+                            (accuracy?.let {
+                                stringResource(R.string.home_gate_accuracy, it, 85)
+                            } ?: stringResource(R.string.home_gate_accuracy_unknown)) to
+                                (accuracy != null && accuracy >= 85),
+                            stringResource(
+                                R.string.home_gate_days,
+                                gate.lettersActiveDays.toInt(),
+                                2
+                            ) to (gate.lettersActiveDays >= 2u)
+                        )
+                        checklist.forEach { (label, met) ->
+                            Text(
+                                text = "${if (met) "✓" else "○"} $label",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.alphabet_check_daily_cap_note),
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                         Button(
@@ -157,7 +198,7 @@ fun HomeScreen(
                 )
                 // Daily new-card intake against the fixed budget of 10.
                 Text(
-                    text = "New today: ${state.newCardsToday} / 10",
+                    text = "New words today: ${state.newCardsToday} / 10",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
@@ -181,7 +222,14 @@ fun HomeScreen(
             enabled = state.dueCardsCount > 0 || state.totalCards > 0
         ) {
             Text(
-                text = "Start Review",
+                text = if (state.decision.reviewLabel == HomeReviewLabel.LEARN_LETTERS) {
+                    stringResource(
+                        R.string.home_learn_letters_with_count,
+                        state.decision.availableNewLetters
+                    )
+                } else {
+                    stringResource(R.string.home_start_review)
+                },
                 style = MaterialTheme.typography.titleMedium
             )
         }
@@ -237,14 +285,17 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Stats summary
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            StatItem(label = "Words learned", value = "${state.wordsLearned}")
+            StatItem(
+                label = stringResource(R.string.home_cards_introduced),
+                value = "${state.wordsLearned}"
+            )
             StatItem(label = "Chapters", value = "${state.chaptersUnlocked}")
             StatItem(label = "Reviewed today", value = "${state.reviewedToday}")
         }

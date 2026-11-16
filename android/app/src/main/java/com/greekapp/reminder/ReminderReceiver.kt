@@ -7,20 +7,39 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.greekapp.MainActivity
 
 /**
  * Fires the daily "cards are ready" notification when [ReminderScheduler]'s
  * alarm goes off.
  *
- * Framework-only on purpose: minSdk is 26, so NotificationChannel and
- * `Notification.Builder(context, channelId)` are available without
- * NotificationCompat, and AlarmManager replaces WorkManager — no new
- * dependencies (no androidx.work / appcompat / core-ktx additions).
+ * Notification construction is framework-only: minSdk is 26, so
+ * NotificationChannel and `Notification.Builder(context, channelId)` are
+ * available without NotificationCompat, and AlarmManager replaces WorkManager
+ * — no new dependencies (no androidx.work / appcompat additions).
  */
 class ReminderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        val hasPermission = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        if (!canPostReminders(
+                sdkInt = Build.VERSION.SDK_INT,
+                hasPostNotificationsPermission = hasPermission,
+                notificationsEnabled = NotificationManagerCompat.from(context)
+                    .areNotificationsEnabled()
+            )
+        ) {
+            return
+        }
+
         ensureChannel(context)
 
         // Tapping the notification opens the app at its default entry point.
@@ -42,9 +61,6 @@ class ReminderReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .build()
 
-        // Note: on Android 13+ (API 33+) the POST_NOTIFICATIONS runtime
-        // permission gates whether this is actually shown; the manifest
-        // declares it and requesting it is the Settings UI's concern.
         val manager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, notification)

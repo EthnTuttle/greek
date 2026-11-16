@@ -175,9 +175,9 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
                     navController.navigate(Screen.Reader.route)
                 },
                 onOpenLetters = {
-                    // Curriculum is a bottom-nav tab: reuse the tab-navigation
-                    // helper so state save/restore matches the nav bar behavior.
-                    navController.navigateToTab(Screen.Curriculum.route)
+                    // Letters are taught through the new-card Review lesson,
+                    // not by tapping a (previously inert) curriculum row.
+                    navController.navigate(Screen.Review.route)
                 },
                 onTakeAlphabetCheck = {
                     // Stacked on top of Home like Review; nav-pop returns here.
@@ -200,7 +200,7 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
                     navController.popBackStack()
                 },
                 onStudyLetters = {
-                    navController.navigateToTab(Screen.Curriculum.route)
+                    navController.navigate(Screen.Review.route)
                 }
             )
         }
@@ -223,7 +223,7 @@ private fun AppNavHost(navController: androidx.navigation.NavHostController, mod
                     navController.popBackStack()
                 },
                 onStudyLetters = {
-                    navController.navigateToTab(Screen.Curriculum.route)
+                    navController.navigate(Screen.Review.route)
                 }
             )
         }

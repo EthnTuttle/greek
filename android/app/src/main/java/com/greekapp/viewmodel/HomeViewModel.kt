@@ -7,12 +7,22 @@ import com.greekapp.GreekApplication
 import com.greekapp.SettingsRepository
 import com.greekapp.core.AlphabetGateState
 import com.greekapp.core.CoreProvider
+import com.greekapp.core.GreekCoreApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+enum class HomeHeading { WELCOME_BACK, START_ALPHABET }
+enum class HomeReviewLabel { START_REVIEW, LEARN_LETTERS }
+
+data class HomeDecision(
+    val heading: HomeHeading = HomeHeading.WELCOME_BACK,
+    val reviewLabel: HomeReviewLabel = HomeReviewLabel.START_REVIEW,
+    val availableNewLetters: Int = 0
+)
 
 data class HomeState(
     val dueCardsCount: Int = 0,
@@ -30,6 +40,7 @@ data class HomeState(
      * deck (lettersTotal == 0).
      */
     val alphabetGate: AlphabetGateState? = null,
+    val decision: HomeDecision = HomeDecision(),
     val isLoading: Boolean = true
 )
 
@@ -73,11 +84,12 @@ class HomeViewModel : ViewModel() {
             val core = CoreProvider.current() ?: return@launch
             try {
                 val stats = core.getReviewStats()
-                // Words learned: count of words the user has marked known (real, Rust-backed).
-                val wordsLearned = try {
-                    core.getKnownWords().size
+                // The gate's introduced counter is authoritative even when
+                // check answers have already spent today's new-card budget.
+                val alphabetGate = try {
+                    core.getAlphabetGateState()
                 } catch (e: Exception) {
-                    0
+                    null
                 }
                 // Chapters: number of unlocked chapters across all curricula.
                 val chaptersUnlocked = try {
@@ -93,19 +105,19 @@ class HomeViewModel : ViewModel() {
                 } catch (e: Exception) {
                     0
                 }
+                val decision = homeDecision(
+                    gateSatisfied = alphabetGate?.satisfied,
+                    lettersTotal = alphabetGate?.lettersTotal?.toInt() ?: 0,
+                    availableNewLetters = availableNewLetters(core, alphabetGate, newCardsToday)
+                )
+                // Core learning_count counts introduced review states, never
+                // Reader known-word marks or the total size of bundled decks.
+                val wordsLearned = stats.learningCount
                 // Practice accuracy; null → Home hides the row (total == 0, or
                 // the wave-3 stub is still in place, or the call failed).
                 val practiceAccuracy = try {
                     val ps = core.getPracticeStats()
                     if (ps.total == 0u) null else (ps.correct * 100u / ps.total).toInt()
-                } catch (e: Exception) {
-                    null
-                }
-                // Alphabet gate (wave 5): replaces the wave-4 letters banner.
-                // The core decides satisfaction across all lanes; Home only
-                // renders the returned counters. Null → card hidden.
-                val alphabetGate = try {
-                    core.getAlphabetGateState()
                 } catch (e: Exception) {
                     null
                 }
@@ -119,6 +131,7 @@ class HomeViewModel : ViewModel() {
                     newCardsToday = newCardsToday,
                     practiceAccuracy = practiceAccuracy,
                     alphabetGate = alphabetGate,
+                    decision = decision,
                     isLoading = false
                 )
             } catch (e: Exception) {
@@ -127,7 +140,45 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    private companion object {
-        const val TAG = "HomeViewModel"
+    companion object {
+        private const val DAILY_NEW_CARD_LIMIT = 10
+        private const val SESSION_SIZE = 20u
+
+        /** Home's primary routing/copy decision is independent of Android and I/O. */
+        internal fun homeDecision(
+            gateSatisfied: Boolean?,
+            lettersTotal: Int,
+            availableNewLetters: Int
+        ): HomeDecision {
+            val learningAlphabet = gateSatisfied == false && lettersTotal > 0
+            return HomeDecision(
+                heading = if (learningAlphabet) HomeHeading.START_ALPHABET else HomeHeading.WELCOME_BACK,
+                reviewLabel = if (learningAlphabet) HomeReviewLabel.LEARN_LETTERS else HomeReviewLabel.START_REVIEW,
+                availableNewLetters = availableNewLetters.coerceAtLeast(0)
+            )
+        }
+
+        /** Ask the core for the actual available batch; never fabricate a session in Home. */
+        private fun availableNewLetters(
+            core: GreekCoreApi,
+            gate: AlphabetGateState?,
+            newCardsToday: Int
+        ): Int {
+            if (gate == null || gate.satisfied || gate.lettersTotal == 0u) return 0
+            return try {
+                core.buildReviewSession(SESSION_SIZE).count {
+                    it.isNew && it.reps == 0 && it.card.id.startsWith("letters-")
+                }
+            } catch (e: Exception) {
+                // Conservative fallback for a stale binding: remaining deck
+                // and daily allowance only. The real batch remains core-built.
+                val deckRemaining = (gate.lettersTotal.toLong() - gate.lettersIntroduced.toLong())
+                    .coerceAtLeast(0L).toInt()
+                minOf(deckRemaining, (DAILY_NEW_CARD_LIMIT - newCardsToday).coerceAtLeast(0))
+                    .coerceAtLeast(0)
+            }
+        }
+
+        private const val TAG = "HomeViewModel"
     }
 }

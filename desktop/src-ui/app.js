@@ -125,14 +125,7 @@
     $("stat-streak").textContent =
       s.streakDays === 1 ? "1 day" : s.streakDays + " days";
 
-    var accWrap = $("stat-accuracy");
-    if (s.practiceTotal > 0) {
-      var pct = Math.round((s.practiceCorrect * 100) / s.practiceTotal);
-      $("stat-accuracy-num").textContent = pct + "%";
-      show(accWrap, true);
-    } else {
-      show(accWrap, false);
-    }
+    $("stat-learned-num").textContent = String(s.wordsLearned || 0);
 
     var banner = $("gate-banner");
     if (!s.gateSatisfied) {
@@ -159,7 +152,7 @@
       if (payload.card) {
         renderCard();
       } else {
-        showReviewEmpty();
+        showReviewEmpty(payload);
       }
     });
   }
@@ -218,7 +211,7 @@
         if (payload.card) {
           renderCard();
         } else {
-          showReviewEmpty();
+          showReviewEmpty(payload);
         }
       })
       .catch(function (err) {
@@ -239,12 +232,28 @@
     );
   }
 
-  function showReviewEmpty() {
+  function showReviewEmpty(payload) {
     review.card = null;
+    var soon = payload && Number(payload.returningSoonCount) > 0
+      ? Number(payload.returningSoonCount)
+      : 0;
+    if (soon) {
+      var minutes = Number(payload.minutesUntilNext || 1);
+      $("review-empty-title").textContent = "Cards come back soon";
+      $("review-empty-detail").textContent =
+        soon + (soon === 1 ? " card comes" : " cards come") +
+        " back in about " + minutes + (minutes === 1 ? " minute" : " minutes") +
+        ". Return then to keep reviewing.";
+    } else {
+      $("review-empty-title").textContent = "All caught up";
+      $("review-empty-detail").textContent =
+        "Nothing due right now. Unlock a new chapter or come back later.";
+    }
     show($("review-card"), false);
     show($("btn-show-answer"), false);
     show($("rating-row"), false);
     show($("review-new-badge"), false);
+    show($("review-remaining"), false);
     show($("review-empty"), true);
   }
 
@@ -298,6 +307,8 @@
       ? '<div class="check-cta">' +
         '<button class="btn" type="button" data-action="check-start">' +
         "Take the Alphabet Check</button>" +
+        '<button class="btn secondary" type="button" data-action="alphabet-known">' +
+        "I already know the Greek alphabet</button>" +
         '<span class="text-dim">24 quick questions on letter names &amp; shapes.</span>' +
         "</div>"
       : "";
@@ -309,8 +320,9 @@
    *  non-interactive (the hint states the requirement); locked rows with an
    *  EMPTY hint have a met requirement and are tappable to unlock. */
   function chapterRow(textbookId, ch) {
-    var pct =
-      ch.totalCards > 0 ? Math.round((ch.masteredCount * 100) / ch.totalCards) : 0;
+    var learning = Number(ch.learningCount || 0);
+    var mastered = Number(ch.masteredCount || 0);
+    var pct = ch.totalCards > 0 ? Math.round((learning * 100) / ch.totalCards) : 0;
     var lock = ch.unlocked
       ? ""
       : '<span class="chapter-lock" aria-label="Locked">🔒</span>';
@@ -324,9 +336,11 @@
         pct +
         '%"></span></div>' +
         '<span class="chapter-count">' +
-        ch.masteredCount +
+        learning +
         " / " +
         ch.totalCards +
+        " learning · " +
+        mastered +
         " mastered</span></div>"
       : '<div class="chapter-progress"><span class="chapter-count">Locked</span></div>';
     var inner =
@@ -385,6 +399,26 @@
       });
   }
   var unlockBusy = false;
+
+  function declareAlphabetKnown() {
+    if (declareBusy) return Promise.resolve();
+    declareBusy = true;
+    return call("alphabet_declare_known")
+      .then(function (r) {
+        if (!r || !r.gateSatisfied) {
+          throw new Error("The alphabet gate could not be updated.");
+        }
+        toast("Alphabet marked as known. Vocabulary is unlocked.");
+        return loadTab(activeTab);
+      })
+      .catch(function (err) {
+        toast(String(err));
+      })
+      .then(function () {
+        declareBusy = false;
+      });
+  }
+  var declareBusy = false;
 
   /* ---------------- alphabet check ----------------
    * Mirrors Android PracticeViewModel check mode + AlphabetCheckVerdictScreen:
@@ -950,6 +984,10 @@
     $("btn-open-dictionary").addEventListener("click", function () {
       showTab("dictionary");
     });
+    $("btn-alphabet-known").addEventListener("click", declareAlphabetKnown);
+    $("btn-open-sync").addEventListener("click", function () {
+      showTab("sync");
+    });
 
     // Review
     $("btn-show-answer").addEventListener("click", revealAnswer);
@@ -984,6 +1022,8 @@
       if (!action) return;
       if (action === "check-start") {
         startAlphabetCheck();
+      } else if (action === "alphabet-known") {
+        declareAlphabetKnown();
       } else if (action === "check-answer") {
         answerCheck(parseInt(el.getAttribute("data-choice"), 10));
       } else if (action === "check-next") {
@@ -1069,6 +1109,7 @@
       recordCheckVerdict: recordCheckVerdict,
       exitCheck: exitCheck,
       unlockChapterRow: unlockChapterRow,
+      declareAlphabetKnown: declareAlphabetKnown,
       renderDictResults: renderDictResults,
       runDictSearch: runDictSearch,
       renderSyncStatus: renderSyncStatus,

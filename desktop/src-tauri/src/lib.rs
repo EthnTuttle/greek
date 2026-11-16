@@ -51,6 +51,11 @@ async fn alphabet_check_verdict(
 }
 
 #[tauri::command]
+async fn alphabet_declare_known(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    commands::alphabet_declare_known(&state.core)
+}
+
+#[tauri::command]
 async fn chapter_unlock(
     state: tauri::State<'_, AppState>,
     textbook: String,
@@ -135,6 +140,7 @@ pub fn run() {
             alphabet_check_generate,
             alphabet_check_answer,
             alphabet_check_verdict,
+            alphabet_declare_known,
             chapter_unlock,
             dict_search,
             dict_status,

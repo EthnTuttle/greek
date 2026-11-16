@@ -19,7 +19,6 @@
         <button class="tab-btn" data-tab="review">Review</button>
         <button class="tab-btn" data-tab="curriculum">Curriculum</button>
         <button class="tab-btn" data-tab="dictionary">Dictionary</button>
-        <button class="tab-btn" data-tab="sync">Sync</button>
       </nav>
     </div>
   </header>
@@ -31,7 +30,8 @@
 
     <!-- ==================== HOME ==================== -->
     <section id="screen-home" class="screen">
-      <h1>Welcome back!</h1>
+      <h1>Welcome to Greek</h1>
+      <p class="text-dim">Your review and dictionary companion to the Android app.</p>
 
       <div id="gate-banner" class="note warn gate-banner" hidden>
         <p class="gate-title">Read Greek first</p>
@@ -40,6 +40,7 @@
           <span id="gate-progress"></span>
           Take the Alphabet Check on the Curriculum tab — or pass it on your phone; progress syncs.
         </p>
+        <button class="btn secondary" id="btn-alphabet-known" type="button">I already know the Greek alphabet</button>
       </div>
 
       <div class="stat-grid">
@@ -56,9 +57,10 @@
           <span class="stat-label">Day streak</span>
           <span class="stat-big" id="stat-streak">0</span>
         </div>
-        <div class="card stat-card" id="stat-accuracy" hidden>
-          <span class="stat-label">Practice accuracy</span>
-          <span class="stat-big" id="stat-accuracy-num">—</span>
+        <div class="card stat-card" id="stat-learned">
+          <span class="stat-label">Words learned</span>
+          <span class="stat-big" id="stat-learned-num">0</span>
+          <span class="stat-sub">cards in review</span>
         </div>
       </div>
 
@@ -103,8 +105,8 @@
 
       <div class="review-empty" id="review-empty" hidden>
         <p class="empty-owl">🦉</p>
-        <h2>All caught up</h2>
-        <p class="text-dim">Nothing due right now. Unlock a new chapter or come back later.</p>
+        <h2 id="review-empty-title">All caught up</h2>
+        <p class="text-dim" id="review-empty-detail">Nothing due right now. Unlock a new chapter or come back later.</p>
       </div>
     </section>
 
@@ -205,6 +207,14 @@
       </div>
     </section>
   </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-wrap">
+      <button class="footer-link" id="btn-open-sync" type="button">Sync &amp; backup</button>
+      <span aria-hidden="true">·</span>
+      <a href="guide.html">Desktop guide</a>
+    </div>
+  </footer>
 
   <div id="toast" class="toast" role="status" hidden></div>
 

@@ -839,6 +839,12 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -867,6 +873,8 @@ internal interface UniffiLib : Library {
     fun uniffi_uniffi_bindings_fn_constructor_greekcore_new_with_cards(`dbPath`: RustBuffer.ByValue,`morphologyDbPath`: RustBuffer.ByValue,`cardsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
     fun uniffi_uniffi_bindings_fn_method_greekcore_add_card_from_lookup(`ptr`: Pointer,`lemma`: RustBuffer.ByValue,`form`: RustBuffer.ByValue,`definition`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_add_card_from_lookup_with_context(`ptr`: Pointer,`lemma`: RustBuffer.ByValue,`form`: RustBuffer.ByValue,`definition`: RustBuffer.ByValue,`context`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_build_review_session(`ptr`: Pointer,`sessionSize`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -952,6 +960,8 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_sync_export_backup_json(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_export_nostr_nsec(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_sync_generate_nostr_identity(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_sync_import_backup_json(`ptr`: Pointer,`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -963,6 +973,8 @@ internal interface UniffiLib : Library {
     fun uniffi_uniffi_bindings_fn_method_greekcore_sync_iroh_ticket(`ptr`: Pointer,
     ): Long
     fun uniffi_uniffi_bindings_fn_method_greekcore_sync_nostr_config(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_uniffi_bindings_fn_method_greekcore_sync_nostr_pubkey(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_uniffi_bindings_fn_method_greekcore_sync_nostr_pull(`ptr`: Pointer,
     ): Long
@@ -1096,6 +1108,8 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup_with_context(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_build_review_session(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_check_typed_answer(
@@ -1180,6 +1194,8 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_export_backup_json(
     ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_export_nostr_nsec(
+    ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_generate_nostr_identity(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_import_backup_json(
@@ -1191,6 +1207,8 @@ internal interface UniffiLib : Library {
     fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_ticket(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_config(
+    ): Short
+    fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_pubkey(
     ): Short
     fun uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_pull(
     ): Short
@@ -1230,10 +1248,13 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_func_parse_postag() != 29183.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup() != 4784.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup() != 45311.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_build_review_session() != 2611.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_add_card_from_lookup_with_context() != 21123.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_build_review_session() != 7040.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_check_typed_answer() != 4024.toShort()) {
@@ -1245,7 +1266,7 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_generate_alphabet_check() != 10168.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_generate_practice_mcq() != 9130.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_generate_practice_mcq() != 7547.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_get_alphabet_gate_state() != 55465.toShort()) {
@@ -1278,7 +1299,7 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_is_word_known() != 22965.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_lookup_word() != 55988.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_lookup_word() != 40218.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_mark_word_known() != 57534.toShort()) {
@@ -1347,7 +1368,7 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_share_set_template() != 28128.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_submit_practice_result() != 35896.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_submit_practice_result() != 40709.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_submit_review() != 47365.toShort()) {
@@ -1359,6 +1380,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_export_backup_json() != 64085.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_export_nostr_nsec() != 42707.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_generate_nostr_identity() != 44829.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1368,7 +1392,7 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_join() != 35801.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_now() != 29920.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_now() != 5964.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_iroh_ticket() != 52676.toShort()) {
@@ -1377,10 +1401,13 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_config() != 62123.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_pull() != 1736.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_pubkey() != 51588.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_push() != 790.toShort()) {
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_pull() != 1062.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_nostr_push() != 40288.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_uniffi_bindings_checksum_method_greekcore_sync_paired_devices() != 29038.toShort()) {
@@ -1603,6 +1630,29 @@ public object FfiConverterFloat: FfiConverter<Float, Float> {
 
     override fun write(value: Float, buf: ByteBuffer) {
         buf.putFloat(value)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterDouble: FfiConverter<Double, Double> {
+    override fun lift(value: Double): Double {
+        return value
+    }
+
+    override fun read(buf: ByteBuffer): Double {
+        return buf.getDouble()
+    }
+
+    override fun lower(value: Double): Double {
+        return value
+    }
+
+    override fun allocationSize(value: Double) = 8UL
+
+    override fun write(value: Double, buf: ByteBuffer) {
+        buf.putDouble(value)
     }
 }
 
@@ -1853,7 +1903,8 @@ public interface GreekCoreInterface {
     /**
      * Create a new SRS card for a word looked up in the reader. The card id
      * is derived from the lemma so repeated lookups of the same word are
-     * idempotent (the content row upserts, nothing else is written).
+     * idempotent: an existing content row is returned untouched, preserving
+     * the first captured front and back alongside any scheduling history.
      *
      * C2: NO `memory_states` row is created here. A row's *presence* means
      * "this card has a learned FSRS state replayable from `review_logs`";
@@ -1866,13 +1917,21 @@ public interface GreekCoreInterface {
     fun `addCardFromLookup`(`lemma`: kotlin.String, `form`: kotlin.String, `definition`: kotlin.String): kotlin.String
     
     /**
+     * Additive reader API that also captures the source sentence. The stored
+     * front is the tapped form followed by that context; the back retains
+     * both lemma and gloss. Existing content remains stable under re-add.
+     */
+    fun `addCardFromLookupWithContext`(`lemma`: kotlin.String, `form`: kotlin.String, `definition`: kotlin.String, `context`: kotlin.String): kotlin.String
+    
+    /**
      * Build a full review session in ONE pass (C3 fix).
      *
      * Replaces the Android-side `get_due_cards` + per-chapter `get_new_cards`
      * loop, in which every chapter call re-saw the full unspent daily budget.
      * UI-visible ordering matches the old semantics: due cards first (most
      * overdue first, never gated, never counting toward the new-card cap),
-     * then new cards in curriculum order (letters → athenaze → jact → dcc),
+     * then never-reviewed lookup cards, then new cards in curriculum order
+     * (letters → athenaze → jact → dcc),
      * chapter order within a curriculum, deck order within a chapter —
      * consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`]),
      * so one session introduces at most the day's true remaining allowance.
@@ -1902,10 +1961,14 @@ public interface GreekCoreInterface {
     
     /**
      * Generate up to `limit` EN→GR multiple-choice questions from the
-     * in-memory deck. Cards that already have a memory state are offered
-     * first (the memory-state ids are queried once and the slice is ordered
-     * reviewed-then-unseen); within those tiers the seeded shuffle decides.
-     * The seed is unix-epoch minutes, so question sets vary per session.
+     * in-memory deck, honoring the alphabet-gate practice policy (C4):
+     * letters-track cards are always eligible, vocabulary cards only once
+     * the gate is satisfied. Within the eligible pool, cards that already
+     * have a memory state are offered first; each tier is generated by a
+     * SEPARATE seeded call whose shuffle sees the FULL tier (C5), so
+     * question sets are no longer pinned to the first `limit` cards in
+     * deck order. The seed is unix-epoch minutes, so question sets vary
+     * per session.
      */
     fun `generatePracticeMcq`(`limit`: kotlin.UInt): List<McqView>
     
@@ -1949,6 +2012,11 @@ public interface GreekCoreInterface {
      */
     fun `isWordKnown`(`word`: kotlin.String): kotlin.Boolean
     
+    /**
+     * Return distinct lemma/gloss candidates rather than asking callers to
+     * infer a dictionary entry from the first parse row. Course knowledge is
+     * supplied here (the morphology layer does not know the loaded decks).
+     */
     fun `lookupWord`(`form`: kotlin.String): List<AnalysisView>
     
     /**
@@ -2093,8 +2161,14 @@ public interface GreekCoreInterface {
     
     /**
      * Record a practice outcome as an SRS review tagged source="practice":
-     * wrong -> 1 (Again), correct -> 3 (Good), correct + exact -> 4 (Easy).
-     * Returns false on error.
+     * wrong -> 1 (Again), correct -> 3 (Good). `exact` remains in the public
+     * signature for UI feedback/compat data, but NEVER promotes to Easy:
+     * measured practice follows the design's Miss→Again / Hit→Good policy.
+     * Returns false on error, or when the card fails the alphabet-gate
+     * practice policy (C4 belt): a practice-source memory state for an
+     * ineligible vocabulary card would fabricate "vocab history" and
+     * falsely trip the gate's Lane-C grandfather. Card ids outside the
+     * loaded deck keep legacy behavior (no policy data to judge them).
      */
     fun `submitPracticeResult`(`cardId`: kotlin.String, `correct`: kotlin.Boolean, `exact`: kotlin.Boolean): kotlin.Boolean
     
@@ -2111,6 +2185,15 @@ public interface GreekCoreInterface {
      * JSON — the "export backup" / paired-file payload.
      */
     fun `syncExportBackupJson`(): kotlin.String
+    
+    /**
+     * Deliberately export the sync identity secret for an explicit,
+     * user-confirmed offline backup. This is the ONLY identity-secret export
+     * path: ordinary JSON backups continue to exclude all vault values.
+     * Uses the same migration-aware accessor as push/pull, so a legacy key
+     * is moved into the vault before being returned.
+     */
+    fun `syncExportNostrNsec`(): kotlin.String
     
     /**
      * Generate a fresh nostr identity and store it; returns the public key
@@ -2145,8 +2228,18 @@ public interface GreekCoreInterface {
     
     /**
      * One full sync round over iroh: push the local delta, sync with known
-     * peers (tolerates everyone being offline), pull every doc entry back,
-     * and merge (reviews uuid-dedup, settings HLC-LWW, then the FSRS fold).
+     * peers, pull every doc entry back, and merge (reviews uuid-dedup,
+     * settings HLC-LWW, then the FSRS fold).
+     *
+     * Round semantics (S8): a fresh device that never paired is a clean
+     * no-op. Once paired, a round that FAILS against every known peer (or
+     * finds none to dial) is surfaced as an error — degraded, not silently
+     * "synced". A round that produced no peer signal at all (deadline) stays
+     * tolerated as Ok; sync is opportunistic.
+     *
+     * The push cursor is scoped to the CURRENT notebook namespace (S7):
+     * creating or joining a different notebook starts it with a FULL push
+     * while the previous namespace's cursor is preserved.
      */
     suspend fun `syncIrohNow`(): SyncStatsView
     
@@ -2163,14 +2256,43 @@ public interface GreekCoreInterface {
     fun `syncNostrConfig`(): NostrConfigView
     
     /**
-     * Pull all batches after the pull cursor from the nostr relays, apply
-     * them, and advance the (device-local) cursor.
+     * Public key (lowercase hex) of the sync nostr identity; `None` when no
+     * identity is configured yet or the stored secret is invalid.
+     *
+     * Derived through the SAME code path as identity load (`nostr_keys` →
+     * `load_nostr_nsec`), so this getter is legacy-migration-aware: calling
+     * it on a pre-v4 database migrates `user_settings.nostr_nsec` into the
+     * secrets vault (it does NOT generate a fresh identity — generation
+     * stays an explicit `sync_generate_nostr_identity` decision). Desktop
+     * uses this to display/verify the identity without linking nostr-sdk
+     * itself (previously it had to `Keys::parse` the secret).
+     */
+    fun `syncNostrPubkey`(): kotlin.String?
+    
+    /**
+     * Pull every complete batch from the nostr relays and apply the ones
+     * whose wire batch UUID is not yet in the `sync_applied_batches`
+     * ledger (S6). Admission is per-batch UUID at ANY HLC position — the
+     * `nostr_last_pull_hlc` cursor no longer filters (it is updated as an
+     * observability-only high-water mark afterwards) — so a batch whose
+     * chunks completed late, or which was pushed from a lagging clock,
+     * still merges instead of being permanently skipped. Each admitted
+     * batch applies and marks in ONE transaction, so a crash mid-apply
+     * leaves the UUID unmarked and the whole batch safely retry-able.
+     * Incomplete batches are simply not returned by the transport
+     * (unmarked — a later fetch completes them); complete-but-corrupt
+     * ones are never surfaced either, so they can never be marked.
      */
     suspend fun `syncNostrPull`(): SyncStatsView
     
     /**
      * Push all local events/settings since the last push cursor to the
      * configured nostr relays, then advance the (device-local) cursor.
+     *
+     * The cursor is scoped to the CURRENT destination (relays + identity
+     * fingerprint — S7): relay/identity changes therefore start the new
+     * destination with a FULL push, and switching back resumes the old
+     * destination's cursor instead of resending.
      */
     suspend fun `syncNostrPush`(): SyncStatsView
     
@@ -2293,7 +2415,8 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     /**
      * Create a new SRS card for a word looked up in the reader. The card id
      * is derived from the lemma so repeated lookups of the same word are
-     * idempotent (the content row upserts, nothing else is written).
+     * idempotent: an existing content row is returned untouched, preserving
+     * the first captured front and back alongside any scheduling history.
      *
      * C2: NO `memory_states` row is created here. A row's *presence* means
      * "this card has a learned FSRS state replayable from `review_logs`";
@@ -2317,13 +2440,32 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
 
     
     /**
+     * Additive reader API that also captures the source sentence. The stored
+     * front is the tapped form followed by that context; the back retains
+     * both lemma and gloss. Existing content remains stable under re-add.
+     */
+    @Throws(GreekException::class)override fun `addCardFromLookupWithContext`(`lemma`: kotlin.String, `form`: kotlin.String, `definition`: kotlin.String, `context`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_add_card_from_lookup_with_context(
+        it, FfiConverterString.lower(`lemma`),FfiConverterString.lower(`form`),FfiConverterString.lower(`definition`),FfiConverterString.lower(`context`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Build a full review session in ONE pass (C3 fix).
      *
      * Replaces the Android-side `get_due_cards` + per-chapter `get_new_cards`
      * loop, in which every chapter call re-saw the full unspent daily budget.
      * UI-visible ordering matches the old semantics: due cards first (most
      * overdue first, never gated, never counting toward the new-card cap),
-     * then new cards in curriculum order (letters → athenaze → jact → dcc),
+     * then never-reviewed lookup cards, then new cards in curriculum order
+     * (letters → athenaze → jact → dcc),
      * chapter order within a curriculum, deck order within a chapter —
      * consuming a SINGLE daily-budget snapshot ([`greek_core::srs::SessionBudget`]),
      * so one session introduces at most the day's true remaining allowance.
@@ -2394,10 +2536,14 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     
     /**
      * Generate up to `limit` EN→GR multiple-choice questions from the
-     * in-memory deck. Cards that already have a memory state are offered
-     * first (the memory-state ids are queried once and the slice is ordered
-     * reviewed-then-unseen); within those tiers the seeded shuffle decides.
-     * The seed is unix-epoch minutes, so question sets vary per session.
+     * in-memory deck, honoring the alphabet-gate practice policy (C4):
+     * letters-track cards are always eligible, vocabulary cards only once
+     * the gate is satisfied. Within the eligible pool, cards that already
+     * have a memory state are offered first; each tier is generated by a
+     * SEPARATE seeded call whose shuffle sees the FULL tier (C5), so
+     * question sets are no longer pinned to the first `limit` cards in
+     * deck order. The seed is unix-epoch minutes, so question sets vary
+     * per session.
      */override fun `generatePracticeMcq`(`limit`: kotlin.UInt): List<McqView> {
             return FfiConverterSequenceTypeMcqView.lift(
     callWithPointer {
@@ -2551,7 +2697,12 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     }
     
 
-    override fun `lookupWord`(`form`: kotlin.String): List<AnalysisView> {
+    
+    /**
+     * Return distinct lemma/gloss candidates rather than asking callers to
+     * infer a dictionary entry from the first parse row. Course knowledge is
+     * supplied here (the morphology layer does not know the loaded decks).
+     */override fun `lookupWord`(`form`: kotlin.String): List<AnalysisView> {
             return FfiConverterSequenceTypeAnalysisView.lift(
     callWithPointer {
     uniffiRustCall() { _status ->
@@ -2932,8 +3083,14 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     
     /**
      * Record a practice outcome as an SRS review tagged source="practice":
-     * wrong -> 1 (Again), correct -> 3 (Good), correct + exact -> 4 (Easy).
-     * Returns false on error.
+     * wrong -> 1 (Again), correct -> 3 (Good). `exact` remains in the public
+     * signature for UI feedback/compat data, but NEVER promotes to Easy:
+     * measured practice follows the design's Miss→Again / Hit→Good policy.
+     * Returns false on error, or when the card fails the alphabet-gate
+     * practice policy (C4 belt): a practice-source memory state for an
+     * ineligible vocabulary card would fabricate "vocab history" and
+     * falsely trip the gate's Lane-C grandfather. Card ids outside the
+     * loaded deck keep legacy behavior (no policy data to judge them).
      */override fun `submitPracticeResult`(`cardId`: kotlin.String, `correct`: kotlin.Boolean, `exact`: kotlin.Boolean): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
@@ -2983,6 +3140,26 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_export_backup_json(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Deliberately export the sync identity secret for an explicit,
+     * user-confirmed offline backup. This is the ONLY identity-secret export
+     * path: ordinary JSON backups continue to exclude all vault values.
+     * Uses the same migration-aware accessor as push/pull, so a legacy key
+     * is moved into the vault before being returned.
+     */
+    @Throws(GreekException::class)override fun `syncExportNostrNsec`(): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(GreekException) { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_export_nostr_nsec(
         it, _status)
 }
     }
@@ -3065,8 +3242,18 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     
     /**
      * One full sync round over iroh: push the local delta, sync with known
-     * peers (tolerates everyone being offline), pull every doc entry back,
-     * and merge (reviews uuid-dedup, settings HLC-LWW, then the FSRS fold).
+     * peers, pull every doc entry back, and merge (reviews uuid-dedup,
+     * settings HLC-LWW, then the FSRS fold).
+     *
+     * Round semantics (S8): a fresh device that never paired is a clean
+     * no-op. Once paired, a round that FAILS against every known peer (or
+     * finds none to dial) is surfaced as an error — degraded, not silently
+     * "synced". A round that produced no peer signal at all (deadline) stays
+     * tolerated as Ok; sync is opportunistic.
+     *
+     * The push cursor is scoped to the CURRENT notebook namespace (S7):
+     * creating or joining a different notebook starts it with a FULL push
+     * while the previous namespace's cursor is preserved.
      */
     @Throws(GreekException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -3131,8 +3318,42 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
 
     
     /**
-     * Pull all batches after the pull cursor from the nostr relays, apply
-     * them, and advance the (device-local) cursor.
+     * Public key (lowercase hex) of the sync nostr identity; `None` when no
+     * identity is configured yet or the stored secret is invalid.
+     *
+     * Derived through the SAME code path as identity load (`nostr_keys` →
+     * `load_nostr_nsec`), so this getter is legacy-migration-aware: calling
+     * it on a pre-v4 database migrates `user_settings.nostr_nsec` into the
+     * secrets vault (it does NOT generate a fresh identity — generation
+     * stays an explicit `sync_generate_nostr_identity` decision). Desktop
+     * uses this to display/verify the identity without linking nostr-sdk
+     * itself (previously it had to `Keys::parse` the secret).
+     */override fun `syncNostrPubkey`(): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_uniffi_bindings_fn_method_greekcore_sync_nostr_pubkey(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Pull every complete batch from the nostr relays and apply the ones
+     * whose wire batch UUID is not yet in the `sync_applied_batches`
+     * ledger (S6). Admission is per-batch UUID at ANY HLC position — the
+     * `nostr_last_pull_hlc` cursor no longer filters (it is updated as an
+     * observability-only high-water mark afterwards) — so a batch whose
+     * chunks completed late, or which was pushed from a lagging clock,
+     * still merges instead of being permanently skipped. Each admitted
+     * batch applies and marks in ONE transaction, so a crash mid-apply
+     * leaves the UUID unmarked and the whole batch safely retry-able.
+     * Incomplete batches are simply not returned by the transport
+     * (unmarked — a later fetch completes them); complete-but-corrupt
+     * ones are never surfaced either, so they can never be marked.
      */
     @Throws(GreekException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -3158,6 +3379,11 @@ open class GreekCore: Disposable, AutoCloseable, GreekCoreInterface {
     /**
      * Push all local events/settings since the last push cursor to the
      * configured nostr relays, then advance the (device-local) cursor.
+     *
+     * The cursor is scoped to the CURRENT destination (relays + identity
+     * fingerprint — S7): relay/identity changes therefore start the new
+     * destination with a FULL push, and switching back resumes the old
+     * destination's cursor instead of resending.
      */
     @Throws(GreekException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -3316,7 +3542,11 @@ data class AlphabetGateStateView (
     var `lettersPracticeTotal`: kotlin.UInt, 
     var `lettersPracticeCorrect`: kotlin.UInt, 
     var `lettersActiveDays`: kotlin.UInt, 
-    var `lettersChaptersMet`: kotlin.UInt
+    var `lettersChaptersMet`: kotlin.UInt, 
+    var `lettersPracticeAccuracy`: kotlin.Double, 
+    var `lettersPracticeRequired`: kotlin.UInt, 
+    var `lettersAccuracyRequired`: kotlin.Double, 
+    var `lettersActiveDaysRequired`: kotlin.UInt
 ) {
     
     companion object
@@ -3336,6 +3566,10 @@ public object FfiConverterTypeAlphabetGateStateView: FfiConverterRustBuffer<Alph
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterUInt.read(buf),
         )
     }
 
@@ -3347,7 +3581,11 @@ public object FfiConverterTypeAlphabetGateStateView: FfiConverterRustBuffer<Alph
             FfiConverterUInt.allocationSize(value.`lettersPracticeTotal`) +
             FfiConverterUInt.allocationSize(value.`lettersPracticeCorrect`) +
             FfiConverterUInt.allocationSize(value.`lettersActiveDays`) +
-            FfiConverterUInt.allocationSize(value.`lettersChaptersMet`)
+            FfiConverterUInt.allocationSize(value.`lettersChaptersMet`) +
+            FfiConverterDouble.allocationSize(value.`lettersPracticeAccuracy`) +
+            FfiConverterUInt.allocationSize(value.`lettersPracticeRequired`) +
+            FfiConverterDouble.allocationSize(value.`lettersAccuracyRequired`) +
+            FfiConverterUInt.allocationSize(value.`lettersActiveDaysRequired`)
     )
 
     override fun write(value: AlphabetGateStateView, buf: ByteBuffer) {
@@ -3359,6 +3597,10 @@ public object FfiConverterTypeAlphabetGateStateView: FfiConverterRustBuffer<Alph
             FfiConverterUInt.write(value.`lettersPracticeCorrect`, buf)
             FfiConverterUInt.write(value.`lettersActiveDays`, buf)
             FfiConverterUInt.write(value.`lettersChaptersMet`, buf)
+            FfiConverterDouble.write(value.`lettersPracticeAccuracy`, buf)
+            FfiConverterUInt.write(value.`lettersPracticeRequired`, buf)
+            FfiConverterDouble.write(value.`lettersAccuracyRequired`, buf)
+            FfiConverterUInt.write(value.`lettersActiveDaysRequired`, buf)
     }
 }
 
@@ -3419,7 +3661,11 @@ data class AnalysisView (
     var `postag`: kotlin.String, 
     var `postagHuman`: kotlin.String, 
     var `definition`: kotlin.String, 
-    var `confidence`: kotlin.Float
+    var `confidence`: kotlin.Float, 
+    /**
+     * Lemma POS used to display and distinguish dictionary candidates.
+     */
+    var `pos`: kotlin.String
 ) {
     
     companion object
@@ -3437,6 +3683,7 @@ public object FfiConverterTypeAnalysisView: FfiConverterRustBuffer<AnalysisView>
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterFloat.read(buf),
+            FfiConverterString.read(buf),
         )
     }
 
@@ -3446,7 +3693,8 @@ public object FfiConverterTypeAnalysisView: FfiConverterRustBuffer<AnalysisView>
             FfiConverterString.allocationSize(value.`postag`) +
             FfiConverterString.allocationSize(value.`postagHuman`) +
             FfiConverterString.allocationSize(value.`definition`) +
-            FfiConverterFloat.allocationSize(value.`confidence`)
+            FfiConverterFloat.allocationSize(value.`confidence`) +
+            FfiConverterString.allocationSize(value.`pos`)
     )
 
     override fun write(value: AnalysisView, buf: ByteBuffer) {
@@ -3456,6 +3704,7 @@ public object FfiConverterTypeAnalysisView: FfiConverterRustBuffer<AnalysisView>
             FfiConverterString.write(value.`postagHuman`, buf)
             FfiConverterString.write(value.`definition`, buf)
             FfiConverterFloat.write(value.`confidence`, buf)
+            FfiConverterString.write(value.`pos`, buf)
     }
 }
 
@@ -3569,6 +3818,7 @@ data class ChapterView (
     var `chapter`: kotlin.Int, 
     var `title`: kotlin.String, 
     var `cardCount`: kotlin.Int, 
+    var `learningCount`: kotlin.Int, 
     var `masteredCount`: kotlin.Int, 
     var `unlocked`: kotlin.Boolean, 
     var `available`: kotlin.Boolean, 
@@ -3588,6 +3838,7 @@ public object FfiConverterTypeChapterView: FfiConverterRustBuffer<ChapterView> {
             FfiConverterString.read(buf),
             FfiConverterInt.read(buf),
             FfiConverterInt.read(buf),
+            FfiConverterInt.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
@@ -3598,6 +3849,7 @@ public object FfiConverterTypeChapterView: FfiConverterRustBuffer<ChapterView> {
             FfiConverterInt.allocationSize(value.`chapter`) +
             FfiConverterString.allocationSize(value.`title`) +
             FfiConverterInt.allocationSize(value.`cardCount`) +
+            FfiConverterInt.allocationSize(value.`learningCount`) +
             FfiConverterInt.allocationSize(value.`masteredCount`) +
             FfiConverterBoolean.allocationSize(value.`unlocked`) +
             FfiConverterBoolean.allocationSize(value.`available`) +
@@ -3608,6 +3860,7 @@ public object FfiConverterTypeChapterView: FfiConverterRustBuffer<ChapterView> {
             FfiConverterInt.write(value.`chapter`, buf)
             FfiConverterString.write(value.`title`, buf)
             FfiConverterInt.write(value.`cardCount`, buf)
+            FfiConverterInt.write(value.`learningCount`, buf)
             FfiConverterInt.write(value.`masteredCount`, buf)
             FfiConverterBoolean.write(value.`unlocked`, buf)
             FfiConverterBoolean.write(value.`available`, buf)
@@ -3697,7 +3950,12 @@ data class McqView (
     var `cardId`: kotlin.String, 
     var `promptGloss`: kotlin.String, 
     var `choices`: List<kotlin.String>, 
-    var `correctIndex`: kotlin.UByte
+    var `correctIndex`: kotlin.UByte, 
+    /**
+     * True when this item may be rendered as typed practice; otherwise use
+     * the multiple-choice fallback regardless of the caller's alternation.
+     */
+    var `typeable`: kotlin.Boolean
 ) {
     
     companion object
@@ -3713,6 +3971,7 @@ public object FfiConverterTypeMcqView: FfiConverterRustBuffer<McqView> {
             FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterUByte.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -3720,7 +3979,8 @@ public object FfiConverterTypeMcqView: FfiConverterRustBuffer<McqView> {
             FfiConverterString.allocationSize(value.`cardId`) +
             FfiConverterString.allocationSize(value.`promptGloss`) +
             FfiConverterSequenceString.allocationSize(value.`choices`) +
-            FfiConverterUByte.allocationSize(value.`correctIndex`)
+            FfiConverterUByte.allocationSize(value.`correctIndex`) +
+            FfiConverterBoolean.allocationSize(value.`typeable`)
     )
 
     override fun write(value: McqView, buf: ByteBuffer) {
@@ -3728,6 +3988,7 @@ public object FfiConverterTypeMcqView: FfiConverterRustBuffer<McqView> {
             FfiConverterString.write(value.`promptGloss`, buf)
             FfiConverterSequenceString.write(value.`choices`, buf)
             FfiConverterUByte.write(value.`correctIndex`, buf)
+            FfiConverterBoolean.write(value.`typeable`, buf)
     }
 }
 
@@ -3847,7 +4108,15 @@ data class ReviewStats (
     var `dueCount`: kotlin.Int, 
     var `reviewedToday`: kotlin.Int, 
     var `streakDays`: kotlin.Int, 
-    var `totalCards`: kotlin.Int
+    var `totalCards`: kotlin.Int, 
+    /**
+     * Introduced cards (memory_states count), not reader known-word marks.
+     */
+    var `learningCount`: kotlin.Int, 
+    /**
+     * Introduced cards with at least 30 days of FSRS stability.
+     */
+    var `masteredCount`: kotlin.Int
 ) {
     
     companion object
@@ -3863,6 +4132,8 @@ public object FfiConverterTypeReviewStats: FfiConverterRustBuffer<ReviewStats> {
             FfiConverterInt.read(buf),
             FfiConverterInt.read(buf),
             FfiConverterInt.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterInt.read(buf),
         )
     }
 
@@ -3870,7 +4141,9 @@ public object FfiConverterTypeReviewStats: FfiConverterRustBuffer<ReviewStats> {
             FfiConverterInt.allocationSize(value.`dueCount`) +
             FfiConverterInt.allocationSize(value.`reviewedToday`) +
             FfiConverterInt.allocationSize(value.`streakDays`) +
-            FfiConverterInt.allocationSize(value.`totalCards`)
+            FfiConverterInt.allocationSize(value.`totalCards`) +
+            FfiConverterInt.allocationSize(value.`learningCount`) +
+            FfiConverterInt.allocationSize(value.`masteredCount`)
     )
 
     override fun write(value: ReviewStats, buf: ByteBuffer) {
@@ -3878,6 +4151,8 @@ public object FfiConverterTypeReviewStats: FfiConverterRustBuffer<ReviewStats> {
             FfiConverterInt.write(value.`reviewedToday`, buf)
             FfiConverterInt.write(value.`streakDays`, buf)
             FfiConverterInt.write(value.`totalCards`, buf)
+            FfiConverterInt.write(value.`learningCount`, buf)
+            FfiConverterInt.write(value.`masteredCount`, buf)
     }
 }
 
@@ -4262,6 +4537,14 @@ sealed class GreekException: kotlin.Exception() {
             get() = "msg=${ `msg` }"
     }
     
+    class InvalidCards(
+        
+        val v1: kotlin.String
+        ) : GreekException() {
+        override val message
+            get() = "v1=${ v1 }"
+    }
+    
     class Sync(
         
         val v1: kotlin.String
@@ -4289,7 +4572,10 @@ public object FfiConverterTypeGreekError : FfiConverterRustBuffer<GreekException
             1 -> GreekException.Database(
                 FfiConverterString.read(buf),
                 )
-            2 -> GreekException.Sync(
+            2 -> GreekException.InvalidCards(
+                FfiConverterString.read(buf),
+                )
+            3 -> GreekException.Sync(
                 FfiConverterString.read(buf),
                 )
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
@@ -4302,6 +4588,11 @@ public object FfiConverterTypeGreekError : FfiConverterRustBuffer<GreekException
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
                 + FfiConverterString.allocationSize(value.`msg`)
+            )
+            is GreekException.InvalidCards -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.v1)
             )
             is GreekException.Sync -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
@@ -4318,8 +4609,13 @@ public object FfiConverterTypeGreekError : FfiConverterRustBuffer<GreekException
                 FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
-            is GreekException.Sync -> {
+            is GreekException.InvalidCards -> {
                 buf.putInt(2)
+                FfiConverterString.write(value.v1, buf)
+                Unit
+            }
+            is GreekException.Sync -> {
+                buf.putInt(3)
                 FfiConverterString.write(value.v1, buf)
                 Unit
             }

@@ -50,6 +50,12 @@ data class SyncState(
     /** True while the explicit rotate-identity confirmation dialog is shown
      *  (only reachable when [hasIdentity]; see Issue-A6 gating). */
     val rotationConfirmPending: Boolean = false,
+    /** Identity-secret export is a separate deliberate recovery flow. The
+     *  secret is absent until the warning is confirmed and the core returns. */
+    val identityExportConfirmPending: Boolean = false,
+    val exportedNsec: String? = null,
+    /** Copy is one-shot; it never re-reads or re-exports the secret. */
+    val identityExportCopied: Boolean = false,
     val busy: Boolean = false,
     val message: SyncUiMessage? = null
 )
@@ -169,6 +175,11 @@ class SyncViewModel : ViewModel() {
      * core is NEVER called from the no-confirm path.
      */
     fun requestGenerateIdentity() {
+        _state.value = _state.value.copy(
+            identityExportConfirmPending = false,
+            exportedNsec = null,
+            identityExportCopied = false
+        )
         when (generateAction(_state.value.hasIdentity)) {
             GenerateAction.GenerateNow -> generateIdentity()
             GenerateAction.RequireConfirmation ->
@@ -185,6 +196,62 @@ class SyncViewModel : ViewModel() {
     /** Dialog dismissed without confirming: nothing reaches the core. */
     fun dismissIdentityRotation() {
         _state.value = _state.value.copy(rotationConfirmPending = false)
+    }
+
+    /** Open the explicit credential-export warning. Requesting a fresh export
+     *  also clears any previously revealed key (including after rotation). */
+    fun requestIdentityExport() {
+        if (!_state.value.hasIdentity) return
+        _state.value = _state.value.copy(
+            rotationConfirmPending = false,
+            identityExportConfirmPending = true,
+            exportedNsec = null,
+            identityExportCopied = false
+        )
+    }
+
+    /** Reveal only if this specific warning is still open when I/O returns;
+     *  dismissing it while busy cannot make a late secret appear. */
+    fun confirmIdentityExport() {
+        if (!_state.value.identityExportConfirmPending) return
+        busyCall(
+            block = {
+                // The config accessor performs legacy vault migration. The
+                // checked-in Kotlin binding already exposes secretGet; the
+                // narrower Rust syncExportNostrNsec export uses this exact
+                // migration-aware source and deliberately returns no Option.
+                CoreProvider.current()?.syncNostrConfig()
+                GreekApplication.greekCore?.secretGet("nostr_nsec")
+            },
+            onSuccess = { nsec ->
+                val next = identityExportRevealState(
+                    _state.value,
+                    confirmed = _state.value.identityExportConfirmPending,
+                    nsec = nsec
+                )
+                if (next.exportedNsec != null) _state.value = next
+                else failMessage(appContext.getString(com.greekapp.R.string.sync_backup_identity_unavailable))
+            },
+            onFailure = {
+                _state.value = _state.value.copy(identityExportConfirmPending = false)
+                failMessage(it)
+            }
+        )
+    }
+
+    fun dismissIdentityExport() {
+        _state.value = _state.value.copy(
+            identityExportConfirmPending = false,
+            exportedNsec = null,
+            identityExportCopied = false
+        )
+    }
+
+    /** Return the already-revealed value at most once for clipboard copy. */
+    fun takeIdentityExportForCopy(): String? {
+        val (next, value) = identityExportCopyState(_state.value)
+        _state.value = next
+        return value
     }
 
     /** Actually calls the core. Private entry is [requestGenerateIdentity] /
@@ -206,6 +273,11 @@ class SyncViewModel : ViewModel() {
 
     fun importNsec(nsec: String) {
         if (nsec.isBlank()) return
+        _state.value = _state.value.copy(
+            identityExportConfirmPending = false,
+            exportedNsec = null,
+            identityExportCopied = false
+        )
         busyCall(
             block = { CoreProvider.current()?.syncSetNostrNsec(nsec.trim()) },
             // No exception == accepted (the stub is a no-op; the real export
@@ -324,6 +396,30 @@ class SyncViewModel : ViewModel() {
 
     companion object {
         private const val TAG = "SyncViewModel"
+
+        /** Pure confirmation gate for host-JVM tests and the async success
+         *  path alike. A dismissed dialog, a missing confirmation, or an
+         *  empty core result can never put a secret into UI state. */
+        internal fun identityExportRevealState(
+            state: SyncState,
+            confirmed: Boolean,
+            nsec: String?
+        ): SyncState {
+            val reveal = confirmed && state.identityExportConfirmPending && !nsec.isNullOrBlank()
+            return state.copy(
+                identityExportConfirmPending = false,
+                exportedNsec = if (reveal) nsec else null,
+                identityExportCopied = false
+            )
+        }
+
+        /** Pure one-shot clipboard handoff; the value remains manually
+         *  selectable after copying and no second core read is involved. */
+        internal fun identityExportCopyState(state: SyncState): Pair<SyncState, String?> {
+            val nsec = state.exportedNsec
+            if (state.identityExportCopied || nsec == null) return state to null
+            return state.copy(identityExportCopied = true) to nsec
+        }
 
         /** How the generate-identity action may proceed for a given state. */
         enum class GenerateAction { GenerateNow, RequireConfirmation }

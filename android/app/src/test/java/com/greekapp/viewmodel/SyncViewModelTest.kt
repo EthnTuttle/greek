@@ -111,6 +111,53 @@ class SyncViewModelTest {
         )
     }
 
+    // ---- Credential recovery: confirmation + one-shot copy ----
+
+    @Test
+    fun identityExport_neverRevealsBeforeConfirmation() {
+        val waiting = SyncState(hasIdentity = true, identityExportConfirmPending = true)
+        val notConfirmed = SyncViewModel.identityExportRevealState(
+            waiting,
+            confirmed = false,
+            nsec = "secret"
+        )
+        assertNull(notConfirmed.exportedNsec)
+        assertTrue(!notConfirmed.identityExportConfirmPending)
+
+        val confirmed = SyncViewModel.identityExportRevealState(
+            waiting,
+            confirmed = true,
+            nsec = "secret"
+        )
+        assertEquals("secret", confirmed.exportedNsec)
+        assertTrue(!confirmed.identityExportConfirmPending)
+    }
+
+    @Test
+    fun identityExport_dismissedDialogCannotRevealLateCoreResult() {
+        val dismissed = SyncState(hasIdentity = true, identityExportConfirmPending = false)
+        val result = SyncViewModel.identityExportRevealState(
+            dismissed,
+            confirmed = true,
+            nsec = "secret"
+        )
+        assertNull(result.exportedNsec)
+    }
+
+    @Test
+    fun identityExport_copyHandsOffRevealedValueOnlyOnce() {
+        val revealed = SyncState(exportedNsec = "secret")
+        val (afterFirst, first) = SyncViewModel.identityExportCopyState(revealed)
+        assertEquals("secret", first)
+        assertTrue(afterFirst.identityExportCopied)
+        // Dialog text remains available for manual selection, but another
+        // copy action cannot trigger another value handoff/core operation.
+        assertEquals("secret", afterFirst.exportedNsec)
+        val (afterSecond, second) = SyncViewModel.identityExportCopyState(afterFirst)
+        assertNull(second)
+        assertEquals(afterFirst, afterSecond)
+    }
+
     // ---- Export P2: staged payload ownership ----
 
     @Test

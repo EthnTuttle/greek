@@ -1,5 +1,10 @@
 package com.greekapp.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -13,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,6 +60,20 @@ fun SettingsScreen(
     var showSkipDialog by remember { mutableStateOf(false) }
     var showShareConsent by remember { mutableStateOf(false) }
     var showShareDisable by remember { mutableStateOf(false) }
+
+    val reminderPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        scope.launch {
+            SettingsRepository.setDailyReminder(context, granted)
+            if (!granted) {
+                snackbarHostState.showSnackbar(
+                    "Notification permission is required for daily reminders"
+                )
+            }
+        }
+        ReminderScheduler.setEnabled(context, granted)
+    }
 
     // Gate state can change on a check entered from this screen — refresh on
     // every return so the row hides immediately after a pass. Same for the
@@ -110,9 +130,22 @@ fun SettingsScreen(
                         title = "Daily reminder",
                         description = "Get notified when you have cards due",
                         checked = notificationsEnabled,
-                        onCheckedChange = {
-                            scope.launch { SettingsRepository.setDailyReminder(context, it) }
-                            ReminderScheduler.setEnabled(context, it)
+                        onCheckedChange = { enabled ->
+                            val needsPermission = enabled && Build.VERSION.SDK_INT >= 33 &&
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
+                            if (needsPermission) {
+                                reminderPermissionLauncher.launch(
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                )
+                            } else {
+                                scope.launch {
+                                    SettingsRepository.setDailyReminder(context, enabled)
+                                }
+                                ReminderScheduler.setEnabled(context, enabled)
+                            }
                         }
                     )
 

@@ -4,14 +4,19 @@
 //! they stay unit-testable without a window.
 
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 use uniffi_bindings::GreekCore;
 
-use crate::state::{AppState, ReviewSession, SessionCard};
+use crate::state::{AppState, ReviewSession, ScheduledReturn, SessionCard};
 
 /// Android ReviewViewModel.SESSION_SIZE.
 const SESSION_SIZE: usize = 20;
+/// Android ReviewViewModel.MAX_SESSION_CARDS (20 initial + 40 requeues).
+const MAX_SESSION_CARDS: usize = 60;
+/// Short learning steps worth recycling before this session closes.
+const SAME_SESSION_RETURN_SECS: u32 = 15 * 60;
 
 // ---------------------------------------------------------------------------
 // Home
@@ -19,8 +24,8 @@ const SESSION_SIZE: usize = 20;
 
 /// home_stats() ->
 /// '{"dueToday":0,"newToday":0,"newCap":10,"streakDays":0,
-///   "practiceCorrect":0,"practiceTotal":0,"gateSatisfied":true,
-///   "lettersChaptersMet":0}'
+///   "practiceCorrect":0,"practiceTotal":0,"wordsLearned":0,
+///   "gateSatisfied":true,"lettersChaptersMet":0}'
 pub fn home_stats(core: &GreekCore) -> Result<String, String> {
     let stats = core.get_review_stats();
     let new_today = core.new_cards_today();
@@ -36,6 +41,9 @@ pub fn home_stats(core: &GreekCore) -> Result<String, String> {
         "streakDays": stats.streak_days,
         "practiceCorrect": practice.correct,
         "practiceTotal": practice.total,
+        // Introduced cards under review, not reader "known word" marks or
+        // the size of the bundled deck.
+        "wordsLearned": stats.learning_count,
         "gateSatisfied": gate.satisfied,
         "lettersChaptersMet": gate.letters_chapters_met,
     })
@@ -96,7 +104,8 @@ fn previews_for(core: &GreekCore, card_id: &str) -> [String; 4] {
 
 /// review_current() ->
 /// '{"card":{"cardId":"","front":"","back":""}|null,"remaining":0,
-///   "isNew":true,"previews":["10m","1d","3d","7d"]}'
+///   "isNew":true,"previews":["10m","1d","3d","7d"],
+///   "returningSoonCount":0,"minutesUntilNext":null}'
 ///
 /// When the in-memory session is empty a fresh batch is built (mirrors the
 /// Android review screen load); after a completed batch this yields
@@ -104,7 +113,13 @@ fn previews_for(core: &GreekCore, card_id: &str) -> [String; 4] {
 pub fn review_current(state: &AppState) -> Result<Value, String> {
     let mut session = state.session.lock().map_err(|e| e.to_string())?;
     if session.queue.is_empty() {
-        session.queue = fill_session(&state.core);
+        let queue = fill_session(&state.core);
+        session.admitted = queue.len();
+        if !queue.is_empty() {
+            // A fresh batch is a fresh return-completeness snapshot too.
+            session.pending_returns.clear();
+        }
+        session.queue = queue;
     }
     Ok(review_payload(&state.core, &session))
 }
@@ -116,13 +131,29 @@ fn review_payload(core: &GreekCore, session: &ReviewSession) -> Value {
             "remaining": session.queue.len(),
             "isNew": c.is_new,
             "previews": previews_for(core, &c.card_id),
+            "returningSoonCount": 0,
+            "minutesUntilNext": Value::Null,
         }),
-        None => json!({
-            "card": Value::Null,
-            "remaining": 0,
-            "isNew": true,
-            "previews": Vec::<String>::new(),
-        }),
+        None => {
+            let minutes = session
+                .pending_returns
+                .iter()
+                .map(|r| {
+                    r.return_at
+                        .saturating_duration_since(Instant::now())
+                        .as_secs()
+                })
+                .min()
+                .map(|secs| ((secs + 59) / 60).max(1));
+            json!({
+                "card": Value::Null,
+                "remaining": 0,
+                "isNew": true,
+                "previews": Vec::<String>::new(),
+                "returningSoonCount": session.pending_returns.len(),
+                "minutesUntilNext": minutes,
+            })
+        }
     }
 }
 
@@ -133,27 +164,65 @@ fn review_payload(core: &GreekCore, session: &ReviewSession) -> Value {
 pub fn invalidate_session(state: &AppState) {
     if let Ok(mut session) = state.session.lock() {
         session.queue.clear();
+        session.admitted = 0;
+        session.pending_returns.clear();
     }
+}
+
+fn rated_interval_secs(core: &GreekCore, card_id: &str, rating: u8) -> Option<u32> {
+    core.preview_intervals(card_id.to_string())
+        .map(|p| match rating {
+            1 => p.again_secs,
+            2 => p.hard_secs,
+            3 => p.good_secs,
+            _ => p.easy_secs,
+        })
 }
 
 /// review_rate(rating: u8) -> same JSON as review_current.
 /// Submits rating 1..=4 (Again/Hard/Good/Easy) for the current card via the
-/// core, pops it, and returns the next card (or the null completion shape).
-/// Never rebuilds the batch — an empty queue after rating is "session done".
+/// core and pops it. A short (<=15 minute) return is appended at the END of
+/// the remaining queue, like Android's requeue path, with total admissions
+/// capped at 60. A lone short-return card is not immediately re-served: the
+/// completion payload reports its upcoming return instead.
 pub fn review_rate(state: &AppState, rating: u8) -> Result<Value, String> {
     if !(1..=4).contains(&rating) {
         return Err(format!("rating must be 1..=4, got {rating}"));
     }
     let mut session = state.session.lock().map_err(|e| e.to_string())?;
-    let current = session
+    let mut current = session
         .queue
         .front()
         .cloned()
         .ok_or_else(|| "no current review card (session empty)".to_string())?;
+    // Read the exact pre-rating core preview before submit_review changes it.
+    let return_secs = rated_interval_secs(&state.core, &current.card_id, rating);
     if !state.core.submit_review(current.card_id.clone(), rating) {
         return Err(format!("submit_review failed for {}", current.card_id));
     }
     session.queue.pop_front();
+
+    session
+        .pending_returns
+        .retain(|r| r.card_id != current.card_id);
+    if let Some(secs) = return_secs.filter(|secs| *secs <= SAME_SESSION_RETURN_SECS) {
+        session.pending_returns.push(ScheduledReturn {
+            card_id: current.card_id.clone(),
+            return_at: Instant::now() + Duration::from_secs(secs as u64),
+        });
+        let already_queued = session
+            .queue
+            .iter()
+            .any(|c| c.card_id == current.card_id);
+        if !session.queue.is_empty()
+            && session.admitted < MAX_SESSION_CARDS
+            && !already_queued
+        {
+            current.is_new = false;
+            session.queue.push_back(current);
+            session.admitted += 1;
+        }
+    }
     Ok(review_payload(&state.core, &session))
 }
 
@@ -163,8 +232,8 @@ pub fn review_rate(state: &AppState, rating: u8) -> Result<Value, String> {
 
 /// curriculum() ->
 /// '{"gateNotMet":false,"textbooks":[{"id","title","chapters":[
-///   {"index":0,"title","totalCards":0,"masteredCount":0,"unlocked":true,
-///    "hint":""}]}]}'
+///   {"index":0,"title","totalCards":0,"learningCount":0,"masteredCount":0,
+///    "unlocked":true,"hint":""}]}]}'
 pub fn curriculum(core: &GreekCore) -> Result<String, String> {
     let gate = core.get_alphabet_gate_state();
     let textbooks: Vec<Value> = core
@@ -179,6 +248,7 @@ pub fn curriculum(core: &GreekCore) -> Result<String, String> {
                         "index": ch.chapter,
                         "title": ch.title,
                         "totalCards": ch.card_count,
+                        "learningCount": ch.learning_count,
                         "masteredCount": ch.mastered_count,
                         "unlocked": ch.unlocked,
                         "hint": ch.unlock_hint,
@@ -246,6 +316,14 @@ pub fn alphabet_check_verdict(
     total: u32,
 ) -> Result<String, String> {
     let satisfied = core.record_alphabet_check_result(correct, total);
+    Ok(json!({"gateSatisfied": satisfied}).to_string())
+}
+
+/// alphabet_declare_known() -> '{"gateSatisfied":true}'.
+/// The self-declared skip lane is persisted by the core as declared_known;
+/// desktop adds no second gate record or alternate unlock policy.
+pub fn alphabet_declare_known(core: &GreekCore) -> Result<String, String> {
+    let satisfied = core.declare_alphabet_known();
     Ok(json!({"gateSatisfied": satisfied}).to_string())
 }
 
@@ -468,22 +546,20 @@ pub async fn sync_now(state: &AppState) -> Result<String, String> {
 /// identity when missing; when one already exists, derives the pubkey from
 /// the stored secret. Idempotent: repeated calls return the SAME pubkey.
 ///
-/// Reads through the secrets vault (schema v4) via the exported
-/// `GreekCore::secret_get("nostr_nsec")` — the same location
-/// `sync_generate_nostr_identity` / `sync_set_nostr_nsec` write. GreekCore
-/// exposes identity generation but no sync-pubkey getter, so the derivation
-/// runs the same Keys::parse the core itself uses (the stored value is the
-/// secret key hex; parse also accepts nsec1… bech32). Do NOT resurrect the
-/// old read of `user_settings.nostr_nsec` — that location is obsolete.
-/// (If the core grows a sync-pubkey getter, switch to it and drop the
-/// nostr-sdk derive here.)
+/// Reads through the migration-aware core getter, so a legacy
+/// `user_settings.nostr_nsec` is moved into the secrets vault before its
+/// pubkey is derived. Desktop deliberately does not parse nostr keys itself.
 pub fn nostr_identity_ensure(state: &AppState) -> Result<String, String> {
-    if let Some(nsec) = state.core.secret_get("nostr_nsec".to_string()) {
-        let keys = nostr_sdk::prelude::Keys::parse(nsec.trim())
-            .map_err(|e| format!("stored nostr identity is invalid: {e}"))?;
-        return Ok(Value::String(keys.public_key().to_hex()).to_string());
-    }
-    let pubkey = state.core.sync_generate_nostr_identity();
+    // Do not turn an unreadable existing secret into an accidental rotation:
+    // config reports presence independently from pubkey parse success.
+    let pubkey = if state.core.sync_nostr_config().has_identity {
+        state
+            .core
+            .sync_nostr_pubkey()
+            .ok_or_else(|| "stored nostr identity is invalid".to_string())?
+    } else {
+        state.core.sync_generate_nostr_identity()
+    };
     Ok(Value::String(pubkey).to_string())
 }
 

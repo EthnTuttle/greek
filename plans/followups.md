@@ -16,6 +16,17 @@ time. Groom these into the next applicable wave.
    vault BEFORE the presence check, so `enable` reuses it instead of shadowing
    it with a fresh identity.
 
+## From Fable close-out (non-blocking polish)
+11. **Headword-normalization residue:** principal-parts lists vary formatting so
+    ~19 repeated lists are not deduped; spelling variants `οὕτω(ς)`/`οὕτως` and
+    `ζάω` versus `ζάω/ζῶ` likewise.
+12. **Chapter display totals use raw card counts**, not the dedupe-aware
+    admissible subset (a slow-schedule completed chapter may read 6/21
+    indefinitely). Surface admissible counts if worth polishing.
+13. **Reader dictionary missing entries:** σύ resolves to a wrong homograph,
+    ὑμῖν has no row. Ship article/pronoun/Attic -ττ-/deponent overrides with a
+    future content pass.
+
 ## From Wave 4 (S8/S9)
 10. **iroh content-vs-restart edge (pre-existing upstream behavior):** if a node
     restarts after entry metadata replicated but before blob content finished

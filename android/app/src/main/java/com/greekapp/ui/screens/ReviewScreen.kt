@@ -10,9 +10,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.greekapp.R
 import com.greekapp.ui.theme.GreekFontFamily
+import com.greekapp.viewmodel.ReviewCompletion
 import com.greekapp.viewmodel.ReviewViewModel
 
 @Composable
@@ -40,15 +44,19 @@ fun ReviewScreen(
     }
 
     if (state.isComplete) {
-        ReviewCompleteScreen(onDone = onComplete)
+        ReviewCompleteScreen(
+            completion = state.completion,
+            onContinue = { viewModel.continueReview() },
+            onDone = onComplete
+        )
         return
     }
 
     // Queue is empty (nothing due, no new cards available): friendly empty state.
     if (card == null) {
         ReviewMessageScreen(
-            title = "No cards due",
-            message = "Great job — you're all caught up! Unlock a new chapter to keep learning.",
+            title = stringResource(R.string.review_empty_title),
+            message = stringResource(R.string.review_empty_message),
             buttonText = "Done",
             onButton = onComplete
         )
@@ -95,6 +103,21 @@ fun ReviewScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                if (card.isFirstExposure) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = stringResource(R.string.review_new_badge),
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 // Front (Greek) — pick a smaller style for longer text so it never
                 // clips on narrow screens or with large system font scaling.
                 val frontStyle = when {
@@ -113,7 +136,7 @@ fun ReviewScreen(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                if (state.isAnswerRevealed) {
+                if (state.isAnswerRevealed || card.isFirstExposure) {
                     Spacer(modifier = Modifier.height(32.dp))
                     Divider(
                         modifier = Modifier.width(100.dp),
@@ -155,8 +178,38 @@ fun ReviewScreen(
             )
         }
 
-        // Action buttons
-        if (!state.isAnswerRevealed) {
+        // A first exposure is a lesson, not a recall test: both sides stay
+        // visible and only Again/Good are offered. A rep now exists after
+        // either choice, so any later exposure gets the normal four ratings.
+        if (card.isFirstExposure) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { viewModel.answerCard(0) },
+                    enabled = !state.isSubmitting,
+                    modifier = Modifier.weight(1f).height(64.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.review_new_again),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Button(
+                    onClick = { viewModel.answerCard(2) },
+                    enabled = !state.isSubmitting,
+                    modifier = Modifier.weight(1f).height(64.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.review_new_good),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        } else if (!state.isAnswerRevealed) {
             Button(
                 onClick = { viewModel.revealAnswer() },
                 modifier = Modifier
@@ -164,7 +217,7 @@ fun ReviewScreen(
                     .height(56.dp)
             ) {
                 Text(
-                    text = "Show Answer",
+                    text = stringResource(R.string.review_show_answer),
                     style = MaterialTheme.typography.titleMedium
                 )
             }
@@ -190,7 +243,7 @@ fun ReviewScreen(
                         )
                     ) {
                         RatingLabel(
-                            label = "Again",
+                            label = stringResource(R.string.review_again),
                             interval = preview?.let { formatIntervalLabel(it.againSecs) }
                         )
                     }
@@ -202,7 +255,7 @@ fun ReviewScreen(
                             .height(56.dp)
                     ) {
                         RatingLabel(
-                            label = "Hard",
+                            label = stringResource(R.string.review_hard),
                             interval = preview?.let { formatIntervalLabel(it.hardSecs) }
                         )
                     }
@@ -219,7 +272,7 @@ fun ReviewScreen(
                             .height(56.dp)
                     ) {
                         RatingLabel(
-                            label = "Good",
+                            label = stringResource(R.string.review_good),
                             interval = preview?.let { formatIntervalLabel(it.goodSecs) }
                         )
                     }
@@ -234,7 +287,7 @@ fun ReviewScreen(
                         )
                     ) {
                         RatingLabel(
-                            label = "Easy",
+                            label = stringResource(R.string.review_easy),
                             interval = preview?.let { formatIntervalLabel(it.easySecs) }
                         )
                     }
@@ -332,7 +385,13 @@ private fun ReviewMessageScreen(
 }
 
 @Composable
-private fun ReviewCompleteScreen(onDone: () -> Unit) {
+private fun ReviewCompleteScreen(
+    completion: ReviewCompletion,
+    onContinue: () -> Unit,
+    onDone: () -> Unit
+) {
+    val moreDue = completion.remainingDue > 0
+    val returningSoon = !moreDue && completion.returningSoonCount > 0
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -341,25 +400,69 @@ private fun ReviewCompleteScreen(onDone: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Great work!",
-            style = MaterialTheme.typography.displayMedium,
-            fontWeight = FontWeight.Bold
+            text = stringResource(
+                when {
+                    moreDue -> R.string.review_more_due_title
+                    returningSoon -> R.string.review_return_soon_title
+                    else -> R.string.review_complete_title
+                }
+            ),
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "You've completed all cards for today",
+            text = when {
+                moreDue -> stringResource(R.string.review_more_due_message)
+                returningSoon -> {
+                    val minutes = completion.minutesUntilNext ?: 0
+                    val time = if (minutes == 1) {
+                        stringResource(R.string.review_about_one_minute)
+                    } else {
+                        stringResource(R.string.review_about_minutes, minutes)
+                    }
+                    pluralStringResource(
+                        R.plurals.review_return_soon_message,
+                        completion.returningSoonCount,
+                        completion.returningSoonCount,
+                        time
+                    )
+                }
+                else -> stringResource(R.string.review_complete_message)
+            },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(32.dp))
-        Button(
-            onClick = onDone,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-        ) {
-            Text("Done")
+        if (moreDue) {
+            Button(
+                onClick = onContinue,
+                modifier = Modifier.fillMaxWidth().height(56.dp)
+            ) {
+                Text(
+                    pluralStringResource(
+                        R.plurals.review_more_due_continue,
+                        completion.remainingDue,
+                        completion.remainingDue
+                    )
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onDone,
+                modifier = Modifier.fillMaxWidth().height(56.dp)
+            ) {
+                Text(stringResource(R.string.review_done))
+            }
+        } else {
+            Button(
+                onClick = onDone,
+                modifier = Modifier.fillMaxWidth().height(56.dp)
+            ) {
+                Text(stringResource(R.string.review_done))
+            }
         }
     }
 }

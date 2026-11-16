@@ -19,9 +19,14 @@ data class Chapter(
     // as coming-soon rather than a normal 0-card entry.
     val available: Boolean = true,
     // Chapters start locked; tapping a locked one may reveal an unlock hint.
-    val unlocked: Boolean = true
+    val unlocked: Boolean = true,
+    /** Core learning_count: familiar/learned, deliberately distinct from mastery. */
+    val learnedCount: Int = completedCount,
+    val unlockHint: String = ""
 ) {
-    val progress: Float get() = if (cardCount > 0) completedCount.toFloat() / cardCount else 0f
+    val masteredCount: Int get() = completedCount
+    val readyToUnlock: Boolean get() = available && !unlocked && unlockHint.isBlank()
+    val progress: Float get() = if (cardCount > 0) learnedCount.toFloat() / cardCount else 0f
 }
 
 data class Section(
@@ -36,6 +41,8 @@ data class CurriculumState(
     val isLoading: Boolean = true,
     /** Transient unlock hint to surface in a snackbar; cleared via [hintShown]. */
     val unlockHint: String? = null,
+    /** Confirmation for an explicit or core-auto-persisted chapter unlock. */
+    val unlockMessage: String? = null,
     /**
      * Wave-5 alphabet gate unmet → the screen shows a compact gate card above
      * the textbook list with a check CTA. False while unknown (load failure).
@@ -68,6 +75,11 @@ class CurriculumViewModel : ViewModel() {
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
             val core = CoreProvider.current() ?: return@launch
+            val previouslyKnownLocks = _state.value.sections.flatMap { section ->
+                section.chapters.map { chapter ->
+                    Triple(section.textbook, chapter.number, chapter.unlocked)
+                }
+            }
             try {
                 // Alphabet gate (wave 5): one shared evaluation, kept local to
                 // this ViewModel; any failure fails open (card hidden).
@@ -96,16 +108,28 @@ class CurriculumViewModel : ViewModel() {
                                 cardCount = ch.cardCount,
                                 completedCount = ch.masteredCount,
                                 available = ch.available,
-                                unlocked = ch.unlocked
+                                unlocked = ch.unlocked,
+                                learnedCount = ch.learningCount,
+                                unlockHint = core.unlockHintFor(ch)
                             )
                         },
                         isExpanded = (index == 0)
                     )
                 }
                 chapterViews = viewMap
+                val autoUnlocked = sections.firstNotNullOfOrNull { section ->
+                    section.chapters.firstOrNull { chapter ->
+                        chapter.unlocked && previouslyKnownLocks.any {
+                            it.first == section.textbook && it.second == chapter.number && !it.third
+                        }
+                    }?.let { section to it }
+                }
                 _state.value = CurriculumState(
                     sections = sections,
                     isLoading = false,
+                    unlockMessage = autoUnlocked?.let { (_, chapter) ->
+                        chapterUnlockedMessage(chapter.number)
+                    } ?: _state.value.unlockMessage,
                     alphabetGateUnmet = gateUnmet,
                     lettersAvailable = lettersTotal > 0u
                 )
@@ -135,10 +159,7 @@ class CurriculumViewModel : ViewModel() {
     fun onChapterTapped(textbook: String, chapterNumber: Int) {
         val (section, chapter) =
             resolveChapter(_state.value.sections, textbook, chapterNumber) ?: return
-        if (chapter.unlocked) {
-            startChapter(textbook, chapterNumber)
-            return
-        }
+        if (chapter.unlocked) return
         viewModelScope.launch(Dispatchers.IO) {
             val core = CoreProvider.current() ?: return@launch
             val chapterView = chapterViews[section.textbook to chapterNumber]
@@ -164,18 +185,48 @@ class CurriculumViewModel : ViewModel() {
         _state.value = _state.value.copy(unlockHint = null)
     }
 
+    fun unlockMessageShown() {
+        _state.value = _state.value.copy(unlockMessage = null)
+    }
+
     fun startChapter(textbook: String, chapterNumber: Int) {
         val (section, _) =
             resolveChapter(_state.value.sections, textbook, chapterNumber) ?: return
         viewModelScope.launch(Dispatchers.IO) {
             val core = CoreProvider.current() ?: return@launch
-            try {
+            val unlocked = try {
                 core.unlockChapter(section.textbook, chapterNumber)
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                false
+            }
+            if (unlocked) {
+                // Heal the visible row immediately, then re-read counts and
+                // auto-unlocks. Updating first prevents refresh from also
+                // classifying this explicit action as an auto detection.
+                _state.value = _state.value.copy(
+                    sections = _state.value.sections.map { current ->
+                        if (current.textbook != section.textbook) return@map current
+                        current.copy(chapters = current.chapters.map { chapter ->
+                            if (chapter.number == chapterNumber) {
+                                chapter.copy(unlocked = true, unlockHint = "")
+                            } else chapter
+                        })
+                    },
+                    unlockMessage = chapterUnlockedMessage(chapterNumber)
+                )
+                refresh()
+            } else {
+                // Core remains the authority if auto-unlock semantics raced
+                // the tap or the chapter was not ready after all.
+                refresh()
+            }
         }
     }
 
     companion object {
+        internal fun chapterUnlockedMessage(chapterNumber: Int): String =
+            "Chapter $chapterNumber unlocked"
+
         /**
          * Resolve a chapter within the section belonging to [textbook].
          * Chapter numbers overlap across textbooks (e.g. Letters ch. 2 and

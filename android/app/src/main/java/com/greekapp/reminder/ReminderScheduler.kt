@@ -63,10 +63,16 @@ object ReminderScheduler {
     fun syncFromPreferences(context: Context) {
         val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
-            val enabled =
-                appContext.settingsDataStore.data.first()[SettingsKeys.DAILY_REMINDER] ?: true
-            setEnabled(appContext, enabled)
+            syncFromPreferencesNow(appContext)
         }
+    }
+
+    /** Awaitable variant for receivers that keep the process alive with goAsync. */
+    suspend fun syncFromPreferencesNow(context: Context) {
+        val appContext = context.applicationContext
+        val enabled =
+            appContext.settingsDataStore.data.first()[SettingsKeys.DAILY_REMINDER] ?: true
+        setEnabled(appContext, enabled)
     }
 
     /** Next 19:00 local time — today if still ahead, otherwise tomorrow. */

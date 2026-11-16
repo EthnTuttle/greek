@@ -2,8 +2,9 @@
 
 **STATUS (2026-10-27): all four waves EXECUTED and green.** 22/22 audit P1s +
 coupled P2s fixed with regression tests; workspace 228+ tests passing,
-desktop contract 15/15, UI mock 91/91, Android unit suites green, CI added
-(R4), release drills in `plans/release-gate-checklist.md`. Remaining work is
+desktop contract 15/15, UI mock 91/91, Android unit suites green, local
+verification runner added (R4), release drills in
+`plans/release-gate-checklist.md`. Remaining work is
 physical-device gates (release-gate-checklist), the grooming list in
 `plans/followups.md`, and committing/tagging. Historical planning content
 follows.
